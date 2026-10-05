@@ -21,26 +21,58 @@ task library, remote registry, visual editor, or deployment platform.
 
 See [supported behavior and limitations](docs/limitations.md).
 
-## Install
+## Documentation
 
-Install Weavem into the Python environment that will author or run tasks. From this
-source checkout:
+- [Create and consume a task](docs/authoring-guide.md) — complete author-to-consumer walkthrough.
+- [CLI, metadata, and SDK reference](docs/reference.md) — exact syntax and configuration rules.
+- [Artifact contract](docs/artifact-contract.md) — publication and execution boundaries.
+- [Limitations](docs/limitations.md) — supported behavior and known gaps.
+
+## Getting started after cloning
+
+You need **CPython 3.12 on Linux x86_64**, with `venv` and pip available.
+The commands below use Bash. Start at the root of your cloned `weavem` repository,
+where `pyproject.toml` lives:
 
 ```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
 python -m pip install .
+python -m weavem task --help
 ```
 
-Native-task authors additionally need the native build dependencies, a C compiler,
-and Python development headers:
+The last command should list `new`, `validate`, `test`, `build`, `list`, and `info`.
+If creating the environment fails, install your operating system's Python 3.12 venv
+support before continuing. Package installation needs access to your configured
+package index, or dependencies supplied through your organization's offline setup.
+
+When you open a new shell, activate `.venv/bin/activate` again from the checkout.
+`python -m weavem` and the installed `weavem` command expose the same CLI. Installing
+the framework does not populate a task store or create any application tasks.
+
+**Choose your next step:**
+
+- **Create a task:** follow [Create a task and use it in another project](docs/authoring-guide.md).
+- **Use tasks someone supplied:** go to [Use existing tasks](#use-existing-tasks).
+  You need their extracted task store and any declared runtime dependencies.
+- **Work on Weavem itself:** see [Development and examples](#development-and-examples).
+
+### Native builds and private installations
+
+To author compiled tasks, install the native build dependencies into the same
+activated environment:
 
 ```bash
 python -m pip install ".[native]"
 ```
 
-Consumers can instead install a privately supplied Weavem wheel. They do not need
-Cython or a compiler to run compatible, prebuilt native tasks. Weavem and each task's
-runtime dependencies must already be installed; distributing a task folder does not
-package the entire Python environment. This project has not been published to PyPI.
+You also need a C compiler and development headers matching Python 3.12. Consumers
+of compatible, prebuilt native tasks do not need Cython or a compiler.
+
+Consumers can install a privately supplied Weavem wheel instead of cloning this
+repository. Weavem and each task's runtime dependencies must already be installed;
+a task folder does not contain the entire Python environment. This project has not
+been published to PyPI.
 
 ## Use existing tasks
 
