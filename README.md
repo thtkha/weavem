@@ -220,6 +220,19 @@ A small [cross-project demonstration](examples/local-cross-project/README.md) is
 available for checking the author-to-consumer path. It is a test fixture, not the
 framework's application model.
 
-## License
+## License and trademarks
 
-[Apache License 2.0](LICENSE).
+The code is licensed under [Apache License 2.0](LICENSE), with attribution in
+[NOTICE](NOTICE). Proprietary products and commercial services can use the code
+under that license.
+
+The **Weavem™** brand is governed separately by our [trademark policy](TRADEMARKS.md):
+
+> If you keep it proprietary, use your own brand. If you want to call it Weavem,
+> contribute back to the commons.
+
+Using Weavem as another product's primary brand requires prior written permission,
+conditioned on publishing the covered Weavem-derived implementation under an agreed
+open-source license. Publishing source alone does not grant branding permission.
+Truthful descriptions such as “Built with Weavem” remain allowed without implying
+endorsement. These branding conditions do not change the Apache code license.
