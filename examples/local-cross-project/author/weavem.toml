@@ -1,0 +1,3 @@
+[weavem]
+store = "../consumer/task-store"
+work_dir = "../../../.artifacts/tmp"

@@ -1,0 +1,11 @@
+[task]
+schema = 1
+task_id = "demo.double"
+version = "1.0.0"
+backend = "python"
+source = "implementation.py"
+export = "double"
+dependencies = []
+description = "Double an integer"
+inputs = ["value: int"]
+output = "int"

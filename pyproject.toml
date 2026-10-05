@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools==84.0.0", "wheel==0.48.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "weavem"
+version = "0.1.0"
+description = "Local-first, versioned task artifacts for Prefect flows"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.12,<3.13"
+dependencies = ["prefect==3.8.7"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.urls]
+Repository = "https://github.com/thtkha/weavem"
+
+[project.optional-dependencies]
+native = ["Cython==3.3.0", "setuptools==84.0.0"]
+
+[project.scripts]
+weavem = "weavem.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
