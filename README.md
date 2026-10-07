@@ -52,6 +52,7 @@ the framework does not populate a task store or create any application tasks.
 
 **Choose your next step:**
 
+- **Start a project:** see [Create a project and flows](#create-a-project-and-flows).
 - **Create a task:** follow [Create a task and use it in another project](docs/authoring-guide.md).
 - **Use tasks someone supplied:** go to [Use existing tasks](#use-existing-tasks).
   You need their extracted task store and any declared runtime dependencies.
@@ -73,6 +74,35 @@ Consumers can install a privately supplied Weavem wheel instead of cloning this
 repository. Weavem and each task's runtime dependencies must already be installed;
 a task folder does not contain the entire Python environment. This project has not
 been published to PyPI.
+
+## Create a project and flows
+
+With Weavem installed in your active environment, start from the directory where
+you want the new project (it need not be inside the framework checkout):
+
+```bash
+weavem project new my_project
+cd my_project
+weavem task new tasks/normalize_text
+weavem flow new process_documents
+```
+
+The project contains `weavem.toml`, `tasks/`, `flows/`, and a `.gitignore`.
+The flow command creates `flows/process_documents.py`; run it from the project root:
+
+```bash
+python -m flows.process_documents
+```
+
+The initial flow does no work. Implement and test your task, build it with
+`weavem task build tasks/normalize_text`, then edit the flow to resolve that task
+by its ID and version with `weavem.task`. More flows can reuse the same published
+tasks without copying their implementations. Follow the [authoring guide](docs/authoring-guide.md)
+for a complete task implementation and composition example.
+
+Scaffolding does not install dependencies, create a virtual environment, initialize
+Git, or start a server. Running a flow may start Prefect's local server. Existing
+project folders and flow files are not overwritten.
 
 ## Use existing tasks
 

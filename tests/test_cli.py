@@ -5,6 +5,7 @@ import unittest
 from contextlib import chdir, redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
+import py_compile
 import tomllib
 
 from _support import workspace
@@ -15,6 +16,91 @@ from weavem.store import LocalStore
 
 
 class CliTests(unittest.TestCase):
+    def test_project_new_creates_minimal_project_convention(self) -> None:
+        with workspace("cli-project-") as temporary:
+            root = Path(temporary) / "demo"
+            self.assertEqual(main(["project", "new", str(root)]), 0)
+            self.assertEqual((root / "weavem.toml").read_text(), "[weavem]\n")
+            self.assertTrue((root / "tasks").is_dir())
+            self.assertTrue((root / "flows" / "__init__.py").is_file())
+            self.assertEqual(
+                (root / ".gitignore").read_text(),
+                ".artifacts/\ntask-store/\n__pycache__/\n.venv/\n",
+            )
+            (root / "weavem.toml").write_text("user-owned edits\n")
+            with redirect_stderr(StringIO()):
+                self.assertEqual(main(["project", "new", str(root)]), 2)
+            self.assertEqual((root / "weavem.toml").read_text(), "user-owned edits\n")
+
+    def test_flow_new_uses_selected_project_and_is_valid_python(self) -> None:
+        with workspace("cli-flow-") as temporary:
+            root = Path(temporary) / "project"
+            self.assertEqual(main(["project", "new", str(root)]), 0)
+            with chdir(Path(temporary)):
+                self.assertEqual(main(["--project", str(root), "flow", "new", "daily_sync"]), 0)
+            flow = root / "flows" / "daily_sync.py"
+            self.assertTrue(flow.is_file())
+            self.assertIn("@flow\ndef daily_sync():\n    return None", flow.read_text())
+            py_compile.compile(str(flow), doraise=True)
+            with redirect_stderr(StringIO()):
+                self.assertEqual(main(["--project", str(root), "flow", "new", "daily_sync"]), 2)
+            self.assertTrue(flow.is_file())
+
+    def test_flow_new_finds_nearest_project_and_rejects_unsafe_names(self) -> None:
+        with workspace("cli-flow-names-") as temporary:
+            root = Path(temporary) / "project"
+            self.assertEqual(main(["project", "new", str(root)]), 0)
+            nested = root / "tasks" / "author"
+            nested.mkdir(parents=True)
+            with chdir(nested):
+                self.assertEqual(main(["flow", "new", "report"]), 0)
+                for name in ("../escape", "nested/name", "not-valid", "class", "__init__", "__name__", "__debug__", ""):
+                    with self.subTest(name=name), redirect_stderr(StringIO()):
+                        self.assertEqual(main(["flow", "new", name]), 2)
+            self.assertTrue((root / "flows" / "report.py").is_file())
+            self.assertFalse((root / "flows" / "escape.py").exists())
+
+    def test_new_commands_refuse_dangling_symlinks(self) -> None:
+        with workspace("cli-symlink-") as temporary:
+            base = Path(temporary)
+            project = base / "project"
+            project.symlink_to(base / "missing-project")
+            with redirect_stderr(StringIO()):
+                self.assertEqual(main(["project", "new", str(project)]), 2)
+            self.assertTrue(project.is_symlink())
+
+            real_project = base / "real-project"
+            self.assertEqual(main(["project", "new", str(real_project)]), 0)
+            flow = real_project / "flows" / "linked.py"
+            flow.symlink_to(base / "missing-flow")
+            with redirect_stderr(StringIO()):
+                self.assertEqual(main(["--project", str(real_project), "flow", "new", "linked"]), 2)
+            self.assertTrue(flow.is_symlink())
+
+    def test_flow_new_rejects_symlinked_flow_directory_without_writes(self) -> None:
+        with workspace("cli-flow-boundary-") as temporary:
+            base = Path(temporary)
+            project = base / "project"
+            project.mkdir()
+            outside = base / "outside"
+            outside.mkdir()
+            (project / "flows").symlink_to(outside, target_is_directory=True)
+            with redirect_stderr(StringIO()):
+                self.assertEqual(main(["--project", str(project), "flow", "new", "report"]), 2)
+            self.assertEqual(list(outside.iterdir()), [])
+
+    def test_flow_new_preserves_invalid_existing_package_initializer(self) -> None:
+        with workspace("cli-flow-initializer-") as temporary:
+            project = Path(temporary)
+            flows = project / "flows"
+            flows.mkdir()
+            init = flows / "__init__.py"
+            init.symlink_to(project / "missing")
+            with redirect_stderr(StringIO()):
+                self.assertEqual(main(["--project", str(project), "flow", "new", "report"]), 2)
+            self.assertTrue(init.is_symlink())
+            self.assertFalse((flows / "report.py").exists())
+
     def test_name_only_creates_editable_metadata_and_runnable_boilerplate(self) -> None:
         with workspace("cli-simple-") as temporary:
             root = Path(temporary)

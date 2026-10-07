@@ -7,10 +7,14 @@ it does not propose additional commands or services.
 ## Command line
 
 `weavem` and `python -m weavem` expose the same interface. Global `--project PATH`
-comes **before** `task`. `PATH` selects an existing directory or config file.
+comes **before** the subcommand. `PATH` selects an existing directory or config file
+for task storage/build configuration and flow creation; `project new` always uses
+its explicit destination relative to the working directory.
 
 | Command | Options | Result |
 | --- | --- | --- |
+| `weavem project new DIRECTORY` | None | Creates a project config, task/flow directories, and ignore file; refuses an existing path. |
+| `weavem flow new NAME` | None | Creates `flows/NAME.py` in the resolved project; refuses an existing file. |
 | `weavem task new TASK_NAME` | `--id ID`, `--version VERSION`, `--backend python\|cython` | Creates a source directory; refuses an existing path. |
 | `weavem task validate DIRECTORY` | None | Validates source metadata and source-file presence. |
 | `weavem task test DIRECTORY` | `--work-dir PATH` | Runs syntax and non-empty unittest checks on a snapshot. |
@@ -18,10 +22,16 @@ comes **before** `task`. `PATH` selects an existing directory or config file.
 | `weavem task list` | `--store PATH`, `--json` | Lists artifact references, not imported callables. |
 | `weavem task info ID==VERSION` | `--store PATH`, `--json` | Reads the resolved manifest, without executing its payload. |
 
-`new` defaults to the directory basename for ID, `0.1.0` for version, and `python`
+`task new` defaults to the directory basename for ID, `0.1.0` for version, and `python`
 for backend. Its starter callable is currently named `double`; replace the starter
 implementation/tests and update `export` for your real task. That function name is
 not a convention for application tasks.
+
+Flow names are non-keyword Python identifiers, excluding reserved `__dunder__`
+names—not paths or filenames; use `process_documents`,
+not `flows/process_documents.py`. The flow command uses the selected project or
+nearest ancestor config; without either it uses the working directory. Project
+destination paths are relative to the working directory.
 
 Source directory arguments are relative to the **shell's working directory**, not
 `--project`. Store/work paths are relative to the **selected project root**. Example,
@@ -38,7 +48,7 @@ for how a project is selected when `--project` is absent.
 Successful commands exit `0`; handled CLI validation/build/store failures print
 `weavem: ...` to stderr and exit `2`. Argparse usage errors also exit `2`. Unexpected
 exceptions can produce tracebacks; do not assume all failures use one exit code.
-There are no `install`, `register`, `publish`, `flow new`, ZIP-loading, or remote-store
+There are no `install`, `register`, `publish`, ZIP-loading, or remote-store
 commands in this release. Local publication is part of `task build`.
 
 ## Author metadata

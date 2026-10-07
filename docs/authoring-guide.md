@@ -44,9 +44,8 @@ export PREFECT_SERVER_ANALYTICS_ENABLED=false
 mkdir -p "${TMPDIR}" "${WEAVEM_ARTIFACTS_DIR}"
 unset WEAVEM_STORE PREFECT_API_URL PREFECT_API_KEY
 python -m weavem task --help
-mkdir "${LAB}/author" "${LAB}/consumer"
-printf '[weavem]\n' > "${LAB}/author/weavem.toml"
-printf '[weavem]\n' > "${LAB}/consumer/weavem.toml"
+python -m weavem project new "${LAB}/author"
+python -m weavem project new "${LAB}/consumer"
 ```
 
 The CLI help should list `new`, `validate`, `test`, `build`, `list`, and `info`.
