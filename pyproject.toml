@@ -9,19 +9,25 @@ description = "Local-first, versioned task artifacts for Prefect flows"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE", "TRADEMARKS.md"]
-requires-python = ">=3.12,<3.13"
-dependencies = ["prefect==3.8.7"]
+requires-python = ">=3.12,<3.15"
+# Native task authoring is a first-class workflow, not an optional add-on.
+dependencies = ["prefect==3.8.7", "Cython==3.3.0", "setuptools==84.0.0", "ziglang==0.17.0"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
 ]
 
 [project.urls]
 Repository = "https://github.com/thtkha/weavem"
 
 [project.optional-dependencies]
-native = ["Cython==3.3.0", "setuptools==84.0.0"]
+# Retained so existing ``pip install 'weavem[native]'`` commands continue to work.
+# The native Python tooling now ships with every installation; a compiler and
+# matching headers are supplied by the managed native builder.
+native = []
 
 [project.scripts]
 weavem = "weavem.cli:main"
@@ -31,3 +37,6 @@ where = ["src"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
+
+[tool.setuptools.package-data]
+weavem = ["_native_headers/*.tar.gz", "_native_headers/*.json", "_native_headers/*LICENSE*"]

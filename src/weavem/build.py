@@ -11,10 +11,11 @@ import subprocess
 import sys
 import sysconfig
 import tempfile
+import time
 
 from .config import resolve_project
 from .contracts import ContractError, Manifest, SourceSpec, module_leaf, require_supported_runtime, sha256_file, source_digest
-from .store import LocalStore
+from .store import ArtifactRef, LocalStore, TaskStore
 
 
 class BuildError(RuntimeError):
@@ -86,23 +87,50 @@ def _check_snapshot(snapshot_root: Path, snapshot_source: Path) -> None:
         raise BuildError("task source tests mutated the build snapshot")
 
 
-def _run_source_tests(snapshot_root: Path) -> None:
+def _run_source_tests(snapshot_root: Path, *, compiled: tuple[Path, str, str] | None = None) -> None:
+    loader = ""
+    arguments = []
+    label = "task source"
+    if compiled is not None:
+        artifact, leaf, alias = compiled
+        label = "compiled artifact"
+        arguments = [str(artifact.resolve()), leaf, alias]
+        loader = (
+            "import importlib.util\n"
+            "spec=importlib.util.spec_from_file_location(sys.argv[2],sys.argv[1])\n"
+            "module=importlib.util.module_from_spec(spec)\n"
+            "sys.modules[sys.argv[2]]=module\n"
+            "spec.loader.exec_module(module)\n"
+            "sys.modules[sys.argv[3]]=module\n"
+        )
     script = (
         "import sys,unittest\n"
+        + loader +
         "suite=unittest.defaultTestLoader.discover('tests')\n"
         "if not suite.countTestCases(): raise SystemExit(3)\n"
         "raise SystemExit(not unittest.TextTestRunner().run(suite).wasSuccessful())\n"
     )
     completed = subprocess.run(
-        [sys.executable, "-c", script], cwd=snapshot_root,
+        [sys.executable, "-c", script, *arguments], cwd=snapshot_root,
         env={key: value for key, value in os.environ.items() if key != "PYTHONPATH"},
         text=True, capture_output=True, check=False,
     )
     if completed.returncode == 3:
-        raise BuildError("task source tests must contain at least one test")
+        raise BuildError(f"{label} tests must contain at least one test")
     if completed.returncode:
         detail = completed.stderr.strip() or completed.stdout.strip()
-        raise BuildError(f"task source tests failed: {detail}")
+        raise BuildError(f"{label} tests failed: {detail}")
+
+
+def _test_compiled(snapshot_root: Path, source: Path, artifact: Path, leaf: str) -> None:
+    """Rerun the authored suite with only the compiled implementation available."""
+    original = artifact.read_bytes()
+    with tempfile.TemporaryDirectory(prefix="compiled-tests-", dir=artifact.parent) as temporary:
+        root = Path(temporary)
+        shutil.copytree(snapshot_root / "tests", root / "tests")
+        _run_source_tests(root, compiled=(artifact, leaf, source.stem))
+    if not artifact.is_file() or artifact.read_bytes() != original:
+        raise BuildError("compiled artifact tests mutated the native payload")
 
 
 def _run(command: list[str], *, cwd: Path) -> None:
@@ -153,31 +181,20 @@ def _build_python(source: Path, staging: Path, leaf: str) -> Path:
     return target
 
 
-def _build_cython(source: Path, staging: Path, leaf: str) -> Path:
-    setup = staging / "setup.py"
-    setup.write_text(
-        "from setuptools import Extension, setup\n"
-        "from Cython.Build import cythonize\n"
-        f"setup(ext_modules=cythonize([Extension({leaf!r}, [{str(source)!r}])], language_level=3))\n",
-        encoding="utf-8",
-    )
-    _run([sys.executable, str(setup), "build_ext", "--inplace"], cwd=staging)
-    suffix = importlib.machinery.EXTENSION_SUFFIXES[0]
-    artifact = staging / f"{leaf}{suffix}"
-    if not artifact.is_file():
-        raise BuildError("Cython build did not create the expected extension artifact")
-    setup.unlink(missing_ok=True)
-    (staging / (source.stem + ".c")).unlink(missing_ok=True)
-    _safe_rmtree(staging / "build")
-    return artifact
+def _build_cython(source: Path, staging: Path, leaf: str) -> tuple[Path, dict[str, str]]:
+    from .native import NativeError, compile_native
+    try:
+        return compile_native(source, staging, leaf)
+    except NativeError as exc:
+        raise BuildError(str(exc)) from exc
 
-def build(task_dir: str | Path, *, store=None, work_dir: str | Path | None = None,
-          project: str | Path | None = None):
-    """Run the promotion lifecycle and atomically publish a verified artifact."""
+
+def build(task_dir: str | Path, *, work_dir: str | Path | None = None,
+          project: str | Path | None = None) -> ArtifactRef:
+    """Create a verified, unpublished artifact candidate in the project work root."""
     require_supported_runtime()
     spec, config, source = validate(task_dir)
     project_config = resolve_project(project, work_dir=work_dir)
-    publisher = store if store is not None else LocalStore(project_config.store_path)
     work_root = project_config.work_dir
     work_root.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix="build-", dir=work_root))
@@ -190,8 +207,9 @@ def build(task_dir: str | Path, *, store=None, work_dir: str | Path | None = Non
             artifact = _build_python(snapshot_source, staging, leaf)
             build_facts = {"backend": "python"}
         elif spec.backend == "cython":
-            artifact = _build_cython(snapshot_source, staging, leaf)
-            build_facts = {"backend": "cython", "python": sys.version}
+            artifact, native_facts = _build_cython(snapshot_source, staging, leaf)
+            _test_compiled(snapshot_root, snapshot_source, artifact, leaf)
+            build_facts = {"backend": "cython", "python": sys.version, **native_facts}
         else:
             raise BuildError(f"unsupported backend: {spec.backend}")
         _safe_rmtree(snapshot_root)
@@ -199,6 +217,29 @@ def build(task_dir: str | Path, *, store=None, work_dir: str | Path | None = Non
         (staging / "manifest.json").write_bytes(manifest.to_json_bytes())
         _smoke(staging)
         _safe_rmtree(staging / "__pycache__")
-        return publisher.publish(staging)
+        if ((staging / "manifest.json").read_bytes() != manifest.to_json_bytes()
+                or sha256_file(artifact) != manifest.artifact_sha256
+                or {entry.name for entry in staging.iterdir()} != {"manifest.json", artifact.name}):
+            raise BuildError("artifact smoke import mutated the candidate")
+        candidate = work_root / f"candidate-{spec.task_id.replace('.', '-')}-{source_hash[:16]}-{time.time_ns()}"
+        # Candidates remain available for a separately authorized publish operation.
+        os.replace(staging, candidate)
+        staging = None
+        return ArtifactRef(candidate)
     finally:
-        _safe_rmtree(staging)
+        if staging is not None:
+            _safe_rmtree(staging)
+
+
+def publish(candidate: ArtifactRef | str | Path, *, store: TaskStore | str | Path | None = None,
+            project: str | Path | None = None) -> ArtifactRef:
+    """Publish an existing candidate verbatim; this never rebuilds task source."""
+    project_config = resolve_project(project)
+    if store is None:
+        actual_store: TaskStore = LocalStore(project_config.store_path)
+    elif isinstance(store, (str, Path)):
+        actual_store = LocalStore(resolve_project(project, store=store).store_path)
+    else:
+        actual_store = store
+    root = candidate.root if isinstance(candidate, ArtifactRef) else Path(candidate)
+    return actual_store.publish(root)

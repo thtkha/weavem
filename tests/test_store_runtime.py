@@ -28,11 +28,17 @@ class StoreRuntimeTests(unittest.TestCase):
     def test_publish_idempotence_and_version_conflict(self) -> None:
         with workspace() as raw:
             root = Path(raw); store = LocalStore(root / "store")
-            first = store.publish(stage(root / "one"))
-            second = store.publish(stage(root / "two"))
+            first_candidate = stage(root / "one")
+            second_candidate = stage(root / "two")
+            first = store.publish(first_candidate)
+            second = store.publish(second_candidate)
             self.assertEqual(first.root, second.root)
+            self.assertTrue(first_candidate.is_dir())
+            self.assertTrue(second_candidate.is_dir())
+            conflict = stage(root / "three", source=b"def run(x): return x * 3\n")
             with self.assertRaises(StoreError):
-                store.publish(stage(root / "three", source=b"def run(x): return x * 3\n"))
+                store.publish(conflict)
+            self.assertTrue(conflict.is_dir())
 
     def test_digest_checked_before_policy_or_import(self) -> None:
         with workspace() as raw:

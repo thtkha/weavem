@@ -1,4 +1,5 @@
 """Universal checks remain enforced for injected stores and cached artifacts."""
+from contextlib import chdir
 from dataclasses import replace
 import errno
 import os
@@ -16,6 +17,25 @@ from weavem.store import ArtifactRef, LocalStore
 
 
 class RuntimeBoundaryTests(unittest.TestCase):
+    def test_injected_store_ignores_malformed_ambient_project(self):
+        with workspace() as raw:
+            root = Path(raw)
+            store = LocalStore(root / "store")
+            ref = store.publish(stage(root / "stage", task_id="boundary.explicit"))
+            (root / "weavem.toml").write_text("[invalid TOML")
+
+            class CustomStore:
+                def resolve(self, task_id, version):
+                    return ref
+
+            with chdir(root):
+                for selected in (store, CustomStore()):
+                    for project in (None, root):
+                        with self.subTest(store=type(selected).__name__, project=project):
+                            wrapped = task("boundary.explicit", "1.0.0",
+                                           store=selected, project=project)
+                            self.assertEqual(wrapped.fn(21), 42)
+
     def test_corrupt_cross_filesystem_copy_cannot_be_published(self):
         with workspace() as raw:
             root = Path(raw)
@@ -44,15 +64,13 @@ class RuntimeBoundaryTests(unittest.TestCase):
 
             def cross_device_once(source, destination):
                 calls.append((Path(source), Path(destination)))
-                if len(calls) == 1:
-                    raise OSError(errno.EXDEV, "different filesystems")
                 return original_replace(source, destination)
 
             with patch("weavem.store.os.replace", side_effect=cross_device_once):
                 ref = LocalStore(root / "store").publish(staged)
-            self.assertEqual(len(calls), 2)
-            self.assertEqual(calls[1][0].parent, ref.root.parent)
-            self.assertFalse(staged.exists())
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(calls[0][0].parent, ref.root.parent)
+            self.assertTrue(staged.exists())
             self.assertEqual(load_export(ref)(21), 42)
 
     def test_symlinked_task_ancestor_cannot_resolve_or_publish(self):

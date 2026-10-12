@@ -1,4 +1,4 @@
-# Task artifact contract
+# Task and flow artifact contracts
 
 Schema 1 defines the boundary between a task author and a consuming flow project.
 It is independent of task version numbers and the Weavem package version.
@@ -39,7 +39,7 @@ output = "list[dict]"
 implementation remains responsible for validating its inputs where appropriate.
 Task IDs and versions must satisfy the framework's conservative filename-safe syntax.
 
-## Promotion boundary
+## Task build and publication boundary
 
 Both backends follow the same lifecycle:
 
@@ -48,10 +48,12 @@ Both backends follow the same lifecycle:
 3. Reject tests that mutate the implementation snapshot.
 4. Copy the Python payload or compile the native payload.
 5. Smoke-import the standalone artifact and verify its bare callable export.
-6. Publish the completed manifest/payload directory to the store.
+6. Return the completed manifest/payload directory as an unpublished candidate.
+7. A separate publish command verifies and copies that exact candidate to the store.
+   It preserves the candidate and does not rebuild author source.
 
-A source directory is not itself a consumable task. Consumers do not repeat the
-build process, and changing an author's source cannot update published bytes.
+An explicit local binding can execute editable source during development. Release
+consumers do not repeat the build process, and author edits cannot update published bytes.
 Native module names are chosen at build time; renaming a compiled extension is not
 a version-isolation mechanism.
 
@@ -93,7 +95,7 @@ reads metadata without importing the implementation.
 
 `TaskStore` is a structural adapter contract with three operations: resolve an exact
 task to an `ArtifactRef`, list built artifact references, and publish a completed
-staging directory. The local filesystem implementation is the default. Other adapters
+candidate directory without deleting it. The local filesystem implementation is the default. Other adapters
 must supply locally materialized artifacts; they do not replace runtime validation.
 
 ## Execution checks
@@ -120,3 +122,50 @@ SHA-256 checks detect corruption; they do not authenticate publishers. Task code
 with the process's privileges and is not sandboxed. Local publication coordinates
 cooperating writers; it does not promise protection from malicious filesystem actors
 or crash-durable distributed transactions.
+
+## Explicit bindings
+
+Project bindings select either a local source directory or an exact published
+ID/version, source folder, and SHA-256 of the canonical task manifest JSON.
+`weavem task use` records this digest automatically. A local binding never falls
+back to a published release if source is missing. Source edits use a separate
+development cache; they cannot replace an already loaded immutable task identity.
+
+## Flow releases
+
+Flows use their own schema-1 manifest, distinguished by `kind: "flow"`. Its fields
+are `schema`, `kind`, `flow_id`, `version`, `module_leaf`, `export`, `artifact_name`,
+`artifact_sha256`, `artifact_size`, `python_cache_tag`, `platform`, and
+`task_dependencies`. Each dependency records `alias`, `task_id`, `version`, and
+`manifest_sha256`; there are no author source paths in these pins.
+
+```text
+task-store/_flows/<flow-id>/<version>/<python-cache-tag>/
+├── manifest.json
+└── <canonical-module-name>.py
+```
+
+`_flows` cannot collide with valid task IDs, which must start with an ASCII letter.
+Each release is one Python flow file plus its manifest. Flow build checks that every
+declared task alias selects an already published release **before** executing tests
+or creating workspace files. Tests run on a snapshot under those exact pins; empty
+suites and source mutation fail. The same bytes become the candidate, which is also
+smoke-imported in an isolated subprocess. Dependencies encountered during tests or
+smoke import must be declared aliases; runtime also rejects undeclared aliases.
+This is not static proof of every possible branch of arbitrary Python code.
+
+Flow publish requires all pinned tasks in its destination store. It does not copy
+them implicitly. Flow loads verify the payload and dependencies before import and
+again on invocation; consumer project bindings cannot override the release pins.
+No author source, Git repository, or registry is needed after copying the whole store.
+
+## Local publication guarantees
+
+Tasks and flows use cooperative directory locks plus private destination-side
+copies and atomic rename. Discovery ignores those private copies. Identical retries
+are accepted; different content at the same identity/version is rejected. These
+guarantees cover cooperating local writers, not distributed filesystem semantics
+or malicious writers. A killed publisher can leave a lock/private directory; an
+operator must establish no publisher is active before removing stale state. There
+is no claim of crash durability, automated garbage collection, or network-store
+transactions. Candidates are disposable only after publication; the store is not.

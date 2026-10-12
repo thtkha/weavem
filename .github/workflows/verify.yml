@@ -1,0 +1,42 @@
+name: Verify Weavem
+'on':
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  supported-python:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.12', '3.13', '3.14']
+    env:
+      WEAVEM_ARTIFACTS_DIR: ${{ github.workspace }}/.artifacts/ci
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install .
+      - run: weavem doctor
+      - run: python -m unittest discover -s tests -v
+  latest-python-release-gate:
+    # Intentionally blocking: never waive a new stable interpreter with
+    # --ignore-requires-python or continue-on-error to manufacture a release.
+    runs-on: ubuntu-24.04
+    env:
+      WEAVEM_ARTIFACTS_DIR: ${{ github.workspace }}/.artifacts/ci-latest
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.x'
+          check-latest: true
+          allow-prereleases: false
+      - run: python -m pip install .
+      - run: weavem doctor
+      - run: python -m unittest discover -s tests -v

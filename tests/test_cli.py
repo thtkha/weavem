@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import unittest
+import json
 from contextlib import chdir, redirect_stderr, redirect_stdout
 from io import StringIO
 from pathlib import Path
@@ -54,7 +55,7 @@ class CliTests(unittest.TestCase):
             nested.mkdir(parents=True)
             with chdir(nested):
                 self.assertEqual(main(["flow", "new", "report"]), 0)
-                for name in ("../escape", "nested/name", "not-valid", "class", "__init__", "__name__", "__debug__", ""):
+                for name in ("../escape", "nested/name", "not-valid", "class", "__init__", "__name__", "__debug__", "_private", "tâche", ""):
                     with self.subTest(name=name), redirect_stderr(StringIO()):
                         self.assertEqual(main(["flow", "new", name]), 2)
             self.assertTrue((root / "flows" / "report.py").is_file())
@@ -115,8 +116,13 @@ class CliTests(unittest.TestCase):
             self.assertTrue((task_dir / "implementation.py").is_file())
             self.assertTrue((task_dir / "tests" / "test_task.py").is_file())
             run_task_tests(task_dir, work_dir=root / "work")
-            with chdir(root), redirect_stdout(StringIO()):
+            output = StringIO()
+            with chdir(root), redirect_stdout(output):
                 self.assertEqual(main(["task", "build", "double", "--work-dir", str(root / "work")]), 0)
+            self.assertFalse((root / "task-store").exists())
+            candidate = json.loads(output.getvalue())["root"]
+            with chdir(root), redirect_stdout(StringIO()):
+                self.assertEqual(main(["task", "publish", candidate]), 0)
             ref = LocalStore(root / "task-store").resolve("double", "0.1.0")
             self.assertEqual(load_export(ref)(21), 42)
             metadata.write_text(metadata.read_text().replace('version = "0.1.0"', 'version = "0.2.0"'))

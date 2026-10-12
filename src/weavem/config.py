@@ -29,7 +29,7 @@ def _read_config(path: Path | None) -> dict[str, object]:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError) as exc:
         raise ContractError(f"cannot read project config: {exc}") from exc
-    section = data.get("weavem", data)
+    section = data.get("weavem", {}) if "weavem" in data else {key: value for key, value in data.items() if key != "tasks"}
     if not isinstance(section, dict):
         raise ContractError("weavem.toml must contain a table")
     allowed = {"store", "store_path", "work_dir", "artifacts_dir"}

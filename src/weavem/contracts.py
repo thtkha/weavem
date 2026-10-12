@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import platform as _platform
 import sys
+import sysconfig
 import tomllib
 from types import MappingProxyType
 from typing import Any, Mapping
@@ -279,7 +280,13 @@ class Manifest:
 
 def require_supported_runtime() -> None:
     """Reject hosts outside the deliberately narrow local-MVP support lane."""
-    if sys.implementation.name != "cpython" or sys.version_info[:2] != (3, 12):
-        raise CompatibilityError("Weavem local MVP requires CPython 3.12.x")
+    if sys.implementation.name != "cpython" or not (3, 12) <= sys.version_info[:2] < (3, 15):
+        raise CompatibilityError("Weavem requires standard CPython 3.12–3.14 (Prefect currently excludes 3.15)")
     if sys.platform != "linux" or _platform.machine().lower() not in {"x86_64", "amd64"}:
         raise CompatibilityError("Weavem local MVP requires Linux x86_64")
+
+    if any(sysconfig.get_config_var(key) for key in ("Py_DEBUG", "Py_GIL_DISABLED", "Py_TRACE_REFS")):
+        raise CompatibilityError("Weavem requires a standard GIL-enabled, non-debug CPython build")
+    libc, version = _platform.libc_ver()
+    if libc != "glibc" or tuple(int(x) for x in version.split(".")[:2]) < (2, 28):
+        raise CompatibilityError("Weavem requires Linux x86_64 with glibc 2.28 or newer")

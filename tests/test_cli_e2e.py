@@ -69,9 +69,12 @@ class CliEndToEndTests(unittest.TestCase):
         return directory
 
     def _build(self, directory: Path) -> None:
-        result = self._command("task", "build", str(directory), "--store", str(self.store), "--work-dir", str(self.work))
+        result = self._command("task", "build", str(directory), "--work-dir", str(self.work))
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("manifest", json.loads(result.stdout))
+        candidate = json.loads(result.stdout)["root"]
+        published = self._command("task", "publish", candidate, "--to", str(self.store))
+        self.assertEqual(published.returncode, 0, published.stderr)
 
     def _consume(self, version: str, *, default_store: bool = False) -> dict[str, object]:
         script = self.consumer / "consume.py"

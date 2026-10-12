@@ -5,3 +5,8 @@ This product includes software developed as part of the Weavem project.
 https://github.com/thtkha/weavem
 
 Licensed under the Apache License, Version 2.0.
+Bundled CPython development headers retain their upstream license terms.
+Their source archive provenance, checksums, runtime configurations, and license texts are
+included under weavem/_native_headers in the installed distribution. Header
+contents are unmodified; platform-specific pyconfig.h selection and archive
+metadata normalization are documented in each bundle's provenance JSON.

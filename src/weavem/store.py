@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import errno
 import os
 from pathlib import Path
 import shutil
@@ -26,7 +25,7 @@ class ArtifactRef:
 class TaskStore(Protocol):
     def resolve(self, task_id: str, version: str) -> ArtifactRef: ...
     def list(self) -> Iterable[ArtifactRef]: ...
-    def publish(self, completed_staging_dir: str | Path) -> ArtifactRef: ...
+    def publish(self, candidate_dir: str | Path) -> ArtifactRef: ...
 
 
 def _read_manifest(root: Path) -> Manifest:
@@ -49,11 +48,11 @@ class LocalStore:
         from .contracts import _validate_identity  # private validation intentionally central
         _validate_identity(task_id, version)
         base = self.root / task_id / version
-        if self.root.is_symlink() or any(part.is_symlink() for part in (self.root / task_id, base)):
+        if any(part.is_symlink() for part in (base, *base.parents)):
             raise StoreError("symlinked store ancestry is not allowed")
         if not base.is_dir():
             raise StoreError(f"task not found: {task_id}=={version}")
-        candidates = [child for child in base.iterdir() if child.is_dir() and not child.is_symlink()
+        candidates = [child for child in base.iterdir() if not child.name.startswith(".") and child.is_dir() and not child.is_symlink()
                       and (child / "manifest.json").is_file() and not (child / "manifest.json").is_symlink()]
         if len(candidates) != 1:
             raise StoreError(f"ambiguous or missing task artifact: {task_id}=={version}")
@@ -69,15 +68,22 @@ class LocalStore:
         if self.root.is_symlink():
             raise StoreError("symlinked store root is not allowed")
         for manifest_path in self.root.glob("*/*/*/manifest.json"):
+            if any(part.startswith(".") for part in manifest_path.relative_to(self.root).parts):
+                continue
             if any(part.is_symlink() for part in (manifest_path.parent.parent.parent, manifest_path.parent.parent, manifest_path.parent)):
                 raise StoreError("symlinked store ancestry is not allowed")
             refs.append(ArtifactRef(manifest_path.parent))
         return tuple(sorted(refs, key=lambda ref: str(ref.root)))
 
     def publish(self, completed_staging_dir: str | Path) -> ArtifactRef:
-        staging = Path(completed_staging_dir).resolve()
+        staging_input = Path(completed_staging_dir).absolute()
+        if any(part.is_symlink() for part in (staging_input, *staging_input.parents)):
+            raise StoreError("symlinked candidate ancestry is not allowed")
+        staging = staging_input.resolve()
         if not staging.is_dir():
-            raise StoreError("publish staging directory is missing")
+            raise StoreError("publish candidate directory is missing")
+        if any(entry.is_symlink() for entry in staging.iterdir()):
+            raise StoreError("publish candidate must not contain symlinks")
         if (staging / "manifest.json").is_symlink():
             raise StoreError("publish staging manifest must not be a symlink")
         manifest = _read_manifest(staging)
@@ -92,7 +98,7 @@ class LocalStore:
         destination = self._destination(manifest)
         ancestry = (self.root, self.root / manifest.task_id,
                     self.root / manifest.task_id / manifest.version, destination)
-        if any(path.is_symlink() for path in ancestry):
+        if any(path.is_symlink() for path in (*ancestry, *self.root.parents)):
             raise StoreError("symlinked store ancestry is not allowed")
         destination.parent.mkdir(parents=True, exist_ok=True)
         lock = destination.parent / f".{destination.name}.lock"
@@ -108,34 +114,33 @@ class LocalStore:
             raise StoreError("timed out waiting for cooperative publish lock")
         try:
             if destination.exists():
+                if (destination.is_symlink() or (destination / "manifest.json").is_symlink()
+                        or (destination / manifest.artifact_name).is_symlink()):
+                    raise StoreError("existing artifact contains symlinks")
                 existing = _read_manifest(destination)
-                if existing.to_json_bytes() == manifest.to_json_bytes() and (destination / manifest.artifact_name).read_bytes() == payload.read_bytes():
+                existing_payload = destination / manifest.artifact_name
+                if (existing.to_json_bytes() == manifest.to_json_bytes() and existing_payload.is_file()
+                        and existing_payload.read_bytes() == payload.read_bytes()):
                     return ArtifactRef(destination)
                 raise StoreError(f"task version already published with different bytes: {manifest.task_id}=={manifest.version}")
-            # Cross-filesystem work/store roots cannot rename directly. Copy only the
-            # already validated two-file artifact into a private destination-side dir,
-            # then publish that complete directory with one atomic rename.
+            # Copy only the validated files into a private destination-side
+            # directory, verify the copy, then publish it with one atomic rename.
+            # The candidate is immutable input and is preserved on every outcome.
+            private = destination.parent / f".{destination.name}.publishing-{os.getpid()}-{time.time_ns()}"
             try:
-                os.replace(staging, destination)
-            except OSError as exc:
-                if exc.errno != errno.EXDEV:
-                    raise StoreError(f"atomic publish failed: {exc}") from exc
-                private = destination.parent / f".{destination.name}.publishing-{os.getpid()}-{time.time_ns()}"
-                try:
-                    private.mkdir()
-                    shutil.copyfile(staging / "manifest.json", private / "manifest.json")
-                    shutil.copyfile(payload, private / manifest.artifact_name)
-                    copied_payload = private / manifest.artifact_name
-                    if ((private / "manifest.json").is_symlink() or copied_payload.is_symlink()
-                            or _read_manifest(private).to_json_bytes() != manifest.to_json_bytes()
-                            or copied_payload.stat().st_size != manifest.artifact_size
-                            or sha256_file(copied_payload) != manifest.artifact_sha256):
-                        raise StoreError("cross-filesystem copy does not match validated artifact")
-                    os.replace(private, destination)
-                    shutil.rmtree(staging)
-                except (OSError, StoreError) as copy_exc:
-                    shutil.rmtree(private, ignore_errors=True)
-                    raise StoreError(f"cross-filesystem atomic publish failed: {copy_exc}") from copy_exc
+                private.mkdir()
+                shutil.copyfile(staging / "manifest.json", private / "manifest.json")
+                shutil.copyfile(payload, private / manifest.artifact_name)
+                copied_payload = private / manifest.artifact_name
+                if ((private / "manifest.json").is_symlink() or copied_payload.is_symlink()
+                        or _read_manifest(private).to_json_bytes() != manifest.to_json_bytes()
+                        or copied_payload.stat().st_size != manifest.artifact_size
+                        or sha256_file(copied_payload) != manifest.artifact_sha256):
+                    raise StoreError("destination copy does not match validated artifact")
+                os.replace(private, destination)
+            except (OSError, StoreError) as copy_exc:
+                shutil.rmtree(private, ignore_errors=True)
+                raise StoreError(f"atomic publish failed: {copy_exc}") from copy_exc
             return ArtifactRef(destination)
         finally:
             if acquired:

@@ -1,55 +1,89 @@
-# CLI, metadata, and SDK reference
+# Reference
 
-Applies to Weavem 0.1.0. Start with the [authoring guide](authoring-guide.md) for a
-complete workflow. This page distinguishes accepted syntax from project conventions;
-it does not propose additional commands or services.
+Run commands from a project containing `weavem.toml`, or pass `--project PATH`.
+`[weavem] store` selects the default `task-store`; `work_dir` selects `.artifacts`
+by default.
 
-## Command line
-
-`weavem` and `python -m weavem` expose the same interface. Global `--project PATH`
-comes **before** the subcommand. `PATH` selects an existing directory or config file
-for task storage/build configuration and flow creation; `project new` always uses
-its explicit destination relative to the working directory.
-
-| Command | Options | Result |
-| --- | --- | --- |
-| `weavem project new DIRECTORY` | None | Creates a project config, task/flow directories, and ignore file; refuses an existing path. |
-| `weavem flow new NAME` | None | Creates `flows/NAME.py` in the resolved project; refuses an existing file. |
-| `weavem task new TASK_NAME` | `--id ID`, `--version VERSION`, `--backend python\|cython` | Creates a source directory; refuses an existing path. |
-| `weavem task validate DIRECTORY` | None | Validates source metadata and source-file presence. |
-| `weavem task test DIRECTORY` | `--work-dir PATH` | Runs syntax and non-empty unittest checks on a snapshot. |
-| `weavem task build DIRECTORY` | `--store PATH`, `--work-dir PATH` | Tests, builds, smoke-loads, and publishes; prints artifact-reference JSON. |
-| `weavem task list` | `--store PATH`, `--json` | Lists artifact references, not imported callables. |
-| `weavem task info ID==VERSION` | `--store PATH`, `--json` | Reads the resolved manifest, without executing its payload. |
-
-`task new` defaults to the directory basename for ID, `0.1.0` for version, and `python`
-for backend. Its starter callable is currently named `double`; replace the starter
-implementation/tests and update `export` for your real task. That function name is
-not a convention for application tasks.
-
-Flow names are non-keyword Python identifiers, excluding reserved `__dunder__`
-names—not paths or filenames; use `process_documents`,
-not `flows/process_documents.py`. The flow command uses the selected project or
-nearest ancestor config; without either it uses the working directory. Project
-destination paths are relative to the working directory.
-
-Source directory arguments are relative to the **shell's working directory**, not
-`--project`. Store/work paths are relative to the **selected project root**. Example,
-from a workspace containing an `author/` directory:
+## Tasks and bindings
 
 ```bash
-weavem --project author task build author/tasks/normalize_names --store ../consumer/task-store
+weavem task use ALIAS --path tasks/foo
+weavem task use ALIAS --release ID==VERSION [--from SOURCE]
 ```
 
-The source is `author/tasks/normalize_names`; publication is to the sibling
-`consumer/task-store`. The source folder must already exist. See [configuration](#configuration)
-for how a project is selected when `--project` is absent.
+The first writes `[tasks."ALIAS"] path = "tasks/foo"`. The second validates an
+existing artifact and writes `release`, `source`, and canonical `manifest_sha256`.
+`--from task-store` (the default) means the configured store; another value is an
+explicit project-relative store path. A released binding always requires its digest.
 
-Successful commands exit `0`; handled CLI validation/build/store failures print
-`weavem: ...` to stderr and exit `2`. Argparse usage errors also exit `2`. Unexpected
-exceptions can produce tracebacks; do not assume all failures use one exit code.
-There are no `install`, `register`, `publish`, ZIP-loading, or remote-store
-commands in this release. Local publication is part of `task build`.
+```bash
+weavem task validate DIR
+weavem task test DIR
+weavem task build DIR --work-dir .artifacts
+weavem task publish CANDIDATE --to STORE
+weavem task list [--store STORE] [--json]
+weavem task info ID==VERSION [--store STORE] [--json]
+```
+
+Build prints JSON containing a persistent candidate root. It does **not** publish.
+Publish preserves that candidate on success, idempotence, and conflict. Older
+`task build --store ...` usage migrates to `task build`, then `task publish`.
+
+At runtime `task("alias")` uses a project binding. `task("id", "version")` remains
+an exact-store API and is useful outside released flows.
+For alias calls, omit `store=`; choose the source with `task use --from` instead.
+
+## Flows
+
+A source flow uses `flows/name.py` and `flows/name.toml`:
+
+```toml
+[flow]
+schema = 1
+flow_id = "name"
+version = "0.1.0"
+source = "name.py"
+export = "name"
+tasks = ["normalize"]
+```
+
+Build/test require tests are in `tests/flows/name/` and must contain at least one unittest.
+
+```bash
+weavem flow validate NAME
+weavem flow test NAME
+weavem flow build NAME --work-dir .artifacts
+weavem flow publish CANDIDATE --to STORE
+weavem flow run NAME --params '{"value": 2}'
+weavem flow run ID==VERSION --release --store STORE --params '{}'
+weavem flow list [--store STORE] [--json]
+weavem flow info ID==VERSION [--store STORE] [--json]
+```
+
+`flow run NAME` runs local source. `--release` runs a stored release. Build only
+accepts declared aliases bound to published releases; it never publishes tasks.
+
+## Scaffolding and paths
+
+```bash
+weavem project new DIRECTORY
+weavem task new DIRECTORY [--id ID] [--version VERSION] [--backend python|cython]
+weavem flow new NAME
+```
+
+Global `--project PATH` goes before the subcommand. Project/source/candidate arguments
+are relative to the shell working directory; configured store/work paths, `--to`,
+`--from`, and `task use --path` are anchored to the selected project root. Absolute
+store paths are also accepted. Local task paths must remain inside that project.
+
+Flow scaffolding creates `flows/NAME.py`, `flows/NAME.toml`, and
+`tests/flows/NAME/test_flow.py`; it refuses existing targets. Edit the placeholder
+implementation, metadata, and tests before releasing meaningful work.
+
+Flow `validate` accepts local bindings; flow `build` requires published dependencies.
+Both build and publish print JSON with `root` and `manifest` paths. Handled CLI
+failures print a diagnostic to stderr and return 2; success returns 0. Application
+exceptions may propagate as ordinary Python/Prefect failures.
 
 ## Author metadata
 
@@ -162,7 +196,7 @@ normalize_names = task(
 ```
 
 This resolves an artifact you supply; it does not install or create the example task.
-`task(task_id, version, *, store=None, policy=None, project=None, **task_options)`
+`task(task_id, version=None, *, store=None, policy=None, project=None, **task_options)`
 returns a genuine Prefect Task. Task invocation—not wrapper creation—resolves and
 validates the artifact and loads the export. Store path configuration is selected
 when the wrapper is created; changing the working directory afterwards does not
@@ -176,11 +210,11 @@ retarget that wrapper.
 - Other keywords are passed to Prefect's task decorator, not to your task function.
   Pass task inputs when calling the returned Task.
 - `flow(...)` forwards to Prefect's real flow decorator. `.with_options(...)` remains
-  available on Prefect objects. Persistent caching is outside the verified MVP;
-  follow the guide's explicit no-cache example for local work.
+  available on Prefect objects. Weavem tasks default to `NO_CACHE`; explicitly enabling Prefect result caching
+  can skip execution-time integrity/policy checks and is outside this verified lane.
 
 A custom adapter implements `resolve(task_id, version) -> ArtifactRef`, `list()`
-returning an iterable of references, and `publish(completed_staging_dir) -> ArtifactRef`.
+returning an iterable of references, and `publish(candidate_dir) -> ArtifactRef`.
 Import these from `weavem.store`; an `ArtifactRef` contains a local artifact-directory
 `root`. Adapters must materialize local files and cannot bypass runtime checks.
 The built-in `LocalStore` is enough for folder-based distribution. Do not build a
@@ -198,3 +232,26 @@ Discovery is metadata-only, **not** an integrity, compatibility, or execution-po
 approval. Successful `task info` does not prove a task is safe or runnable. Only run
 trusted publishers' artifacts. See the [artifact contract](artifact-contract.md) and
 [limitations](limitations.md) for runtime checks, immutability, and caching boundaries.
+
+## Released flow SDK
+
+```python
+from weavem import load_flow
+process = load_flow("text.process", "1.0.0", store="task-store")
+result = process(text="Example")
+```
+
+This returns a real Prefect Flow with the authored signature and options. Its
+recorded task aliases resolve only in the supplied store, regardless of project
+bindings. A released flow cannot override those pins. Use `load_local_flow` from
+`weavem.flows` to load a source flow by name and selected project.
+Flow lifecycle errors use `weavem.flows.FlowError`.
+
+## Managed native environment
+
+`weavem doctor [--work-dir PATH]` verifies the bundled compiler, selects verified
+headers (or the interpreter's complete headers), and compiles/imports a probe.
+It prints JSON and uses the same configured work directory as task builds.
+`task build` automatically performs this check and reruns the authored tests
+against the compiled extension. `task test` remains a source test, not publication.
+See [native authoring](native-authoring.md).

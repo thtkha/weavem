@@ -8,7 +8,7 @@ from _support import workspace  # noqa: F401
 from pathlib import Path
 import unittest
 
-from weavem.build import build
+from weavem.build import build, publish
 from weavem.store import LocalStore
 
 
@@ -51,8 +51,9 @@ class PrefectAcceptanceTests(unittest.TestCase):
         self._workspace.cleanup()
 
     def _build(self, task_id: str, *, source: str = "def run(value):\n    return value * 2\n") -> None:
-        build(make_task(self.root / "author", task_id=task_id, source=source), store=self.store,
-              work_dir=self.work, project=self.root)
+        candidate = build(make_task(self.root / "author", task_id=task_id, source=source),
+                          work_dir=self.work, project=self.root)
+        publish(candidate, store=self.store)
 
     def test_task_and_flow_return_real_prefect_objects_and_run_artifact(self) -> None:
         task_id = "prefect.real-flow"
