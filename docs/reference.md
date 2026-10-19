@@ -255,3 +255,64 @@ It prints JSON and uses the same configured work directory as task builds.
 `task build` automatically performs this check and reruns the authored tests
 against the compiled extension. `task test` remains a source test, not publication.
 See [native authoring](native-authoring.md).
+
+## Local project metadata (Python API)
+
+```python
+from weavem import Project
+
+project = Project.open(".")
+snapshot = project.metadata()
+```
+
+This is a local library call, not an API server. It reads files without importing
+or executing task/flow code, starting Prefect, compiling, writing files, or making
+network requests. No additional installation, registration or CLI command is needed.
+
+`Project.open()` without a path uses existing current-directory project discovery.
+An explicit directory or `weavem.toml` selects that project. Existing configuration
+and environment overrides for store/work paths still apply. The handle retains
+its selected project; each `metadata()` call rereads configuration and definitions.
+
+The returned dictionary is directly serializable with `json.dumps(snapshot)`:
+
+| Key | Contents |
+| --- | --- |
+| `schema` | Snapshot schema version, currently `1` (separate from manifest versions) |
+| `project` | Absolute `root`, `config_path` (or null), `store_path`, `work_dir` |
+| `tasks` | Authored definitions: absolute task.toml `path` and complete source `metadata` |
+| `flows` | Authored definitions: absolute sidecar `path` and complete flow `metadata` |
+| `bindings` | Sorted entries with `alias`, local directory `path`, `release`, `source`, `manifest_sha256`; unused alternatives are null |
+| `releases` | Referenced task releases: `kind`, absolute artifact `root`, canonical `manifest_sha256`, complete manifest `metadata` |
+
+Tasks are discovered under `tasks/` recursively and from explicit local bindings.
+Flows come from `flows/*.toml`. Task definitions are deduplicated by resolved path;
+aliases remain separate bindings. Hidden task directories, symlinked definition
+directories, and configured work/store subtrees are not scanned. Explicitly bound
+symlink paths and symlinked definition/source files are rejected. Flow dependency
+relationships are their declared task aliases, resolved through `bindings`.
+
+Only project references are followed, including references to external local
+stores. Unrelated store entries, unpublished candidates and unreferenced flow
+releases are excluded. An authored task/flow is not labelled published just because
+an artifact with the same ID exists somewhere. Releases are deduplicated by location.
+
+Missing or invalid definitions, source files, aliases, referenced manifests or
+pinned digests raise `weavem.contracts.ContractError` with context; no partial
+snapshot is returned. Metadata inspection does not enforce the inspecting Python's
+ABI or import runtime dependencies. It validates metadata and pins, **not payload
+bytes or execution safety**. Collections have deterministic ordering; paths remain
+machine-specific. Read a stable checkout: this is not an atomic filesystem snapshot.
+
+A database adapter can consume it directly:
+
+```python
+snapshot = Project.open(".").metadata()
+for release in snapshot["releases"]:
+    # Your application owns database mapping and transactional writes.
+    register_release(release)  # application-provided function, not Weavem API
+```
+
+This describes the project, not a publication receipt or execution/billing history.
+Publication-specific automation must register only releases actually published by
+its release process, rather than interpreting all authored definitions as releases.

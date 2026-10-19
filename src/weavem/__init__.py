@@ -1,5 +1,6 @@
 """Weavem task framework public API."""
 from .runtime import task
+from .project import Project
 
 
 def load_flow(flow_id, version, **options):
@@ -12,4 +13,4 @@ def flow(*args, **kwargs):
     from prefect import flow as prefect_flow
     return prefect_flow(*args, **kwargs)
 
-__all__ = ["flow", "task", "load_flow"]
+__all__ = ["flow", "task", "load_flow", "Project"]

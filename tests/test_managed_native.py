@@ -68,11 +68,26 @@ class ManagedNativeTests(unittest.TestCase):
                 with self.assertRaisesRegex(NativeError, 'not supported'):
                     _headers(Path(temporary))
 
-    def test_doctor_selects_verified_header_pack(self):
+    def test_doctor_checks_available_headers(self):
         with workspace() as temporary:
             result = check_native(Path(temporary))
-            self.assertTrue(result['headers'].startswith('cpython-'))
+            self.assertTrue(result['headers'] == 'interpreter'
+                            or result['headers'].startswith('cpython-'))
             self.assertEqual(list(Path(temporary).iterdir()), [])
+
+    def test_matching_bundle_is_verified_and_extracted(self):
+        import weavem.native as native
+        resources = Path(native.__file__).with_name('_native_headers')
+        for path in sorted(resources.glob('*.json')):
+            record = json.loads(path.read_text())
+            with self.subTest(bundle=path.name), workspace() as temporary:
+                config = record['config'] | {'SOABI': record['soabi']}
+                with patch('weavem.native.sys.version_info', tuple(record['version'])), \
+                        patch('weavem.native.sysconfig.get_config_vars', return_value=config):
+                    paths, identity = _headers(Path(temporary))
+                self.assertEqual(identity, path.stem)
+                self.assertTrue((paths[0] / 'Python.h').is_file())
+                self.assertTrue((paths[0] / 'pyconfig.h').is_file())
 
     def test_complete_interpreter_headers_are_used_when_no_bundle_matches(self):
         with workspace() as temporary:

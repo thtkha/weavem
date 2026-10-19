@@ -135,6 +135,19 @@ Tests use `.artifacts/` (or `WEAVEM_ARTIFACTS_DIR`), disable analytics, and exer
 Prefect's local test harness. Full integration tests need local loopback sockets
 and native build prerequisites. They do not require a second machine.
 
+## Read project metadata from Python
+
+```python
+from weavem import Project
+
+metadata = Project.open(".").metadata()
+```
+
+Read task/flow definitions, bindings and referenced release metadata directly from
+local files. No server, export command or task execution is involved. See the
+[metadata API reference](docs/reference.md#local-project-metadata-python-api)
+for the snapshot format and strict error behavior.
+
 ## License and trademarks
 
 The code is licensed under [Apache License 2.0](LICENSE), with attribution in
