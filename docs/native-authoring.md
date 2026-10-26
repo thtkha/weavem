@@ -132,10 +132,12 @@ replace remote CI. Results are recorded in the
 [current compatibility evidence](release-readiness-2026-10-26.md), separately
 from the dated 3.12–3.14 evidence below.
 
-The workflow is prepared locally, not pushed or executed on GitHub. There is no
-automated publication job and no claim that repository branch protection has been
-configured. Any future publishing job must depend on this gate; maintainers must
-not manually waive it while promising latest-stable support.
+The workflow passed all five GitHub-hosted lanes for commit `14dfe1e`:
+[Verify Weavem run 40304972425](https://github.com/thtkha/weavem/actions/runs/40304972425).
+That result covers the tested commit, not subsequent changes. There is no
+automated publication job and no claim that repository branch protection has
+been configured. Any future publishing job must depend on this gate; maintainers
+must not manually waive it while promising latest-stable support.
 
 ## Private distribution and verification
 
@@ -170,7 +172,7 @@ Verified on 2026-10-12:
   isolated Python imports: the journey did not depend on the checkout or the
   author's system compiler settings. The recipient did not compile anything.
 - `pip check`, Python syntax checks, workflow YAML parsing, and `git diff --check`
-  passed. GitHub-hosted CI has not run yet.
+  passed. GitHub-hosted CI had not run at that point.
 
 The retained recorder is `installed-journey.py`; its evidence is in
 `logs/installed-author.log` and `logs/installed-recipient.log` under the same

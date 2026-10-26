@@ -1,7 +1,9 @@
 # Compatibility evidence and release readiness
 
-This is the current status of the uncommitted release-hardening changes on
-`weavem-v1`, based on commit `9b9a49f95a82effa4a8f2ba12ae250e5a21da757`.
+The release-hardening changes were committed and pushed on `weavem-v1` as
+`14dfe1e859e4baba13b4d2eb334762bf08e69a9e`, based on commit
+`9b9a49f95a82effa4a8f2ba12ae250e5a21da757`. The local results below describe the
+candidate before that commit; the GitHub result identifies the tested revision.
 The package is still a provisional `0.1.0` candidate, not a public PyPI release.
 Wheel checksums distinguish candidates that share that package version.
 
@@ -87,6 +89,18 @@ header archive checksums and safe member paths, and `git diff --check`. No
 dedicated lint/typecheck configuration is defined for this project; syntax and
 manual review are not presented as a substitute for a typechecker.
 
+## GitHub CI: commit 14dfe1e
+
+[Verify Weavem run 40304972425](https://github.com/thtkha/weavem/actions/runs/40304972425)
+completed successfully for `14dfe1e859e4baba13b4d2eb334762bf08e69a9e`.
+All five jobs passed: Python 3.12, 3.13, 3.14, 3.15, and the separate
+latest-stable-Python gate. Each ran wheel installation, native doctor, full tests,
+and fresh-environment installed-wheel verification.
+
+This closes the remote-CI gate for that commit only. Later changes, including the
+packaging-test follow-up below, need their own CI run before release; the earlier
+114-test counts are not results for the follow-up test suite.
+
 ## Earlier reports and remaining gates
 
 The [original blind trial](blind-acceptance-2026-10-21.md) failed on runtime
@@ -103,15 +117,22 @@ platform portability, publisher authenticity, sandboxing, comprehensive secret
 scanning, or cross-toolchain reproducible native builds.
 
 Independent code review found no blocking defects. Architecture review identified
-one non-blocking regression-coverage gap: the wheel packaging test asserts bundled
-archives and licenses, but not every matching JSON provenance record. A future
-omission could be masked by legitimate interpreter-header fallback. All four
-current archive/JSON/license sets and archive checksums were manually verified
-in the fresh wheel; a follow-up should
-assert complete archive/JSON/license sets in the built wheel without removing
-that fallback.
+one non-blocking regression-coverage gap in `14dfe1e`: the wheel packaging test
+asserted bundled archives and licenses, but not every matching JSON provenance
+record. All four archive/JSON/license sets and archive checksums were manually
+verified in that candidate. **Resolved in the local test-only follow-up:** the
+packaging test now asserts matching sets, archive references, and checksums
+without changing interpreter-header fallback.
 
-Remote GitHub Actions, including the latest-stable-Python gate, must still pass
-before release. No remote workflow, public publication, or branch-protection
-configuration is established by local test success. This pass does not commit,
-push, publish, or remove existing artifacts.
+Focused packaging verification passed **2 tests on each of Python 3.12.3,
+3.13.16, 3.14.8, and 3.15.0**. Each lane built a real wheel and checked its
+contents; in-memory fixtures confirmed that missing JSON, archive, or license
+files, an incorrect archive reference, and a wrong checksum are rejected.
+Logs and `summary.json` are retained under
+`.artifacts/header-provenance/2026-10-26/`. This test/docs-only follow-up has not
+rerun the full suite or remote CI and is not covered by the earlier GitHub run.
+
+Every release needs passing GitHub Actions, including the latest-stable-Python
+gate, for its exact candidate revision. No tag, public publication, or
+branch-protection configuration is established by these checks. The test/docs
+follow-up does not commit, push, publish, or remove existing artifacts.

@@ -67,7 +67,8 @@ separate follow-up work.
   Caches are process-local and grow with distinct source versions until exit.
 - RustFS, remote release repositories, automated publication, warehouse metadata
   syncing, and billing remain outside this implementation. GitHub Actions
-  verification is defined, but remote CI must pass before release.
+  verification passed for commit `14dfe1e`; every release candidate still needs
+  passing CI for its exact revision.
 
 ## Managed native authoring
 
@@ -76,5 +77,5 @@ and compiled-test boundaries. Header bundles are not inferred from version alone
 Free-threaded, debug/trace-ref, musl, Windows, and macOS builds are unsupported.
 The current dependency pins are Prefect 3.9.0 and FastAPI 0.143.0; the earlier
 Python 3.15 dependency blocker is resolved in local verification. See the
-[current compatibility evidence](release-readiness-2026-10-26.md) for results and
-the remaining remote-CI release gate.
+[current compatibility evidence](release-readiness-2026-10-26.md) for local and
+GitHub CI results and the exact-revision release rule.
