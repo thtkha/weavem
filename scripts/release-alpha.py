@@ -18,6 +18,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import tomllib
 import zipfile
 from dataclasses import dataclass
@@ -252,9 +253,19 @@ def publish(args: argparse.Namespace) -> int:
             notes = directory / "notes.md"
             notes.write_text(release_notes(candidate, args.tag, source_sha), encoding="utf-8")
             run("gh", "release", "create", args.tag, "--repo", github_repository(), "--verify-tag", "--draft", "--prerelease", "--title", f"Weavem {args.tag}", "--notes-file", str(notes))
-            release = gh_release(args.tag)
-            if release is None:
-                raise ReleaseError("draft release was not created")
+            # Creation can succeed before the draft appears in the release list.
+            # Retry only absence, never API errors or the create command itself.
+            for delay in (0, 1, 2, 4, 8):
+                if delay:
+                    time.sleep(delay)
+                release = gh_release(args.tag)
+                if release is not None:
+                    break
+            else:
+                raise ReleaseError(
+                    "draft visibility timed out after five lookups; creation command succeeded. "
+                    "Preserve the tag and candidate; rerun only the failed publication job."
+                )
         if release.get("tagName") != args.tag or not release.get("isPrerelease"):
             raise ReleaseError("existing release does not belong to this alpha prerelease")
         body = str(release.get("body", ""))

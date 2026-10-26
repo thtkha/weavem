@@ -162,7 +162,15 @@ gh release view "${TAG}" --repo thtkha/weavem --json isPrerelease,isDraft,body,u
 release is not a draft, is a prerelease, identifies the tag commit in its notes, and contains one
 wheel plus `SHA256SUMS`.
 
-**If this fails:** Preserve the tag, logs, draft, and assets. If GitHub reports a
+After successful draft creation, automation checks immediately, then retries a
+missing draft after waits of 1, 2, 4, and 8 seconds. API errors and identity or
+checksum conflicts still stop immediately. It never retries the create command.
+If the draft remains invisible, it reports a **draft visibility timeout**; this
+does not mean creation failed.
+
+**If this fails:** Preserve the tag, logs, draft, and assets. A draft visibility
+timeout can be recovered by waiting for GitHub to show the draft and rerunning
+only the failed publication job below. If GitHub reports another
 transient runner, network, or publication failure rather than a code, test, or
 metadata failure, rerun only failed jobs and watch the same run:
 

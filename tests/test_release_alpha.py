@@ -113,16 +113,74 @@ class ReleaseAlphaTests(unittest.TestCase):
         candidate = release_alpha.validate_candidate(self.dist, self.root, "v0.1.0a1", require_checksums=True)
         draft = {"tagName": "v0.1.0a1", "isDraft": True, "isPrerelease": True, "targetCommitish": "main", "body": "- Source commit: `abc`\n- CI run: https://github.com/acme/weavem/actions/runs/1", "assets": []}
         complete = {**draft, "assets": [{"name": candidate.wheel.name}, {"name": "SHA256SUMS"}]}
+        original = self.wheel.read_bytes()
+        for missed in range(5):
+            with self.subTest(missed_lookups=missed), \
+                 mock.patch.object(release_alpha, "validate_publication_context", return_value="abc"), \
+                 mock.patch.object(release_alpha, "gh_release", side_effect=[None] + [None] * missed + [draft, complete]) as lookup, \
+                 mock.patch.object(release_alpha, "verify_existing_assets", side_effect=[set(), {candidate.wheel.name, "SHA256SUMS"}]), \
+                 mock.patch.object(release_alpha, "run") as runner, \
+                 mock.patch("time.sleep") as sleep, \
+                 mock.patch.dict("os.environ", {"WEAVEM_ARTIFACTS_DIR": str(self.root / ".artifacts"), "GITHUB_REPOSITORY": "acme/weavem"}, clear=False):
+                self.assertEqual(release_alpha.publish(self._publish_args()), 0)
+            self.assertEqual(sleep.call_args_list, [mock.call(delay) for delay in (1, 2, 4, 8)[:missed]])
+            self.assertEqual(lookup.call_count, missed + 3)
+            commands = [call.args for call in runner.call_args_list]
+            self.assertEqual([command[:3] for command in commands], [
+                ("gh", "release", "create"), ("gh", "release", "upload"),
+                ("gh", "release", "upload"), ("gh", "release", "edit"),
+            ])
+            self.assertIn("--verify-tag", commands[0])
+            self.assertTrue(all("--clobber" not in command for command in commands))
+            self.assertEqual(self.wheel.read_bytes(), original)
+
+    def test_draft_visibility_timeout_preserves_candidate_and_does_not_recreate(self) -> None:
+        original = self.wheel.read_bytes()
         with mock.patch.object(release_alpha, "validate_publication_context", return_value="abc"), \
-             mock.patch.object(release_alpha, "gh_release", side_effect=[None, draft, complete]), \
-             mock.patch.object(release_alpha, "verify_existing_assets", side_effect=[set(), {candidate.wheel.name, "SHA256SUMS"}]), \
+             mock.patch.object(release_alpha, "gh_release", return_value=None) as lookup, \
+             mock.patch.object(release_alpha, "verify_existing_assets") as verify, \
              mock.patch.object(release_alpha, "run") as runner, \
+             mock.patch("time.sleep") as sleep, \
              mock.patch.dict("os.environ", {"WEAVEM_ARTIFACTS_DIR": str(self.root / ".artifacts"), "GITHUB_REPOSITORY": "acme/weavem"}, clear=False):
-            self.assertEqual(release_alpha.publish(self._publish_args()), 0)
-        commands = [call.args for call in runner.call_args_list]
-        self.assertTrue(any(command[0:3] == ("gh", "release", "create") and "--verify-tag" in command for command in commands))
-        self.assertEqual(sum(command[0:3] == ("gh", "release", "upload") for command in commands), 2)
-        self.assertTrue(any(command[0:3] == ("gh", "release", "edit") for command in commands))
+            with self.assertRaisesRegex(release_alpha.ReleaseError, "draft visibility timed out.*rerun.*failed"):
+                release_alpha.publish(self._publish_args())
+        self.assertEqual(lookup.call_count, 6)  # Initial lookup plus five after create.
+        self.assertEqual(sleep.call_args_list, [mock.call(delay) for delay in (1, 2, 4, 8)])
+        self.assertEqual([call.args[:3] for call in runner.call_args_list], [("gh", "release", "create")])
+        verify.assert_not_called()
+        self.assertEqual(self.wheel.read_bytes(), original)
+
+    def test_draft_lookup_errors_stop_without_retry_or_additional_mutations(self) -> None:
+        for missed in (0, 1):
+            with self.subTest(missed=missed), \
+                 mock.patch.object(release_alpha, "validate_publication_context", return_value="abc"), \
+                 mock.patch.object(release_alpha, "gh_release", side_effect=[None] + [None] * missed + [release_alpha.ReleaseError("HTTP 403")]) as lookup, \
+                 mock.patch.object(release_alpha, "run") as runner, \
+                 mock.patch("time.sleep") as sleep, \
+                 mock.patch.dict("os.environ", {"WEAVEM_ARTIFACTS_DIR": str(self.root / ".artifacts"), "GITHUB_REPOSITORY": "acme/weavem"}, clear=False):
+                with self.assertRaisesRegex(release_alpha.ReleaseError, "HTTP 403"):
+                    release_alpha.publish(self._publish_args())
+            self.assertEqual(lookup.call_count, missed + 2)
+            self.assertEqual(sleep.call_args_list, [mock.call(1)] if missed else [])
+            self.assertEqual([call.args[:3] for call in runner.call_args_list], [("gh", "release", "create")])
+
+    def test_visible_draft_conflicts_are_not_retried(self) -> None:
+        draft = {"tagName": "v0.1.0a1", "isDraft": True, "isPrerelease": True,
+                 "body": "- Source commit: `abc`\n- CI run: https://github.com/acme/weavem/actions/runs/1"}
+        for conflict in ("identity", "checksum"):
+            visible = {**draft, "tagName": "wrong"} if conflict == "identity" else draft
+            with self.subTest(conflict=conflict), \
+                 mock.patch.object(release_alpha, "validate_publication_context", return_value="abc"), \
+                 mock.patch.object(release_alpha, "gh_release", side_effect=[None, None, visible]) as lookup, \
+                 mock.patch.object(release_alpha, "verify_existing_assets", side_effect=release_alpha.ReleaseError("checksum conflict")), \
+                 mock.patch.object(release_alpha, "run") as runner, \
+                 mock.patch("time.sleep") as sleep, \
+                 mock.patch.dict("os.environ", {"WEAVEM_ARTIFACTS_DIR": str(self.root / ".artifacts"), "GITHUB_REPOSITORY": "acme/weavem"}, clear=False):
+                with self.assertRaisesRegex(release_alpha.ReleaseError, "does not belong|checksum conflict"):
+                    release_alpha.publish(self._publish_args())
+            self.assertEqual(lookup.call_count, 3)
+            sleep.assert_called_once_with(1)
+            self.assertEqual([call.args[:3] for call in runner.call_args_list], [("gh", "release", "create")])
 
     def test_publish_resumes_partial_draft_without_replacing_existing_asset(self) -> None:
         candidate = release_alpha.validate_candidate(self.dist, self.root, "v0.1.0a1", require_checksums=True)
