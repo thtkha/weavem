@@ -16,6 +16,10 @@ weavem task new tasks/normalize_text
 weavem flow new process_documents
 ```
 
+The project README explains the generated layout. A task initially exports
+`run(value)`, which returns its input unchanged; this is scaffolding, not your
+finished behavior. A flow is initially empty and must be connected explicitly.
+
 Replace `tasks/normalize_text/task.toml` with:
 
 ```toml
@@ -57,6 +61,14 @@ weavem task test tasks/normalize_text
 
 `normalize` is a project-local dependency alias. Another alias can select an
 existing published task; local and released bindings can coexist in one project.
+Successful validation and tests print `task validate passed: ...` and
+`task test passed: ...`. A failure exits nonzero and does not print a success
+message. Validation checks the source contract; tests execute your authored
+behavioral checks. Neither publishes a release.
+
+In Python, use `weavem.task(...)` to select executable tasks. The separate
+`Project.open(".").metadata()` entry point reads local metadata; there is no
+`Project.task(...)` execution method.
 
 ## 2. Compose and run a local flow
 

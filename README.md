@@ -24,15 +24,32 @@ Python builds remain outside it.
 From the cloned repository root, with supported Python venv/pip support installed:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install .
+python3 -m venv .venv &&
+source .venv/bin/activate &&
+python -m pip --version &&
+python -m pip install . &&
 weavem --help
 ```
 
 Activate that environment again in new shells. Installation requires your package
 index or a provisioned offline wheelhouse; Weavem does not install task dependencies
 on invocation. A privately supplied Weavem wheel can be installed instead of cloning.
+
+**If environment creation fails, stop before installation.** `venv` normally
+bootstraps pip through `ensurepip`, but some OS-provided Python installations omit
+that component. This is a Python installation prerequisite, not a missing Weavem
+compiler. For `No module named venv` or an unavailable `ensurepip`, use your Python
+distributor's instructions to install the venv support matching `python3 --version`,
+or select a supported Python installation that includes it. OS package changes
+remain an explicit administrator action; neither pip nor Weavem performs them.
+
+If `.venv` was created successfully but reports `No module named pip`, run
+`.venv/bin/python -m ensurepip --upgrade`, then verify
+`.venv/bin/python -m pip --version`. If `ensurepip` is missing too, repair the
+base Python as above and rerun environment creation before continuing. Do not
+fall back to a global `sudo pip install` or copy someone else's `.venv`.
+See Python's [venv documentation](https://docs.python.org/3/library/venv.html)
+and [ensurepip guidance](https://docs.python.org/3/library/ensurepip.html).
 
 Weavem installs its native authoring tools by default: pinned Cython, setuptools,
 and a bundled Zig C compiler. Verified CPython header bundles—including the
@@ -85,8 +102,12 @@ weavem flow new process_documents
 weavem task use normalize --path tasks/normalize_text
 ```
 
-The task implementation and tests are starter code: replace them and edit the
-metadata. The new flow is an empty scaffold, not an automatically connected pipeline.
+Each new project includes a README explaining its folders and next steps.
+The task starts with a neutral `run(value)` pass-through and a matching test:
+replace both and edit the metadata. Its `export` must name your callable.
+`validate` and `test` print a short `passed` message only when their checks succeed;
+build and publish retain their machine-readable JSON output.
+The new flow is an empty scaffold, not an automatically connected pipeline.
 The [authoring guide](docs/authoring-guide.md) walks through the complete, runnable
 author-to-consumer story, including exact file contents.
 

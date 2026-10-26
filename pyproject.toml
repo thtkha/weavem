@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "weavem"
-version = "0.1.0a1"
+version = "0.1.0a2"
 description = "Local-first, versioned task artifacts for Prefect flows"
 readme = "README.md"
 license = "Apache-2.0"

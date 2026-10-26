@@ -24,6 +24,10 @@ class CliTests(unittest.TestCase):
             self.assertEqual((root / "weavem.toml").read_text(), "[weavem]\n")
             self.assertTrue((root / "tasks").is_dir())
             self.assertTrue((root / "flows" / "__init__.py").is_file())
+            readme = (root / "README.md").read_text()
+            for instruction in ("weavem task new tasks/my_task", "weavem task use", "weavem flow run",
+                                "export", "Project", ".artifacts/", "task-store/"):
+                self.assertIn(instruction, readme)
             self.assertEqual(
                 (root / ".gitignore").read_text(),
                 ".artifacts/\ntask-store/\n__pycache__/\n.venv/\n",
@@ -113,6 +117,7 @@ class CliTests(unittest.TestCase):
             self.assertEqual(data["task_id"], "double")
             self.assertEqual(data["version"], "0.1.0")
             self.assertEqual(data["backend"], "python")
+            self.assertEqual(data["export"], "run")
             self.assertTrue((task_dir / "implementation.py").is_file())
             self.assertTrue((task_dir / "tests" / "test_task.py").is_file())
             run_task_tests(task_dir, work_dir=root / "work")
@@ -124,9 +129,50 @@ class CliTests(unittest.TestCase):
             with chdir(root), redirect_stdout(StringIO()):
                 self.assertEqual(main(["task", "publish", candidate]), 0)
             ref = LocalStore(root / "task-store").resolve("double", "0.1.0")
-            self.assertEqual(load_export(ref)(21), 42)
+            self.assertEqual(load_export(ref)(21), 21)
             metadata.write_text(metadata.read_text().replace('version = "0.1.0"', 'version = "0.2.0"'))
             self.assertEqual(validate(task_dir)[0].version, "0.2.0")
+
+    def test_validate_and_test_report_success_only_after_passing(self) -> None:
+        with workspace("cli-check-messages-") as temporary:
+            root = Path(temporary) / "project"
+            self.assertEqual(main(["project", "new", str(root)]), 0)
+            with chdir(root):
+                self.assertEqual(main(["task", "new", "tasks/example"]), 0)
+                self.assertEqual(main(["flow", "new", "example"]), 0)
+                for kind, target in (("task", "tasks/example"), ("flow", "example")):
+                    for action in ("validate", "test"):
+                        with self.subTest(kind=kind, action=action):
+                            output = StringIO()
+                            with redirect_stdout(output):
+                                self.assertEqual(main([kind, action, target]), 0)
+                            self.assertEqual(output.getvalue(), f"{kind} {action} passed: {target}\n")
+                    test_path = (root / "tasks/example/tests/test_task.py" if kind == "task"
+                                 else root / "tests/flows/example/test_flow.py")
+                    test_path.write_text("import unittest\nclass Failure(unittest.TestCase):\n"
+                                         "    def test_failure(self): self.fail('intentional')\n")
+                    output, errors = StringIO(), StringIO()
+                    with redirect_stdout(output), redirect_stderr(errors):
+                        self.assertEqual(main([kind, "test", target]), 2)
+                    self.assertEqual(output.getvalue(), "")
+                    self.assertIn("intentional", errors.getvalue())
+                    metadata = root / ("tasks/example/task.toml" if kind == "task" else "flows/example.toml")
+                    metadata.write_text("invalid toml !")
+                    with redirect_stdout(output), redirect_stderr(errors):
+                        self.assertEqual(main([kind, "validate", target]), 2)
+                    self.assertEqual(output.getvalue(), "")
+
+    def test_native_starter_builds_and_runs_the_export(self) -> None:
+        with workspace("cli-native-starter-") as temporary:
+            root = Path(temporary)
+            source = root / "my-task"
+            self.assertEqual(main(["task", "new", str(source), "--backend", "cython"]), 0)
+            output = StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(main(["task", "build", str(source), "--work-dir", str(root / "work")]), 0)
+            from weavem.store import ArtifactRef
+            ref = ArtifactRef(Path(json.loads(output.getvalue())["root"]))
+            self.assertEqual(load_export(ref)("unchanged"), "unchanged")
 
     def test_nested_directory_infers_id_from_task_name(self) -> None:
         with workspace("cli-nested-") as temporary:

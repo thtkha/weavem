@@ -76,6 +76,27 @@ are the runtime boundaries. Free-threaded, trace-ref/debug, musl, Windows, and
 macOS builds are not supported. Native artifacts remain tied to their Python minor
 ABI and platform; a 3.12 `.so` is not upgraded into a 3.14 `.so` by copying it.
 
+## What portability verification covers
+
+Installing the framework wheel on a clean machine, building a native task there,
+and transferring an already-built task to a different machine are separate checks.
+The framework wheel is Python code; a task's `.so` is interpreter/platform-specific.
+
+CI's supported-Python lanes install the shared wheel into fresh environments and
+exercise native authoring and copied-store reuse on the same runner. The separate
+`native-handoff` jobs receive only the published task/flow store, its
+hashes, and a verifier. On another runner with the matching Python minor, they
+install the same framework wheel, execute the pinned releases, verify the loaded
+module is the transferred `.so`, and check that the store bytes remain unchanged.
+No task source, producer virtual environment, or native rebuild is supplied.
+
+These new cross-runner checks must pass in GitHub Actions before claiming that
+handoff has been verified remotely. Both sides use Ubuntu 24.04 x86_64; success
+is not evidence for every glibc 2.28+ distribution, custom Python build, CPU,
+or task-specific shared library. Recipients still install required task packages
+and native libraries. Never distribute the author's virtual environment as the
+installation mechanism.
+
 ## What a native build guarantees
 
 1. Validate metadata and snapshot source and authored tests.

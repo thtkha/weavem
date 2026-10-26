@@ -81,6 +81,25 @@ jobs:
           cp scripts/verify-installed-wheel.py "$RUNNER_TEMP/verify-installed-wheel.py"
           cd "$RUNNER_TEMP"
           "$RUNNER_TEMP/weavem-wheel-${{ matrix.python }}/bin/python" -I verify-installed-wheel.py --work-dir "$RUNNER_TEMP/weavem-installed-wheel-${{ matrix.python }}"
+      - name: Prepare native handoff for a separate consumer runner
+        run: |
+          handoff="$RUNNER_TEMP/weavem-native-handoff-${{ matrix.python }}"
+          producer="$RUNNER_TEMP/weavem-installed-wheel-${{ matrix.python }}"
+          mkdir "$handoff"
+          cp -a "$producer/consumer/task-store" "$handoff/store"
+          cp "$producer/result.json" "$handoff/producer-result.json"
+          cp scripts/verify-native-handoff.py "$handoff/verify-native-handoff.py"
+          test ! -e "$handoff/author"
+          test ! -e "$handoff/tasks"
+          test -f "$handoff/store/release.money/2.0.0"/*/manifest.json
+          test -f "$handoff/store/_flows/release.money_flow/2.0.0"/*/manifest.json
+      - name: Upload native handoff
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-handoff-${{ matrix.python }}
+          include-hidden-files: true
+          path: ${{ runner.temp }}/weavem-native-handoff-${{ matrix.python }}
+          if-no-files-found: error
       - name: Upload installed-wheel evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -90,6 +109,54 @@ jobs:
           path: |
             ${{ runner.temp }}/weavem-ci-${{ matrix.python }}
             ${{ runner.temp }}/weavem-installed-wheel-${{ matrix.python }}
+          if-no-files-found: warn
+  native-handoff:
+    needs: [build-wheel, supported-python]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.12', '3.13', '3.14', '3.15']
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: weavem-wheel
+          path: dist
+      - uses: actions/download-artifact@v8
+        with:
+          name: native-handoff-${{ matrix.python }}
+          path: ${{ runner.temp }}/native-handoff-download-${{ matrix.python }}
+      - name: Install the exact tested wheel in an isolated consumer environment
+        run: |
+          (cd dist && sha256sum -c SHA256SUMS)
+          python -m venv "$RUNNER_TEMP/weavem-native-consumer-${{ matrix.python }}"
+          "$RUNNER_TEMP/weavem-native-consumer-${{ matrix.python }}/bin/python" -m pip install dist/weavem-*.whl
+          "$RUNNER_TEMP/weavem-native-consumer-${{ matrix.python }}/bin/python" -m pip check
+      - name: Consume the transferred native store without author source or rebuild
+        run: |
+          download="$RUNNER_TEMP/native-handoff-download-${{ matrix.python }}"
+          mapfile -t gates < <(find "$download" -type f -name verify-native-handoff.py -print)
+          test "${#gates[@]}" -eq 1
+          handoff="$(dirname "${gates[0]}")"
+          test ! -e "$handoff/author"
+          test ! -e "$handoff/tasks"
+          "$RUNNER_TEMP/weavem-native-consumer-${{ matrix.python }}/bin/python" -I "$handoff/verify-native-handoff.py" \
+            --store "$handoff/store" \
+            --expected "$handoff/producer-result.json" \
+            --work-dir "$RUNNER_TEMP/weavem-native-handoff-evidence-${{ matrix.python }}"
+      - name: Upload native handoff evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-handoff-evidence-${{ matrix.python }}
+          include-hidden-files: true
+          path: ${{ runner.temp }}/weavem-native-handoff-evidence-${{ matrix.python }}
           if-no-files-found: warn
   latest-python-release-gate:
     needs: build-wheel
@@ -153,7 +220,7 @@ jobs:
   publish-alpha:
     # A manual run (even on a tag) and a pull request can never publish.
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && github.event.repository.private == true
-    needs: [build-wheel, supported-python, latest-python-release-gate]
+    needs: [build-wheel, supported-python, native-handoff, latest-python-release-gate]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

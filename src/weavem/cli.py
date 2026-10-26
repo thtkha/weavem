@@ -94,17 +94,17 @@ def _new(args):
     task_id = root.name if args.task_id is None else args.task_id
     # Validate every user-supplied value before creating filesystem state.
     SourceSpec(schema=1, task_id=task_id, version=args.version, backend=args.backend,
-               source_path="implementation.py", export="double")
+               source_path="implementation.py", export="run")
     if root.exists():
         raise BuildError(f"refusing to overwrite existing path: {root}")
     root.mkdir(parents=True)
     tests = root / "tests"
     tests.mkdir()
     (root / "task.toml").write_text(
-        f'''# Edit task identity, version, and backend here before building.\n[task]\nschema = 1\ntask_id = "{task_id}"\nversion = "{args.version}"\nbackend = "{args.backend}"\nsource = "implementation.py"\nexport = "double"\ndependencies = []\n''', encoding="utf-8")
-    (root / "implementation.py").write_text("def double(value):\n    return value * 2\n", encoding="utf-8")
+        f'''# Edit task identity, version, and backend here before building.\n[task]\nschema = 1\ntask_id = "{task_id}"\nversion = "{args.version}"\nbackend = "{args.backend}"\nsource = "implementation.py"\nexport = "run"\ndependencies = []\n''', encoding="utf-8")
+    (root / "implementation.py").write_text("def run(value):\n    # Replace this pass-through starter with your task behavior.\n    return value\n", encoding="utf-8")
     (tests / "test_task.py").write_text(
-        "import unittest\nfrom implementation import double\n\nclass TaskTests(unittest.TestCase):\n    def test_double(self):\n        self.assertEqual(double(21), 42)\n", encoding="utf-8")
+        "import unittest\nfrom implementation import run\n\nclass TaskTests(unittest.TestCase):\n    def test_run(self):\n        self.assertEqual(run(\"hello\"), \"hello\")\n", encoding="utf-8")
 
 
 def _new_project(args):
@@ -120,6 +120,77 @@ def _new_project(args):
     (flows / "__init__.py").write_text("", encoding="utf-8")
     (root / ".gitignore").write_text(
         ".artifacts/\ntask-store/\n__pycache__/\n.venv/\n", encoding="utf-8")
+    (root / "README.md").write_text('''# Your Weavem project
+
+Run these commands in this folder with your Weavem Python environment activated.
+Use supported standard CPython 3.12–3.15 on Linux x86_64 (glibc 2.28+).
+No account, shared server, or publication is needed for local development.
+
+## What goes where
+
+- `weavem.toml`: project settings and explicitly selected task aliases.
+- `tasks/`: suggested home for editable task folders (created below).
+- `flows/`: flow Python modules and their `.toml` metadata.
+- `tests/flows/`: generated flow tests; each task has its own `tests/` folder.
+- `.artifacts/`: disposable build/test work and retained unpublished candidates.
+- `task-store/`: immutable published releases, created when you publish locally.
+  This store is gitignored, not disposable: retain or copy releases you need.
+
+## Start locally
+
+```bash
+weavem task new tasks/my_task
+weavem task use my_task --path tasks/my_task
+weavem task validate tasks/my_task
+weavem task test tasks/my_task
+weavem flow new my_flow
+weavem flow validate my_flow
+weavem flow test my_flow
+weavem flow run my_flow
+```
+
+Checks print `passed` on success. The untouched flow returns JSON `null`:
+it is an empty scaffold, not automatically wired to the task. Stop on errors;
+fix the named metadata or failing test before continuing. Creation commands
+refuse existing paths; edit existing files instead of rerunning scaffolding.
+
+Replace `tasks/my_task/implementation.py` and its tests with your behavior.
+The task metadata's `export` names the callable (`run` initially); keep that
+name consistent with your code and test imports. A function can call your
+classes and methods internally. Select `--backend cython` at task creation
+for native builds, or edit `backend` in `task.toml`. `weavem doctor` checks
+the native compiler and headers without installing OS packages.
+
+To connect the task, import `task` from `weavem` in `flows/my_flow.py` and call
+`task("my_task")(value)` inside the flow. Also add `"my_task"` to the flow
+metadata's `tasks` list and update its behavioral test. Run the checks again.
+Use `weavem.task(...)` for execution; `Project.open(".").metadata()` is the
+local metadata entry point, not a `Project.task(...)` execution API.
+
+## Build, publish, and share
+
+`weavem task build tasks/my_task` tests and creates an unpublished candidate.
+Its JSON output contains `root`: pass that exact path as the positional argument
+to `weavem task publish`. This publishes to `task-store/` by default; add
+`--to PATH` to choose another folder. Publishing promotes the same bytes,
+without rebuilding. Do not edit a published release: change the source version
+and build a new candidate instead.
+
+For a releasable flow, first publish every dependency and switch each alias
+with `weavem task use my_task --release my_task==0.1.0`. Then run
+`weavem flow build my_flow` and pass its candidate `root` to `weavem flow publish`.
+Local unpublished dependencies deliberately block flow builds.
+
+Share the published store folder, not `.artifacts/` or your virtual environment.
+Recipients install Weavem and any task-specific dependencies themselves.
+Native `.so` releases require a matching Python minor and compatible platform;
+copying a folder does not make a binary portable to every machine.
+
+Keep source and tests in version control. Retain candidates until promotion
+and verification finish; there is no automatic cleanup in these instructions.
+For the complete walkthrough and troubleshooting, see the Weavem repository's
+`docs/authoring-guide.md` and `docs/native-authoring.md`.
+''', encoding="utf-8")
 
 
 def _flow_name(value: str) -> str:
@@ -332,6 +403,9 @@ def main(argv=None) -> int:
         action = getattr(args, "task_command", None) or getattr(args, "flow_command", None)
         if result is not None and action in {"build", "publish"}:
             print(json.dumps(_json_ref(result), sort_keys=True))
+        if action in {"validate", "test"}:
+            target = args.directory if args.command == "task" else args.name
+            print(f"{args.command} {action} passed: {target}")
         return 0
     except (BuildError, FlowError, NativeError, CompatibilityError, ContractError, IntegrityError, PolicyError, StoreError, ValueError, OSError) as exc:
         print(f"weavem: {exc}", file=sys.stderr)
