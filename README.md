@@ -13,7 +13,11 @@ A company can share an extracted release folder privately. GitHub, a central
 registry, and the author's source checkout are not required.
 
 This branch implements the next developer workflow; it is still a provisional 0.x
-API, not a stable 1.0 release. Supported environment: **standard CPython 3.12–3.14, Linux x86_64, glibc 2.28+**.
+API, not a stable 1.0 release. The supported release lane is **standard,
+GIL-enabled CPython 3.12–3.15 on Linux x86_64 with glibc 2.28+**. A release
+may claim that lane only after its ordinary dependency install, native build,
+and latest-stable-Python CI gate have passed; custom, free-threaded, and debug
+Python builds remain outside it.
 
 ## Getting started after cloning
 
@@ -31,9 +35,10 @@ index or a provisioned offline wheelhouse; Weavem does not install task dependen
 on invocation. A privately supplied Weavem wheel can be installed instead of cloning.
 
 Weavem installs its native authoring tools by default: pinned Cython, setuptools,
-and a bundled Zig C compiler. Verified CPython header bundles ship in the wheel.
-For the tested standard CPython distributions, native authoring needs no system
-compiler, development-header package, sudo, Docker, or build-time download.
+and a bundled Zig C compiler. Verified CPython header bundles—including the
+CPython 3.15 bundle—ship in the wheel. For the supported standard CPython
+distributions, native authoring needs no system compiler, development-header
+package, sudo, Docker, or build-time download.
 
 ```bash
 weavem doctor
@@ -56,10 +61,10 @@ run compatible prebuilt native tasks without compiling them, though their defaul
 installation also contains the authoring tools. Release folders do not provision
 task-specific Python packages or native shared libraries.
 
-**Release blocker:** as of 2026-10-12, Python 3.15 is stable, but Prefect excludes
-it. This branch does not claim 3.15 support. A release promising latest-stable
-Python support must not ship until the latest-Python CI lane passes; bypassing
-pip's Python requirement is not a supported workaround.
+Weavem pins `prefect==3.9.0` and retains `fastapi==0.143.0` for the compatible
+runtime path. A release promising latest-stable Python support must not ship
+until the latest-Python CI lane passes with a normal install; bypassing pip's
+Python requirement is not a supported workaround.
 
 ## The developer workflow
 
@@ -100,6 +105,7 @@ schema-1 artifacts and `task("id", "version")` consumers remain supported.
 - [Reference](docs/reference.md): CLI, metadata, explicit bindings, path rules, and SDK.
 - [Artifact contract](docs/artifact-contract.md): integrity, publication, and flow dependency pins.
 - [Limitations](docs/limitations.md): support boundaries and execution risks.
+- [Current compatibility evidence](docs/release-readiness-2026-10-26.md): Python 3.12–3.15 checks and remaining release gates.
 - [Python/native cross-project fixture](examples/local-cross-project/README.md).
 
 ## Local configuration

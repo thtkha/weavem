@@ -14,6 +14,28 @@ from weavem.native import NativeError, _headers, check_native
 
 
 class ManagedNativeTests(unittest.TestCase):
+    def test_supported_runtime_version_boundaries(self):
+        from types import SimpleNamespace
+
+        for version in ((3, 12), (3, 13), (3, 14), (3, 15), (3, 11), (3, 16)):
+            with self.subTest(version=version), \
+                    patch('weavem.contracts.sys.version_info', version), \
+                    patch('weavem.contracts.sys.implementation', SimpleNamespace(name='cpython')), \
+                    patch('weavem.contracts.sys.platform', 'linux'), \
+                    patch('weavem.contracts._platform.machine', return_value='x86_64'), \
+                    patch('weavem.contracts._platform.libc_ver', return_value=('glibc', '2.28')), \
+                    patch('weavem.contracts.sysconfig.get_config_var', return_value=0):
+                if (3, 12) <= version <= (3, 15):
+                    require_supported_runtime()
+                else:
+                    with self.assertRaises(CompatibilityError):
+                        require_supported_runtime()
+
+        with patch('weavem.contracts.sys.implementation', SimpleNamespace(name='pypy')), \
+                patch('weavem.contracts.sys.version_info', (3, 15)):
+            with self.assertRaises(CompatibilityError):
+                require_supported_runtime()
+
     def author(self, root, *, source='def run(value): return value * 2\n', body='self.assertEqual(run(3), 6)'):
         task = root / 'task'; task.mkdir()
         (task / 'task.toml').write_text('[task]\ntask_id="managed.example"\nversion="1.0.0"\nbackend="cython"\nsource="implementation.py"\nexport="run"\n')
@@ -99,7 +121,10 @@ class ManagedNativeTests(unittest.TestCase):
             self.assertEqual(paths, [root])
             self.assertEqual(identity, 'interpreter')
 
-    def test_free_threaded_runtime_is_rejected(self):
-        with patch('weavem.contracts.sysconfig.get_config_var', return_value=1):
-            with self.assertRaisesRegex(CompatibilityError, 'GIL'):
-                require_supported_runtime()
+    def test_nonstandard_runtime_builds_are_rejected(self):
+        for flag in ('Py_DEBUG', 'Py_GIL_DISABLED', 'Py_TRACE_REFS'):
+            with self.subTest(flag=flag), patch(
+                    'weavem.contracts.sysconfig.get_config_var',
+                    side_effect=lambda key: int(key == flag)):
+                with self.assertRaisesRegex(CompatibilityError, 'GIL'):
+                    require_supported_runtime()

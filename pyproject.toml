@@ -9,15 +9,18 @@ description = "Local-first, versioned task artifacts for Prefect flows"
 readme = "README.md"
 license = "Apache-2.0"
 license-files = ["LICENSE", "NOTICE", "TRADEMARKS.md"]
-requires-python = ">=3.12,<3.15"
+requires-python = ">=3.12,<3.16"
 # Native task authoring is a first-class workflow, not an optional add-on.
-dependencies = ["prefect==3.8.7", "Cython==3.3.0", "setuptools==84.0.0", "ziglang==0.17.0"]
+# Retain the verified FastAPI pin during the Prefect/Python support upgrade;
+# relaxing it requires a separate fresh installed-wheel orchestration gate.
+dependencies = ["prefect==3.9.0", "fastapi==0.143.0", "Cython==3.3.0", "setuptools==84.0.0", "ziglang==0.17.0"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
 ]
 
 [project.urls]

@@ -8,10 +8,11 @@ permissions:
 jobs:
   supported-python:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        python: ['3.12', '3.13', '3.14']
+        python: ['3.12', '3.13', '3.14', '3.15']
     env:
       WEAVEM_ARTIFACTS_DIR: ${{ github.workspace }}/.artifacts/ci
       PYTHONDONTWRITEBYTECODE: '1'
@@ -20,13 +21,51 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
-      - run: python -m pip install .
-      - run: weavem doctor
-      - run: python -m unittest discover -s tests -v
+      - name: Build the distribution wheel
+        run: |
+          mkdir -p "$RUNNER_TEMP/weavem-ci-${{ matrix.python }}"
+          set -o pipefail
+          python -m pip wheel --no-deps . --wheel-dir dist 2>&1 | tee "$RUNNER_TEMP/weavem-ci-${{ matrix.python }}/build-wheel.log"
+      - name: Install the wheel and test tooling
+        run: |
+          set -o pipefail
+          python -m pip install wheel==0.48.0 2>&1 | tee "$RUNNER_TEMP/weavem-ci-${{ matrix.python }}/install-tooling.log"
+          python -m pip install dist/weavem-*.whl 2>&1 | tee "$RUNNER_TEMP/weavem-ci-${{ matrix.python }}/install-wheel.log"
+          python -m pip freeze 2>&1 | tee "$RUNNER_TEMP/weavem-ci-${{ matrix.python }}/installed-freeze.txt"
+          python -m pip check 2>&1 | tee "$RUNNER_TEMP/weavem-ci-${{ matrix.python }}/pip-check.log"
+      - name: Verify native authoring environment
+        run: |
+          set -o pipefail
+          weavem doctor 2>&1 | tee "$RUNNER_TEMP/weavem-ci-${{ matrix.python }}/doctor.log"
+      - name: Run the full test suite
+        run: |
+          set -o pipefail
+          python -m unittest discover -s tests -v 2>&1 | tee "$RUNNER_TEMP/weavem-ci-${{ matrix.python }}/tests.log"
+      - name: Install and verify the wheel in a fresh environment
+        run: |
+          python -m venv "$RUNNER_TEMP/weavem-wheel-${{ matrix.python }}"
+          set -o pipefail
+          "$RUNNER_TEMP/weavem-wheel-${{ matrix.python }}/bin/python" -m pip install dist/weavem-*.whl 2>&1 | tee "$RUNNER_TEMP/weavem-ci-${{ matrix.python }}/fresh-install.log"
+          "$RUNNER_TEMP/weavem-wheel-${{ matrix.python }}/bin/python" -m pip freeze 2>&1 | tee "$RUNNER_TEMP/weavem-ci-${{ matrix.python }}/fresh-freeze.txt"
+          "$RUNNER_TEMP/weavem-wheel-${{ matrix.python }}/bin/python" -m pip check 2>&1 | tee "$RUNNER_TEMP/weavem-ci-${{ matrix.python }}/fresh-pip-check.log"
+          cp scripts/verify-installed-wheel.py "$RUNNER_TEMP/verify-installed-wheel.py"
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/weavem-wheel-${{ matrix.python }}/bin/python" -I verify-installed-wheel.py --work-dir "$RUNNER_TEMP/weavem-installed-wheel-${{ matrix.python }}"
+      - name: Upload installed-wheel evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installed-wheel-${{ matrix.python }}
+          include-hidden-files: true
+          path: |
+            ${{ runner.temp }}/weavem-ci-${{ matrix.python }}
+            ${{ runner.temp }}/weavem-installed-wheel-${{ matrix.python }}
+          if-no-files-found: warn
   latest-python-release-gate:
     # Intentionally blocking: never waive a new stable interpreter with
     # --ignore-requires-python or continue-on-error to manufacture a release.
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
     env:
       WEAVEM_ARTIFACTS_DIR: ${{ github.workspace }}/.artifacts/ci-latest
       PYTHONDONTWRITEBYTECODE: '1'
@@ -37,6 +76,43 @@ jobs:
           python-version: '3.x'
           check-latest: true
           allow-prereleases: false
-      - run: python -m pip install .
-      - run: weavem doctor
-      - run: python -m unittest discover -s tests -v
+      - name: Build the distribution wheel when latest Python is supported
+        run: |
+          mkdir -p "$RUNNER_TEMP/weavem-ci-latest"
+          set -o pipefail
+          python -m pip wheel --no-deps . --wheel-dir dist 2>&1 | tee "$RUNNER_TEMP/weavem-ci-latest/build-wheel.log"
+      - name: Install the wheel and test tooling when supported
+        run: |
+          set -o pipefail
+          python -m pip install wheel==0.48.0 2>&1 | tee "$RUNNER_TEMP/weavem-ci-latest/install-tooling.log"
+          python -m pip install dist/weavem-*.whl 2>&1 | tee "$RUNNER_TEMP/weavem-ci-latest/install-wheel.log"
+          python -m pip freeze 2>&1 | tee "$RUNNER_TEMP/weavem-ci-latest/installed-freeze.txt"
+          python -m pip check 2>&1 | tee "$RUNNER_TEMP/weavem-ci-latest/pip-check.log"
+      - name: Verify native authoring environment
+        run: |
+          set -o pipefail
+          weavem doctor 2>&1 | tee "$RUNNER_TEMP/weavem-ci-latest/doctor.log"
+      - name: Run the full test suite
+        run: |
+          set -o pipefail
+          python -m unittest discover -s tests -v 2>&1 | tee "$RUNNER_TEMP/weavem-ci-latest/tests.log"
+      - name: Install and verify the wheel in a fresh environment
+        run: |
+          python -m venv "$RUNNER_TEMP/weavem-wheel-latest"
+          set -o pipefail
+          "$RUNNER_TEMP/weavem-wheel-latest/bin/python" -m pip install dist/weavem-*.whl 2>&1 | tee "$RUNNER_TEMP/weavem-ci-latest/fresh-install.log"
+          "$RUNNER_TEMP/weavem-wheel-latest/bin/python" -m pip freeze 2>&1 | tee "$RUNNER_TEMP/weavem-ci-latest/fresh-freeze.txt"
+          "$RUNNER_TEMP/weavem-wheel-latest/bin/python" -m pip check 2>&1 | tee "$RUNNER_TEMP/weavem-ci-latest/fresh-pip-check.log"
+          cp scripts/verify-installed-wheel.py "$RUNNER_TEMP/verify-installed-wheel.py"
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/weavem-wheel-latest/bin/python" -I verify-installed-wheel.py --work-dir "$RUNNER_TEMP/weavem-installed-wheel-latest"
+      - name: Upload installed-wheel evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installed-wheel-latest
+          include-hidden-files: true
+          path: |
+            ${{ runner.temp }}/weavem-ci-latest
+            ${{ runner.temp }}/weavem-installed-wheel-latest
+          if-no-files-found: warn

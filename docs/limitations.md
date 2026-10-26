@@ -5,7 +5,7 @@ still provisional.
 
 ## Supported environment
 
-- standard CPython 3.12–3.14.x on Linux x86_64.
+- standard, GIL-enabled CPython 3.12–3.15 on Linux x86_64 with glibc 2.28+.
 - Python and Cython backends, with one implementation module and one exported callable
   per task artifact.
 - Exact task versions and a local filesystem store, including independently copied
@@ -65,11 +65,16 @@ separate follow-up work.
 - Local Python source changes are picked up on subsequent task invocations; native
   source is compiled once per source/config digest per process, without publication.
   Caches are process-local and grow with distinct source versions until exit.
-- RustFS, remote release repositories, GitHub Actions, warehouse metadata syncing,
-  and billing remain outside this implementation.
+- RustFS, remote release repositories, automated publication, warehouse metadata
+  syncing, and billing remain outside this implementation. GitHub Actions
+  verification is defined, but remote CI must pass before release.
 
 ## Managed native authoring
 
 See [native authoring](native-authoring.md) for header-signature, glibc, compiler,
-and compiled-test boundaries. Standard GIL builds only; Python 3.15 remains blocked
-by Prefect as of 2026-10-12. Header bundles are not inferred from version alone.
+and compiled-test boundaries. Header bundles are not inferred from version alone.
+Free-threaded, debug/trace-ref, musl, Windows, and macOS builds are unsupported.
+The current dependency pins are Prefect 3.9.0 and FastAPI 0.143.0; the earlier
+Python 3.15 dependency blocker is resolved in local verification. See the
+[current compatibility evidence](release-readiness-2026-10-26.md) for results and
+the remaining remote-CI release gate.

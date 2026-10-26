@@ -270,12 +270,29 @@ def _read_flow(ref: ArtifactRef) -> FlowManifest:
         manifest = FlowManifest.from_json_bytes(ref.manifest_path.read_bytes())
     except (OSError, ManifestError) as exc:
         raise IntegrityError(f"invalid flow manifest: {exc}") from exc
+    entries = {entry.name for entry in root.iterdir()}
+    unexpected = sorted(entries - {"manifest.json", manifest.artifact_name, "__pycache__"})
+    if unexpected:
+        raise IntegrityError(f"unexpected flow artifact entries: {', '.join(unexpected)}")
+    if "__pycache__" in entries:
+        cache = root / "__pycache__"
+        if cache.is_symlink() or not cache.is_dir():
+            raise IntegrityError(f"invalid flow cache directory: {cache}; expected a non-symlink directory")
+        # Derived caches are never read: _import_flow compiles verified source.
+        # Reject other contents without following links or recursing into them.
+        for entry in cache.iterdir():
+            if entry.is_symlink() or not entry.is_file() or entry.suffix != ".pyc":
+                raise IntegrityError(f"invalid flow cache entry: {entry}; expected a regular non-symlink .pyc file")
     payload = root / manifest.artifact_name
-    if ({entry.name for entry in root.iterdir()} != {"manifest.json", manifest.artifact_name}
-            or payload.is_symlink() or not payload.is_file()
-            or sha256_file(payload) != manifest.artifact_sha256
+    if payload.is_symlink():
+        raise IntegrityError(f"flow payload must not be a symlink: {payload}")
+    if not payload.exists():
+        raise IntegrityError(f"flow payload is missing: {payload}")
+    if not payload.is_file():
+        raise IntegrityError(f"flow payload must be a regular file: {payload}")
+    if (sha256_file(payload) != manifest.artifact_sha256
             or payload.stat().st_size != manifest.artifact_size):
-        raise IntegrityError("flow payload differs from manifest")
+        raise IntegrityError(f"flow payload hash or size differs from manifest: {payload}")
     return manifest
 
 

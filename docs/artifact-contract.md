@@ -48,6 +48,9 @@ Both backends follow the same lifecycle:
 3. Reject tests that mutate the implementation snapshot.
 4. Copy the Python payload or compile the native payload.
 5. Smoke-import the standalone artifact and verify its bare callable export.
+   Native builds also replay the authored behavioral tests against the compiled
+   export without the Python implementation present, then check that the payload
+   was not changed by those tests.
 6. Return the completed manifest/payload directory as an unpublished candidate.
 7. A separate publish command verifies and copies that exact candidate to the store.
    It preserves the candidate and does not rebuild author source.
@@ -69,9 +72,18 @@ task-store/
     └── <canonical-module-name>.so    # or .py
 ```
 
-A published directory contains exactly the manifest and its named payload. Keep the
-original filenames and directory layout when distributing it. Published versions
-are immutable; changed implementations need a new version.
+The canonical release is its manifest and named payload. An optional
+`__pycache__/` directory may also be present as a derived Python cache. It may be
+empty or contain only regular, non-symlink `.pyc` files directly within that
+directory. Cache bytes are not release identity, are ignored as untrusted derived
+data, and are never executed instead of the verified payload. Other unexpected
+entries, symlinks, and nested cache directories are not part of the artifact
+contract. Keep the original manifest, payload filenames, and directory layout when
+distributing a store. Published versions are immutable; changed implementations
+need a new version.
+
+Task runtime cache handling is unchanged by this convention. The strict cache-layout
+validation described for flow releases below is specific to the flow loader.
 
 The manifest records:
 
@@ -143,6 +155,7 @@ are `schema`, `kind`, `flow_id`, `version`, `module_leaf`, `export`, `artifact_n
 task-store/_flows/<flow-id>/<version>/<python-cache-tag>/
 ├── manifest.json
 └── <canonical-module-name>.py
+# optional: __pycache__/*.pyc (derived, untrusted cache only)
 ```
 
 `_flows` cannot collide with valid task IDs, which must start with an ASCII letter.
@@ -155,9 +168,14 @@ smoke import must be declared aliases; runtime also rejects undeclared aliases.
 This is not static proof of every possible branch of arbitrary Python code.
 
 Flow publish requires all pinned tasks in its destination store. It does not copy
-them implicitly. Flow loads verify the payload and dependencies before import and
-again on invocation; consumer project bindings cannot override the release pins.
-No author source, Git repository, or registry is needed after copying the whole store.
+them implicitly. Flow loading permits only the optional cache layout described
+above: a regular `__pycache__` directory containing direct, regular `.pyc` files (or
+no files). The loader ignores those cache files, verifies the manifest, payload,
+and pinned dependencies before import and again on invocation, and executes the
+verified payload rather than cached bytecode. Other entries,
+symlinks, and nested cache directories fail validation. Consumer project bindings
+cannot override the release pins. No author source, Git repository, or registry is
+needed after copying the whole store.
 
 ## Local publication guarantees
 

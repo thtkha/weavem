@@ -280,8 +280,8 @@ class Manifest:
 
 def require_supported_runtime() -> None:
     """Reject hosts outside the deliberately narrow local-MVP support lane."""
-    if sys.implementation.name != "cpython" or not (3, 12) <= sys.version_info[:2] < (3, 15):
-        raise CompatibilityError("Weavem requires standard CPython 3.12–3.14 (Prefect currently excludes 3.15)")
+    if sys.implementation.name != "cpython" or not (3, 12) <= sys.version_info[:2] < (3, 16):
+        raise CompatibilityError("Weavem requires standard CPython 3.12–3.15")
     if sys.platform != "linux" or _platform.machine().lower() not in {"x86_64", "amd64"}:
         raise CompatibilityError("Weavem local MVP requires Linux x86_64")
 
