@@ -1,11 +1,11 @@
 # Compatibility evidence and release readiness
 
-The release-hardening changes were committed and pushed on `weavem-v1` as
-`14dfe1e859e4baba13b4d2eb334762bf08e69a9e`, based on commit
-`9b9a49f95a82effa4a8f2ba12ae250e5a21da757`. The local results below describe the
-candidate before that commit; the GitHub result identifies the tested revision.
-The package is still a provisional `0.1.0` candidate, not a public PyPI release.
-Wheel checksums distinguish candidates that share that package version.
+The release-hardening work was subsequently completed at
+`97a958f9d3ccdee321d73bb0d8ca2c9c2cda9328`. Historical references to the
+`weavem-v1` development branch below describe the work while it was in progress;
+they are not the name of a supported Weavem release line. The package version is
+now `0.1.0a1`, Weavem’s first official alpha. It is not a public PyPI release.
+A tag must still pass the exact-candidate release workflow before it is released.
 
 ## Current support boundary
 
@@ -89,17 +89,32 @@ header archive checksums and safe member paths, and `git diff --check`. No
 dedicated lint/typecheck configuration is defined for this project; syntax and
 manual review are not presented as a substitute for a typechecker.
 
-## GitHub CI: commit 14dfe1e
+## GitHub CI: commit 97a958f
 
-[Verify Weavem run 40304972425](https://github.com/thtkha/weavem/actions/runs/40304972425)
-completed successfully for `14dfe1e859e4baba13b4d2eb334762bf08e69a9e`.
+[Verify Weavem run 40307182090](https://github.com/thtkha/weavem/actions/runs/40307182090)
+completed successfully for `97a958f9d3ccdee321d73bb0d8ca2c9c2cda9328`.
 All five jobs passed: Python 3.12, 3.13, 3.14, 3.15, and the separate
-latest-stable-Python gate. Each ran wheel installation, native doctor, full tests,
-and fresh-environment installed-wheel verification.
+latest-stable-Python gate. Each ran wheel installation, native doctor, the full
+115-test suite, and fresh-environment installed-wheel verification.
 
-This closes the remote-CI gate for that commit only. Later changes, including the
-packaging-test follow-up below, need their own CI run before release; the earlier
-114-test counts are not results for the follow-up test suite.
+This closes the remote-CI gate for that commit only. The first alpha changes the
+package version and release automation, so its tagged commit must pass its own
+workflow before a release is published.
+
+## First-alpha automation checks
+
+The `0.1.0a1` preparation adds build-once/test-many CI and guarded private
+prerelease publication. Local verification passed **19 release-helper tests and
+2 packaging tests on each of Python 3.12–3.15**. The helper checks invalid tags,
+metadata/checksum conflicts, draft recovery, published-asset preservation,
+main-branch ancestry, and private-repository requirements. Workflow YAML and shell
+syntax checks, strict release-runbook lint, and `git diff --check` also passed.
+Evidence is retained under `.artifacts/alpha-release/2026-10-26/`.
+
+These local checks do not replace the full remote suite: remote CI for this alpha
+revision is pending at the time of this source update. The tagged workflow must
+pass every lane before publishing; its release notes record the exact commit,
+run URL, and tested wheel checksum. See [releasing](releasing.md).
 
 ## Earlier reports and remaining gates
 
@@ -119,20 +134,19 @@ scanning, or cross-toolchain reproducible native builds.
 Independent code review found no blocking defects. Architecture review identified
 one non-blocking regression-coverage gap in `14dfe1e`: the wheel packaging test
 asserted bundled archives and licenses, but not every matching JSON provenance
-record. All four archive/JSON/license sets and archive checksums were manually
-verified in that candidate. **Resolved in the local test-only follow-up:** the
-packaging test now asserts matching sets, archive references, and checksums
-without changing interpreter-header fallback.
+record. The follow-up at `97a958f` resolved it: the packaging test now asserts
+matching sets, archive references, and checksums without changing
+interpreter-header fallback.
 
 Focused packaging verification passed **2 tests on each of Python 3.12.3,
 3.13.16, 3.14.8, and 3.15.0**. Each lane built a real wheel and checked its
 contents; in-memory fixtures confirmed that missing JSON, archive, or license
 files, an incorrect archive reference, and a wrong checksum are rejected.
 Logs and `summary.json` are retained under
-`.artifacts/header-provenance/2026-10-26/`. This test/docs-only follow-up has not
-rerun the full suite or remote CI and is not covered by the earlier GitHub run.
+`.artifacts/header-provenance/2026-10-26/`. The full remote suite for this
+follow-up passed in run `40307182090` above.
 
 Every release needs passing GitHub Actions, including the latest-stable-Python
-gate, for its exact candidate revision. No tag, public publication, or
-branch-protection configuration is established by these checks. The test/docs
-follow-up does not commit, push, publish, or remove existing artifacts.
+gate, for its exact tagged candidate revision. The planned first alpha is a
+private GitHub prerelease with a wheel and checksum file; it does not publish to
+PyPI. Historical checks do not create a tag, publication, or branch protection.

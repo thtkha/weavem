@@ -6,7 +6,34 @@ name: Verify Weavem
 permissions:
   contents: read
 jobs:
+  build-wheel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      WEAVEM_ARTIFACTS_DIR: ${{ github.workspace }}/.artifacts/ci-build
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Build the single candidate shared by every verification lane
+        run: python -m pip wheel --no-deps . --wheel-dir dist
+      - name: Record and validate the candidate
+        run: |
+          args=()
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then args=(--tag "$GITHUB_REF_NAME"); fi
+          python scripts/release-alpha.py prepare --dist dist "${args[@]}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: weavem-wheel
+          path: |
+            dist/*.whl
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
   supported-python:
+    needs: build-wheel
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -21,11 +48,14 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
-      - name: Build the distribution wheel
+      - uses: actions/download-artifact@v8
+        with:
+          name: weavem-wheel
+          path: dist
+      - name: Verify the shared candidate
         run: |
           mkdir -p "$RUNNER_TEMP/weavem-ci-${{ matrix.python }}"
-          set -o pipefail
-          python -m pip wheel --no-deps . --wheel-dir dist 2>&1 | tee "$RUNNER_TEMP/weavem-ci-${{ matrix.python }}/build-wheel.log"
+          python scripts/release-alpha.py check --dist dist
       - name: Install the wheel and test tooling
         run: |
           set -o pipefail
@@ -53,7 +83,7 @@ jobs:
           "$RUNNER_TEMP/weavem-wheel-${{ matrix.python }}/bin/python" -I verify-installed-wheel.py --work-dir "$RUNNER_TEMP/weavem-installed-wheel-${{ matrix.python }}"
       - name: Upload installed-wheel evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: installed-wheel-${{ matrix.python }}
           include-hidden-files: true
@@ -62,6 +92,7 @@ jobs:
             ${{ runner.temp }}/weavem-installed-wheel-${{ matrix.python }}
           if-no-files-found: warn
   latest-python-release-gate:
+    needs: build-wheel
     # Intentionally blocking: never waive a new stable interpreter with
     # --ignore-requires-python or continue-on-error to manufacture a release.
     runs-on: ubuntu-24.04
@@ -76,11 +107,14 @@ jobs:
           python-version: '3.x'
           check-latest: true
           allow-prereleases: false
-      - name: Build the distribution wheel when latest Python is supported
+      - uses: actions/download-artifact@v8
+        with:
+          name: weavem-wheel
+          path: dist
+      - name: Verify the shared candidate
         run: |
           mkdir -p "$RUNNER_TEMP/weavem-ci-latest"
-          set -o pipefail
-          python -m pip wheel --no-deps . --wheel-dir dist 2>&1 | tee "$RUNNER_TEMP/weavem-ci-latest/build-wheel.log"
+          python scripts/release-alpha.py check --dist dist
       - name: Install the wheel and test tooling when supported
         run: |
           set -o pipefail
@@ -108,7 +142,7 @@ jobs:
           "$RUNNER_TEMP/weavem-wheel-latest/bin/python" -I verify-installed-wheel.py --work-dir "$RUNNER_TEMP/weavem-installed-wheel-latest"
       - name: Upload installed-wheel evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: installed-wheel-latest
           include-hidden-files: true
@@ -116,3 +150,34 @@ jobs:
             ${{ runner.temp }}/weavem-ci-latest
             ${{ runner.temp }}/weavem-installed-wheel-latest
           if-no-files-found: warn
+  publish-alpha:
+    # A manual run (even on a tag) and a pull request can never publish.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && github.event.repository.private == true
+    needs: [build-wheel, supported-python, latest-python-release-gate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    concurrency:
+      group: alpha-release-${{ github.ref }}
+      cancel-in-progress: false
+    env:
+      RELEASE_TAG: ${{ github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+      WEAVEM_ARTIFACTS_DIR: ${{ github.workspace }}/.artifacts/ci-release
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v8
+        with:
+          name: weavem-wheel
+          path: dist
+      - name: Verify, upload, and publish the tested candidate without rebuilding
+        run: |
+          git fetch origin main
+          python scripts/release-alpha.py publish --dist dist --tag "$RELEASE_TAG"

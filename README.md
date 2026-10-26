@@ -12,8 +12,8 @@ immutable releases for other projects.
 A company can share an extracted release folder privately. GitHub, a central
 registry, and the author's source checkout are not required.
 
-This branch implements the next developer workflow; it is still a provisional 0.x
-API, not a stable 1.0 release. The supported release lane is **standard,
+This is Weavem’s first official alpha (`0.1.0a1`): a provisional 0.x API,
+not a stable 1.0 release. The supported release lane is **standard,
 GIL-enabled CPython 3.12–3.15 on Linux x86_64 with glibc 2.28+**. A release
 may claim that lane only after its ordinary dependency install, native build,
 and latest-stable-Python CI gate have passed; custom, free-threaded, and debug
@@ -106,6 +106,7 @@ schema-1 artifacts and `task("id", "version")` consumers remain supported.
 - [Artifact contract](docs/artifact-contract.md): integrity, publication, and flow dependency pins.
 - [Limitations](docs/limitations.md): support boundaries and execution risks.
 - [Current compatibility evidence](docs/release-readiness-2026-10-26.md): Python 3.12–3.15 checks and remaining release gates.
+- [Release runbook](docs/releasing.md): how a maintainer creates and verifies a private alpha release.
 - [Python/native cross-project fixture](examples/local-cross-project/README.md).
 
 ## Local configuration
