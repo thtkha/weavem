@@ -1,10 +1,12 @@
 # Native developer simulation: build locally, then share `.so` tasks
 
+> **Historical record — not current instructions.** Preserved for the project owner and retrospective review. Versions, pending work, and commands below describe the recorded revision. See the [history index](index.md) for context and the [user documentation](../../users/index.md) for current usage.
+
 **Verdict: native task authoring and folder-based sharing work. The next work
 should improve native setup and release confidence—not add a storage server.**
 
 **Historical snapshot:** subsequent managed-native work supersedes the setup and
-compiled-test limitations below; see [native authoring](native-authoring.md). The
+compiled-test limitations below; see [native authoring](../../users/native-authoring.md). The
 recorded results remain unchanged.
 
 This replaces the previous Python-only simulation. That workspace was deleted
@@ -507,13 +509,13 @@ owns follow-up; no infrastructure team or production on-call is involved here.
 
 ## References
 
-- [Installation and native prerequisites](../README.md#getting-started-after-cloning).
-- [Authoring guide](authoring-guide.md): complete task/flow authoring example.
-- [CLI and metadata reference](reference.md).
-- [Artifact contract](artifact-contract.md).
-- [Limitations](limitations.md).
-- [Dependency contract](../pyproject.toml).
-- [Packaging regression tests](../tests/test_packaging.py).
+- [Installation and native prerequisites](../../../README.md#getting-started-after-cloning).
+- [Authoring guide](../../users/authoring-guide.md): complete task/flow authoring example.
+- [CLI and metadata reference](../../users/reference.md).
+- [Artifact contract](../../users/artifact-contract.md).
+- [Limitations](../../users/limitations.md).
+- [Dependency contract](../../../pyproject.toml).
+- [Packaging regression tests](../../../tests/test_packaging.py).
 - Native compilation source: `src/weavem/build.py`, `_build_cython` and `build`.
 
 ## Document maintenance

@@ -5,14 +5,15 @@
 | Status | Source-verified |
 | Owner | Repository maintainer with write access to `thtkha/weavem` |
 | Escalation | Private GitHub issue in `thtkha/weavem`, with the release tag and workflow URL |
-| Last verified | 2026-10-26 — workflow and package metadata inspected; new cross-runner gate awaits remote execution |
-| Last executed | 2026-10-26 — `v0.1.0a1` published; subsequent workflow changes have not published another release |
+| Last verified | 2026-10-27 — workflow and package metadata inspected; the new documentation gate awaits its first remote execution |
+| Last executed | 2026-10-26 — `v0.1.0a2` published with separate-runner native handoff verification |
 | Applies to | Private GitHub releases for `weavem` alpha versions |
 | Risk | Medium — pushing a tag creates an immutable release record visible to repository readers |
 
 > **Verification claim:** This procedure is traced to `pyproject.toml` and
-> `.github/workflows/verify.yml`. The first alpha was published successfully after
-> retrying publication; the newly added cross-runner gate has not yet run remotely.
+> `.github/workflows/verify.yml`. The `v0.1.0a2` tagged workflow passed, including
+> separate-runner native handoff. The subsequently added documentation gate has
+> passed locally but has not yet run remotely; this is not a new release execution.
 
 ## Purpose and successful outcome
 
@@ -27,8 +28,8 @@ workflow job passes, and the downloaded wheel passes `sha256sum -c SHA256SUMS`.
 ## Scope
 
 Use this only for an unused version already set in `pyproject.toml`.
-`0.1.0a1` is already published and must not be reused. Select and commit a new
-alpha version before starting this procedure; do not overwrite the first release.
+`0.1.0a1` and `0.1.0a2` are already published and must not be reused. Select and
+commit a new alpha version before starting; do not overwrite an existing release.
 Do not use it for stable releases, PyPI publication, repository-visibility changes,
 or replacing existing assets. Stable release automation does not exist yet.
 
@@ -54,8 +55,11 @@ authenticated GitHub CLI. `gh auth status` must show an account with write acces
 
 | Variable | Required | Description | Safe example |
 | --- | --- | --- | --- |
-| `TAG` | Yes | Unused alpha Git tag matching package version | `v0.1.0a2` |
-| `VERSION` | Yes | Version read from package metadata | `0.1.0a2` |
+| `TAG` | Yes | Unused alpha Git tag matching package version | `v0.1.0a3` |
+| `VERSION` | Yes | Version read from package metadata | `0.1.0a3` |
+
+These examples describe a possible next release, not the current package version
+or permission to reuse a tag. Read the actual version from committed metadata.
 
 The candidate must already be merged into `main`, and the latest `Verify Weavem`
 **push** run for that exact `main` commit must have concluded successfully.
@@ -263,6 +267,10 @@ First release: [`v0.1.0a1`](https://github.com/thtkha/weavem/releases/tag/v0.1.0
 verified on 2026-10-26 in [workflow run 40312643304](https://github.com/thtkha/weavem/actions/runs/40312643304).
 Publication succeeded on the second attempt, reusing the original candidate;
 this run predates the separate-runner native handoff gate.
+
+Next published alpha: [`v0.1.0a2`](https://github.com/thtkha/weavem/releases/tag/v0.1.0a2),
+verified on 2026-10-26 in [workflow run 40339054745](https://github.com/thtkha/weavem/actions/runs/40339054745),
+including all supported Python lanes and separate-runner native handoff.
 
 ## References
 

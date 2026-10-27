@@ -1,5 +1,7 @@
 # Cache-tolerant releases: acceptance results
 
+> **Historical record — not current instructions.** Preserved for the project owner and retrospective review. Versions, pending work, and commands below describe the recorded revision. See the [history index](index.md) for context and the [user documentation](../../users/index.md) for current usage.
+
 > **Historical report.** The results below describe the cache-fix candidate,
 > before the Prefect 3.9.0/Python 3.15 verification. Its final Python-support
 > blocker is superseded by [current compatibility evidence](release-readiness-2026-10-26.md).
@@ -36,7 +38,7 @@ Everything else remains strict:
   payloads, and payload corruption. The exception remains `IntegrityError`.
 
 No schema, public API, or CLI was added. Task loading already tolerated caches;
-its behavior was not changed. The [artifact contract](artifact-contract.md)
+its behavior was not changed. The [artifact contract](../../users/artifact-contract.md)
 documents the flow-specific rules. Publication still copies manifest/payload
 pairs; subsequent distribution can copy the whole cache-bearing store unchanged.
 

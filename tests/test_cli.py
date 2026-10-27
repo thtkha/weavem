@@ -26,7 +26,7 @@ class CliTests(unittest.TestCase):
             self.assertTrue((root / "flows" / "__init__.py").is_file())
             readme = (root / "README.md").read_text()
             for instruction in ("weavem task new tasks/my_task", "weavem task use", "weavem flow run",
-                                "export", "Project", ".artifacts/", "task-store/"):
+                                "export", "Project", ".artifacts/", "task-store/", "docs/users/index.md"):
                 self.assertIn(instruction, readme)
             self.assertEqual(
                 (root / ".gitignore").read_text(),

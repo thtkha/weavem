@@ -1,5 +1,7 @@
 # Compatibility evidence and release readiness
 
+> **Historical record — not current instructions.** Preserved for the project owner and retrospective review. Versions, pending work, and commands below describe the recorded revision. See the [history index](index.md) for context and the [user documentation](../../users/index.md) for current usage.
+
 The release-hardening work was subsequently completed at
 `97a958f9d3ccdee321d73bb0d8ca2c9c2cda9328`. Historical references to the
 `weavem-v1` development branch below describe the work while it was in progress;
@@ -114,7 +116,7 @@ Evidence is retained under `.artifacts/alpha-release/2026-10-26/`.
 These local checks do not replace the full remote suite: remote CI for this alpha
 revision is pending at the time of this source update. The tagged workflow must
 pass every lane before publishing; its release notes record the exact commit,
-run URL, and tested wheel checksum. See [releasing](releasing.md).
+run URL, and tested wheel checksum. See [releasing](../../maintainers/releasing.md).
 
 ## Earlier reports and remaining gates
 

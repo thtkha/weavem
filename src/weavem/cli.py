@@ -188,8 +188,9 @@ copying a folder does not make a binary portable to every machine.
 
 Keep source and tests in version control. Retain candidates until promotion
 and verification finish; there is no automatic cleanup in these instructions.
-For the complete walkthrough and troubleshooting, see the Weavem repository's
-`docs/authoring-guide.md` and `docs/native-authoring.md`.
+Start with the [official user documentation](https://github.com/thtkha/weavem/blob/main/docs/users/index.md)
+for installation, the complete walkthrough, native builds, and troubleshooting.
+Use the documentation for your installed Weavem version when following release-specific instructions.
 ''', encoding="utf-8")
 
 

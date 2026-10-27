@@ -287,6 +287,13 @@ class ReleaseAlphaTests(unittest.TestCase):
         self.assertIn("abcdef", notes)
         self.assertIn("https://github.com/acme/weavem/actions/runs/42", notes)
         self.assertIn("pip install", notes)
+        self.assertIn("https://github.com/acme/weavem/blob/v0.1.0a1/docs/users/index.md", notes)
+
+    def test_notes_without_ci_environment_link_canonical_tagged_docs(self) -> None:
+        candidate = release_alpha.validate_candidate(self.dist, self.root, "v0.1.0a1", require_checksums=True)
+        with mock.patch.dict("os.environ", {}, clear=True):
+            notes = release_alpha.release_notes(candidate, "v0.1.0a1", "abcdef")
+        self.assertIn("https://github.com/thtkha/weavem/blob/v0.1.0a1/docs/users/index.md", notes)
 
 
 if __name__ == "__main__":

@@ -167,11 +167,13 @@ def validate_publication_context(tag: str, project: Path) -> str:
 
 
 def release_notes(candidate: Candidate, tag: str, source_sha: str) -> str:
+    repository_url = (f"{os.environ.get('GITHUB_SERVER_URL', 'https://github.com')}/"
+                      f"{os.environ.get('GITHUB_REPOSITORY', 'thtkha/weavem')}")
     run_url = ""
     if os.environ.get("GITHUB_SERVER_URL") and os.environ.get("GITHUB_REPOSITORY") and os.environ.get("GITHUB_RUN_ID"):
         run_url = f"{os.environ['GITHUB_SERVER_URL']}/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}"
     ci_line = f"- CI run: {run_url}" if run_url else "- CI run: this tagged workflow"
-    return f"""# Weavem {tag}\n\nWeavem alpha release.\n\n## Install\n\nDownload `{candidate.wheel.name}` and install it directly:\n\n```bash\npython -m pip install ./{candidate.wheel.name}\nweavem doctor\n```\n\n## Verified artifact\n\n- Wheel SHA-256: `{candidate.sha256}`\n- Source commit: `{source_sha}`\n{ci_line}\n\n## Support limits\n\nThis alpha supports standard, GIL-enabled, non-debug CPython 3.12–3.15 on Linux x86_64 with glibc 2.28 or newer. Free-threaded and custom Python builds are excluded. The bundled compiler and verified headers are installed with Weavem; `weavem doctor` reports actionable environment problems. The API is provisional and this release does not sandbox task code. This is a private GitHub Release, not a PyPI publication.\n"""
+    return f"""# Weavem {tag}\n\nWeavem alpha release.\n\n## Install\n\nDownload `{candidate.wheel.name}` and install it directly:\n\n```bash\npython -m pip install ./{candidate.wheel.name}\nweavem doctor\n```\n\n## Documentation\n\n[Start here]({repository_url}/blob/{tag}/docs/users/index.md) for installation, a working task/flow tutorial, native builds, and the reference.\n\n## Verified artifact\n\n- Wheel SHA-256: `{candidate.sha256}`\n- Source commit: `{source_sha}`\n{ci_line}\n\n## Support limits\n\nThis alpha supports standard, GIL-enabled, non-debug CPython 3.12–3.15 on Linux x86_64 with glibc 2.28 or newer. Free-threaded and custom Python builds are excluded. The bundled compiler and verified headers are installed with Weavem; `weavem doctor` reports actionable environment problems. The API is provisional and this release does not sandbox task code. This is a private GitHub Release, not a PyPI publication.\n"""
 
 
 def github_repository() -> str:

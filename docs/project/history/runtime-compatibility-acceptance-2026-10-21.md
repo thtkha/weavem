@@ -1,5 +1,7 @@
 # Runtime compatibility repair and acceptance rerun
 
+> **Historical record — not current instructions.** Preserved for the project owner and retrospective review. Versions, pending work, and commands below describe the recorded revision. See the [history index](index.md) for context and the [user documentation](../../users/index.md) for current usage.
+
 > **Historical report.** Versions, failures, and blockers below describe this
 > earlier candidate. The cache handoff issue was subsequently fixed and Python
 > 3.15 passed local verification with Prefect 3.9.0. See

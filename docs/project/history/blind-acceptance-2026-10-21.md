@@ -1,5 +1,7 @@
 # Blind acceptance trial — 2026-10-21
 
+> **Historical record — not current instructions.** Preserved for the project owner and retrospective review. Versions, pending work, and commands below describe the recorded revision. See the [history index](index.md) for context and the [user documentation](../../users/index.md) for current usage.
+
 > **Historical report.** The failed trial below is preserved unchanged. Later
 > runtime and cache fixes, Python 3.15 verification, and remaining release gates
 > are summarized in [current compatibility evidence](release-readiness-2026-10-26.md).

@@ -81,6 +81,23 @@ jobs:
           cp scripts/verify-installed-wheel.py "$RUNNER_TEMP/verify-installed-wheel.py"
           cd "$RUNNER_TEMP"
           "$RUNNER_TEMP/weavem-wheel-${{ matrix.python }}/bin/python" -I verify-installed-wheel.py --work-dir "$RUNNER_TEMP/weavem-installed-wheel-${{ matrix.python }}"
+      - name: Execute the official user documentation against the installed wheel
+        run: |
+          bundle="$RUNNER_TEMP/weavem-user-docs-${{ matrix.python }}"
+          docs="$bundle/docs"
+          evidence="$RUNNER_TEMP/weavem-user-docs-evidence-${{ matrix.python }}"
+          mkdir "$bundle"
+          cp -a docs "$docs"
+          cp README.md LICENSE NOTICE TRADEMARKS.md pyproject.toml "$bundle"
+          mkdir "$bundle/tests"
+          cp tests/test_packaging.py "$bundle/tests"
+          mkdir -p "$bundle/examples"
+          cp -a examples/local-cross-project "$bundle/examples/local-cross-project"
+          cp scripts/verify-user-docs.py "$RUNNER_TEMP/verify-user-docs.py"
+          "$RUNNER_TEMP/weavem-wheel-${{ matrix.python }}/bin/python" -I "$RUNNER_TEMP/verify-user-docs.py" \
+            --docs "$docs" \
+            --wheel "$GITHUB_WORKSPACE"/dist/weavem-*.whl \
+            --work-dir "$evidence"
       - name: Prepare native handoff for a separate consumer runner
         run: |
           handoff="$RUNNER_TEMP/weavem-native-handoff-${{ matrix.python }}"
@@ -109,6 +126,17 @@ jobs:
           path: |
             ${{ runner.temp }}/weavem-ci-${{ matrix.python }}
             ${{ runner.temp }}/weavem-installed-wheel-${{ matrix.python }}
+            ${{ runner.temp }}/weavem-user-docs-evidence-${{ matrix.python }}/result.json
+            ${{ runner.temp }}/weavem-user-docs-evidence-${{ matrix.python }}/tutorial.sh
+            ${{ runner.temp }}/weavem-user-docs-evidence-${{ matrix.python }}/tutorial.stdout
+            ${{ runner.temp }}/weavem-user-docs-evidence-${{ matrix.python }}/tutorial.stderr
+            ${{ runner.temp }}/weavem-user-docs-evidence-${{ matrix.python }}/consumer-native.stdout
+            ${{ runner.temp }}/weavem-user-docs-evidence-${{ matrix.python }}/consumer-native.stderr
+            ${{ runner.temp }}/weavem-user-docs-evidence-${{ matrix.python }}/consumer-flow.stdout
+            ${{ runner.temp }}/weavem-user-docs-evidence-${{ matrix.python }}/consumer-flow.stderr
+            ${{ runner.temp }}/weavem-user-docs-evidence-${{ matrix.python }}/author-hidden/tasks
+            ${{ runner.temp }}/weavem-user-docs-evidence-${{ matrix.python }}/author-hidden/flows
+            ${{ runner.temp }}/weavem-user-docs-evidence-${{ matrix.python }}/consumer/task-store
           if-no-files-found: warn
   native-handoff:
     needs: [build-wheel, supported-python]
@@ -207,6 +235,23 @@ jobs:
           cp scripts/verify-installed-wheel.py "$RUNNER_TEMP/verify-installed-wheel.py"
           cd "$RUNNER_TEMP"
           "$RUNNER_TEMP/weavem-wheel-latest/bin/python" -I verify-installed-wheel.py --work-dir "$RUNNER_TEMP/weavem-installed-wheel-latest"
+      - name: Execute the official user documentation against the installed wheel
+        run: |
+          bundle="$RUNNER_TEMP/weavem-user-docs-latest"
+          docs="$bundle/docs"
+          evidence="$RUNNER_TEMP/weavem-user-docs-evidence-latest"
+          mkdir "$bundle"
+          cp -a docs "$docs"
+          cp README.md LICENSE NOTICE TRADEMARKS.md pyproject.toml "$bundle"
+          mkdir "$bundle/tests"
+          cp tests/test_packaging.py "$bundle/tests"
+          mkdir -p "$bundle/examples"
+          cp -a examples/local-cross-project "$bundle/examples/local-cross-project"
+          cp scripts/verify-user-docs.py "$RUNNER_TEMP/verify-user-docs.py"
+          "$RUNNER_TEMP/weavem-wheel-latest/bin/python" -I "$RUNNER_TEMP/verify-user-docs.py" \
+            --docs "$docs" \
+            --wheel "$GITHUB_WORKSPACE"/dist/weavem-*.whl \
+            --work-dir "$evidence"
       - name: Upload installed-wheel evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -216,6 +261,17 @@ jobs:
           path: |
             ${{ runner.temp }}/weavem-ci-latest
             ${{ runner.temp }}/weavem-installed-wheel-latest
+            ${{ runner.temp }}/weavem-user-docs-evidence-latest/result.json
+            ${{ runner.temp }}/weavem-user-docs-evidence-latest/tutorial.sh
+            ${{ runner.temp }}/weavem-user-docs-evidence-latest/tutorial.stdout
+            ${{ runner.temp }}/weavem-user-docs-evidence-latest/tutorial.stderr
+            ${{ runner.temp }}/weavem-user-docs-evidence-latest/consumer-native.stdout
+            ${{ runner.temp }}/weavem-user-docs-evidence-latest/consumer-native.stderr
+            ${{ runner.temp }}/weavem-user-docs-evidence-latest/consumer-flow.stdout
+            ${{ runner.temp }}/weavem-user-docs-evidence-latest/consumer-flow.stderr
+            ${{ runner.temp }}/weavem-user-docs-evidence-latest/author-hidden/tasks
+            ${{ runner.temp }}/weavem-user-docs-evidence-latest/author-hidden/flows
+            ${{ runner.temp }}/weavem-user-docs-evidence-latest/consumer/task-store
           if-no-files-found: warn
   publish-alpha:
     # A manual run (even on a tag) and a pull request can never publish.

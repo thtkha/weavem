@@ -1,180 +1,56 @@
 # Weavem
 
-Weavem is a local-first framework for developing reusable **tasks** and composing
-**flows** with Prefect. Develop against source, then deliberately build and publish
-immutable releases for other projects.
+Weavem is a local-first Python framework for developing reusable **tasks** and
+composing **flows** with Prefect. Develop against editable source, then build and
+publish immutable releases to an ordinary folder for reuse in other projects.
 
-- **Tasks** are functions with metadata, tests, and Python or native implementations.
-- **Flows** compose tasks and application logic using Prefect's execution model.
-- **`task-store/`** holds published tasks and flows available to a project.
-- **`.artifacts/`** holds unpublished candidates and disposable build/test work.
+- A **task** is a callable with metadata and behavioral tests, released as Python
+  or a native extension (`.so`).
+- A **flow** composes tasks and application logic. A published flow pins its tasks.
+- `task-store/` holds published releases. `.artifacts/` holds build/test work and
+  unpublished candidates. Both locations are configurable.
 
-A company can share an extracted release folder privately. GitHub, a central
-registry, and the author's source checkout are not required.
+## Start using Weavem
 
-This is Weavem’s first official alpha (`0.1.0a1`): a provisional 0.x API,
-not a stable 1.0 release. The supported release lane is **standard,
-GIL-enabled CPython 3.12–3.15 on Linux x86_64 with glibc 2.28+**. A release
-may claim that lane only after its ordinary dependency install, native build,
-and latest-stable-Python CI gate have passed; custom, free-threaded, and debug
-Python builds remain outside it.
+**[Official user documentation](docs/users/index.md)** is the shared starting point
+for developers and coding assistants. You do not need to clone this repository
+to use a released wheel.
 
-## Getting started after cloning
+1. [Install and check your environment](docs/users/getting-started.md).
+2. [Create, test, run, publish, and reuse a project](docs/users/authoring-guide.md).
+3. [Build a native task release](docs/users/native-authoring.md).
 
-From the cloned repository root, with supported Python venv/pip support installed:
+Current documented release: **[0.1.0a2](https://github.com/thtkha/weavem/releases/tag/v0.1.0a2)**,
+a private GitHub alpha, not a public PyPI package or a stable API.
+Supported environment: standard GIL-enabled, non-debug **CPython 3.12–3.15 on
+Linux x86_64 with glibc 2.28+**. See [support limits](docs/users/limitations.md).
 
-```bash
-python3 -m venv .venv &&
-source .venv/bin/activate &&
-python -m pip --version &&
-python -m pip install . &&
-weavem --help
-```
+Weavem supplies its native compiler and verified headers. Initial installation
+needs access to its Python dependencies, or a complete offline wheelhouse.
+Task-specific Python packages and shared libraries remain your responsibility.
 
-Activate that environment again in new shells. Installation requires your package
-index or a provisioned offline wheelhouse; Weavem does not install task dependencies
-on invocation. A privately supplied Weavem wheel can be installed instead of cloning.
-
-**If environment creation fails, stop before installation.** `venv` normally
-bootstraps pip through `ensurepip`, but some OS-provided Python installations omit
-that component. This is a Python installation prerequisite, not a missing Weavem
-compiler. For `No module named venv` or an unavailable `ensurepip`, use your Python
-distributor's instructions to install the venv support matching `python3 --version`,
-or select a supported Python installation that includes it. OS package changes
-remain an explicit administrator action; neither pip nor Weavem performs them.
-
-If `.venv` was created successfully but reports `No module named pip`, run
-`.venv/bin/python -m ensurepip --upgrade`, then verify
-`.venv/bin/python -m pip --version`. If `ensurepip` is missing too, repair the
-base Python as above and rerun environment creation before continuing. Do not
-fall back to a global `sudo pip install` or copy someone else's `.venv`.
-See Python's [venv documentation](https://docs.python.org/3/library/venv.html)
-and [ensurepip guidance](https://docs.python.org/3/library/ensurepip.html).
-
-Weavem installs its native authoring tools by default: pinned Cython, setuptools,
-and a bundled Zig C compiler. Verified CPython header bundles—including the
-CPython 3.15 bundle—ship in the wheel. For the supported standard CPython
-distributions, native authoring needs no system compiler, development-header
-package, sudo, Docker, or build-time download.
-
-```bash
-weavem doctor
-weavem task new tasks/my_task --backend cython
-```
-
-`doctor` compiles and imports a tiny native module, reporting the selected header
-bundle and compiler. Builds run this check automatically. Python distributions
-outside the verified header signatures must provide their own matching headers;
-unsupported free-threaded/debug builds fail clearly. See [native authoring](docs/native-authoring.md)
-for the tested matrix and exact support boundaries.
-
-Native task builds run your tests against both the Python source and the compiled
-export. Release binaries exclude debug information and Weavem's absolute build
-paths. Keep the original candidate for promotion to additional destinations;
-cross-toolchain bit-for-bit reproducibility is not promised.
-
-The older `.[native]` extra remains a no-op compatibility alias. Recipients can
-run compatible prebuilt native tasks without compiling them, though their default
-installation also contains the authoring tools. Release folders do not provision
-task-specific Python packages or native shared libraries.
-
-Weavem pins `prefect==3.9.0` and retains `fastapi==0.143.0` for the compatible
-runtime path. A release promising latest-stable Python support must not ship
-until the latest-Python CI lane passes with a normal install; bypassing pip's
-Python requirement is not a supported workaround.
-
-## The developer workflow
-
-1. **Create** a project, tasks, and flows.
-2. **Choose dependencies** explicitly: editable local source or an exact published release.
-3. **Develop and test** without publishing each edit.
-4. **Build** an unpublished candidate.
-5. **Publish** the exact candidate to a folder, without rebuilding it.
-6. **Reuse** released tasks and flows in another project without author source.
-
-Start from the directory where you want application projects:
-
-```bash
-weavem project new my_project
-cd my_project
-weavem task new tasks/normalize_text
-weavem flow new process_documents
-weavem task use normalize --path tasks/normalize_text
-```
-
-Each new project includes a README explaining its folders and next steps.
-The task starts with a neutral `run(value)` pass-through and a matching test:
-replace both and edit the metadata. Its `export` must name your callable.
-`validate` and `test` print a short `passed` message only when their checks succeed;
-build and publish retain their machine-readable JSON output.
-The new flow is an empty scaffold, not an automatically connected pipeline.
-The [authoring guide](docs/authoring-guide.md) walks through the complete, runnable
-author-to-consumer story, including exact file contents.
-
-**Release rule:** every task dependency of a published flow must already be published
-and exactly pinned. Weavem stops on a local/unpublished dependency; it does not
-silently publish dependencies or switch their bindings.
-
-**Migration:** `task build` no longer publishes and no longer accepts `--store`.
-Use `task build` followed by `task publish CANDIDATE --to STORE`. Existing task
-schema-1 artifacts and `task("id", "version")` consumers remain supported.
+No Weavem account, registry, Docker, or central server is required. Prefect may
+start a local loopback service and write local state. Task code is **not sandboxed**;
+run only code from publishers you trust. A checksum detects changed bytes, not
+publisher identity.
 
 ## Documentation
 
-- [Executed native developer simulation](docs/developer-simulation.md): `.so` builds, a colleague handoff, and direct pros and cons.
-- [Authoring guide](docs/authoring-guide.md): develop, publish, and copy releases into a second project.
-- [Reference](docs/reference.md): CLI, metadata, explicit bindings, path rules, and SDK.
-- [Artifact contract](docs/artifact-contract.md): integrity, publication, and flow dependency pins.
-- [Limitations](docs/limitations.md): support boundaries and execution risks.
-- [Current compatibility evidence](docs/release-readiness-2026-10-26.md): Python 3.12–3.15 checks and remaining release gates.
-- [Release runbook](docs/releasing.md): how a maintainer creates and verifies a private alpha release.
-- [Python/native cross-project fixture](examples/local-cross-project/README.md).
+- [Developer users](docs/users/index.md) — installation, authoring, reuse,
+  reference, and troubleshooting. This is the official user manual.
+- [Maintainers and contributors](docs/maintainers/index.md) — changing, testing,
+  and releasing the framework.
+- [Project owner](docs/project/index.md) — project context and preserved
+  historical reports, separate from current instructions.
 
-## Local configuration
+See the [documentation directory](docs/index.md) for the audience map and filing rules.
 
-```toml
-[weavem]
-store = "task-store"
-work_dir = ".artifacts"
-```
+## Getting started after cloning
 
-Use relative or absolute paths. Explicit CLI/SDK settings take precedence over
-`WEAVEM_STORE` / `WEAVEM_ARTIFACTS_DIR`, then project settings, then defaults.
-Global `weavem --project PATH ...` selects a project explicitly. No `.weavem` folder
-or registration service is needed. Only local folder stores ship in this branch;
-RustFS and warehouse synchronization are separate future work.
-
-Weavem itself needs no account or network service. Prefect follows its own settings
-and may start a loopback server. For local work, use
-`PREFECT_SERVER_ANALYTICS_ENABLED=false`. Weavem tasks default to no result caching
-so execution reaches dependency/integrity checks; opting into caching can skip them.
-Hashes are not publisher authentication, and task/flow code is not sandboxed.
-
-## Work on the framework
-
-Install an editable checkout for the full test suite:
-
-```bash
-python -m pip install -e .
-PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=src python -m unittest discover -s tests -v
-```
-
-Tests use `.artifacts/` (or `WEAVEM_ARTIFACTS_DIR`), disable analytics, and exercise
-Prefect's local test harness. Full integration tests need local loopback sockets
-and native build prerequisites. They do not require a second machine.
-
-## Read project metadata from Python
-
-```python
-from weavem import Project
-
-metadata = Project.open(".").metadata()
-```
-
-Read task/flow definitions, bindings and referenced release metadata directly from
-local files. No server, export command or task execution is involved. See the
-[metadata API reference](docs/reference.md#local-project-metadata-python-api)
-for the snapshot format and strict error behavior.
+If your goal is to **use** Weavem, follow the [release installation guide](docs/users/getting-started.md).
+If your goal is to **change Weavem itself**, follow the
+[contributor setup](docs/maintainers/index.md#work-on-the-framework).
+Cloning is not a task registration or runtime requirement.
 
 ## License and trademarks
 
