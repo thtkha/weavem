@@ -27,22 +27,32 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   min-height: 100vh;
 }
 .workbench {
+  --default-library-width: 272px;
+  --default-inspector-width: 308px;
   min-width: 1100px;
   height: 100vh;
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 272px minmax(430px, 1fr) 308px;
-  grid-template-rows: 68px minmax(0, 1fr) 34px;
+  grid-template-columns: var(--library-width, var(--default-library-width)) 8px minmax(430px, 1fr) 8px var(--inspector-width, var(--default-inspector-width));
+  grid-template-rows: minmax(68px, auto) minmax(0, 1fr) 34px;
   background: #0c0f09;
 }
 .topbar {
   grid-column: 1 / -1;
-  display: flex;
+  display: grid;
+  /* Anchor actions to the default canvas, not the user's resized panel tracks. */
+  grid-template-columns: var(--default-library-width) 8px minmax(430px, 1fr) 8px var(--default-inspector-width);
   align-items: center;
-  gap: 20px;
-  padding: 0 20px;
   background: #080a06;
   border-bottom: 1px solid #374227;
+}
+.topbar-main {
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 10px 12px;
 }
 .brand {
   display: flex;
@@ -85,9 +95,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   gap: 9px;
   color: #c6d2b4;
   font-size: 12px;
-  min-width: 180px;
-  max-width: 270px;
-  flex: 1;
+  min-width: 150px;
+  max-width: 100%;
 }
 .draft-name input {
   min-width: 0;
@@ -99,9 +108,26 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   padding: 7px 2px;
   font-weight: 650;
 }
+.draft-name > span {
+  white-space: nowrap;
+}
 .toolbar-actions {
+  grid-column: 3;
   display: flex;
-  gap: 7px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 16px;
+}
+.run-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+.run-actions .button, .canvas-run-action .button {
+  min-width: 96px;
 }
 .button, .icon-button, .filters button, .add-task {
   border: 1px solid #374227;
@@ -146,7 +172,9 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   width: 100%;
 }
 .save-state {
-  margin-left: auto;
+  grid-column: 5;
+  padding: 0 12px;
+  overflow: hidden;
   color: #c6d2b4;
   display: flex;
   gap: 7px;
@@ -171,11 +199,36 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   overflow: auto;
 }
 .library {
-  border-right: 1px solid #374227;
+  grid-column: 1;
 }
 .inspector {
-  border-left: 1px solid #374227;
+  grid-column: 5;
 }
+.panel-resizer {
+  position: relative;
+  z-index: 9;
+  cursor: col-resize;
+  touch-action: none;
+  background: #080a06;
+  outline: none;
+}
+.panel-resizer-library { grid-column: 2; }
+.panel-resizer-inspector { grid-column: 4; }
+.panel-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 3px;
+  width: 1px;
+  background: #374227;
+  transition: background .15s ease, box-shadow .15s ease;
+}
+.panel-resizer:hover::after, .panel-resizer:focus-visible::after {
+  background: #90a96e;
+  box-shadow: 0 0 0 1px #90a96e;
+}
+.panel-resizer:focus-visible { outline: 2px solid #90a96e; outline-offset: -2px; }
 .panel-heading {
   padding: 20px 18px 8px;
   display: flex;
@@ -255,6 +308,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   gap: 8px;
 }
 .library-task {
+  cursor: pointer;
   border: 1px solid #374227;
   padding: 12px;
   border-radius: 8px;
@@ -322,6 +376,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   text-align: center;
 }
 .canvas-area {
+  grid-column: 3;
   position: relative;
   min-width: 0;
   min-height: 0;
@@ -340,6 +395,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .canvas-header > * {
   pointer-events: auto;
+}
+.canvas-run-action {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  margin-right: 8px;
+}
+.fullscreen-status {
+  max-width: 340px;
+  color: #c6d2b4;
+  font-size: 11px;
+  line-height: 1.3;
 }
 .canvas-summary {
   margin-left: 10px;
@@ -688,6 +756,13 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
     line-height: 1.5;
   }
 }
+@media (max-width: 1270px) {
+  .save-state { display: none; }
+  .topbar-main { padding-left: 10px; }
+  .toolbar-actions { gap: 4px; }
+  .button { padding: 7px 8px; }
+  .draft-name { min-width: 124px; }
+}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     scroll-behavior: auto !important;
@@ -697,20 +772,24 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 
 .run-log {
-  position: fixed;
+  position: absolute;
+  left: 18px;
   right: 18px;
-  bottom: 52px;
+  bottom: 38px;
   z-index: 8;
-  width: min(420px, calc(100vw - 36px));
+  width: auto;
+  max-width: 720px;
   max-height: 260px;
   overflow: auto;
   padding: 14px;
+  margin: 0 auto;
   box-shadow: 0 16px 42px rgba(0, 0, 0, .32);
 }
 .run-log .panel-heading { margin-bottom: 8px; }
 .run-log pre, .run-result pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.5 ui-monospace, monospace; color: #c6d2b4; }
 .run-result { margin-top: 16px; border-top: 1px solid #374227; padding-top: 12px; }
-.button.danger { border-color: #b16a6a; color: #f2b2ac; }
+.button.danger { background: #754645; border-color: #754645; color: #edf1e7; }
+.button.danger:hover { background: #875252; border-color: #875252; color: #edf1e7; }
 
 .node-run-status {
   display: inline-flex;
@@ -731,14 +810,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .node-run-status.pending { border-color: #b99763; color: #d9bc88; }
 .react-flow__edge-text { fill: #c6d2b4; font-size: 11px; font-weight: 700; }
 .react-flow__edge-textbg { fill: #212818; fill-opacity: .92; }
-.run-log {
-  left: 290px;
-  right: 344px;
-  bottom: 38px;
-  width: auto;
-  max-width: 720px;
-  margin: 0 auto;
-}
 .run-log > code { display: block; color: #c6d2b4; font-size: 11px; }
 
 /* Connection inspection keeps draft.edges as the shared canvas/inspector state. */
@@ -748,3 +819,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .connection-row input { width: 100%; min-width: 0; color: #edf1e7; background: #080a06; border: 1px solid #374227; border-radius: 4px; padding: 5px; font-size: 10px; }
 .connection-delete { color: #d99393; background: transparent; border: 0; padding: 3px; font-size: 10px; }
 .react-flow__handle { width: 13px; height: 13px; }
+
+.canvas-area:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  background: #0c0f09;
+}
+.canvas-area:fullscreen .canvas-run-action { display: flex; }
+.canvas-area:fullscreen .canvas-header { top: 16px; left: 18px; right: 18px; }
