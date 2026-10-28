@@ -470,3 +470,56 @@ test('unavailable browser storage does not prevent editing or exporting', async 
   await page.getByRole('button', { name: 'Export draft', exact: true }).click();
   expect((await download).suggestedFilename()).toMatch(/\.json$/);
 });
+
+test('JSON pending state spans fields and guided values follow raw JSON edits', async ({ page }) => {
+  const snapshot = JSON.parse(await readFile(metadataFile, 'utf-8'));
+  const release = snapshot.releases[0];
+  const taskKey = `released:${release.root}:${release.manifest_sha256}`;
+  let starts = 0;
+  await page.route('**/api/session', async (route) => route.fulfill({ json: {
+    token: 'test-token', project: '/projects/document-demo', metadata: snapshot,
+    bindings: { [taskKey]: 'normalize' },
+    parameterHints: { [taskKey]: { origin: 'metadata', parameters: [
+      { name: 'settingsA', kind: 'json', required: false, hasDefault: false },
+      { name: 'settingsB', kind: 'json', required: false, hasDefault: false },
+    ] } },
+  } }));
+  await page.route('**/api/runs', async (route) => {
+    starts += 1;
+    await route.fulfill({ status: 400, json: { error: 'Unexpected run request' } });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Connect project', exact: true }).click();
+  await replace(page);
+  await page.getByRole('button', { name: 'Add task text.normalize', exact: true }).last().click();
+  const first = (await page.getByTestId('task-node').getAttribute('data-node-id'))!;
+  await node(page, first).click();
+  const a = page.getByLabel('settingsA', { exact: true });
+  const b = page.getByLabel('settingsB', { exact: true });
+  await a.fill('{');
+  await b.focus();
+  await b.blur();
+  await expect(page.getByRole('button', { name: 'Edit JSON', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Run flow', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Apply the edited parameters' })).toBeVisible();
+  expect(starts).toBe(0);
+
+  await a.fill('{"old":1}');
+  await a.blur();
+  await page.getByRole('button', { name: 'Apply parameters', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit JSON', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Draft parameters', exact: true }).fill('{"settingsA":{"new":2},"unknown":0}');
+  await page.getByRole('button', { name: 'Apply parameters', exact: true }).click();
+  await page.getByRole('button', { name: 'Guided fields', exact: true }).click();
+  await expect(a).toHaveValue('{"new":2}');
+  await a.fill('null');
+  await a.blur();
+  await page.getByRole('button', { name: 'Apply parameters', exact: true }).click();
+  await expect.poll(async () => (await stored(page))?.nodes[0]?.parameters).toEqual({ settingsA: null, unknown: 0 });
+
+  await a.fill('{');
+  await a.blur();
+  await page.getByRole('button', { name: 'Add task text.normalize', exact: true }).last().click();
+  await expect(page.getByLabel('settingsA', { exact: true })).toHaveValue('');
+  await expect(page.getByRole('button', { name: 'Edit JSON', exact: true })).toBeEnabled();
+});
