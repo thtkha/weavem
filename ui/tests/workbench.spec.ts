@@ -31,7 +31,7 @@ test('demo renders a real canvas with execution safely unavailable', async ({ pa
   const external: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('request', (request) => {
-    if (request.url().startsWith('http') && !request.url().startsWith('http://127.0.0.1:4173/')) external.push(request.url());
+    if (request.url().startsWith('http') && new URL(request.url()).hostname !== '127.0.0.1') external.push(request.url());
   });
   await page.goto('/');
   await expect(page.getByTestId('task-node')).toHaveCount(3);
@@ -241,8 +241,8 @@ test('consecutive library additions use non-overlapping default positions', asyn
 test('inspector connects and deletes; invalid parameters do not change saved data', async ({ page }) => {
   await page.goto('/');
   await node(page, 'demo-count').click();
-  await page.getByLabel('Connect to node', { exact: true }).selectOption('demo-read');
-  await page.getByRole('button', { name: 'Connect nodes', exact: true }).click();
+  await page.getByLabel('Add connection target', { exact: true }).selectOption('demo-read');
+  await page.getByRole('button', { name: 'Add connection', exact: true }).click();
   await expect.poll(async () => (await stored(page))?.edges.length).toBe(3);
   await page.getByRole('button', { name: 'Delete connection to Read documents', exact: true }).click();
   await expect.poll(async () => (await stored(page))?.edges.length).toBe(2);
@@ -253,6 +253,44 @@ test('inspector connects and deletes; invalid parameters do not change saved dat
   await page.getByRole('button', { name: 'Delete node', exact: true }).click();
   await expect.poll(async () => (await stored(page))?.edges.length).toBe(1);
   await expect(page.getByTestId('task-node')).toHaveCount(2);
+});
+
+test('the inspector reflects existing incoming and outgoing canvas wires', async ({ page }) => {
+  await page.goto('/');
+  await node(page, 'demo-normalize').click();
+  await expect(page.getByRole('heading', { name: 'Incoming connections' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Select connection from Read documents' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Outgoing connections' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Select connection to Count words' })).toBeVisible();
+  await page.getByRole('button', { name: 'Select connection to Count words' }).click();
+  await expect(page.getByLabel('Connection target argument', { exact: true })).toBeVisible();
+});
+
+test('edge endpoints reconnect and preserve a wire on Escape', async ({ page }) => {
+  await page.goto('/');
+  const targetUpdater = page.locator('.react-flow__edge[data-id="demo-edge-read-normalize"] .react-flow__edgeupdater-target');
+  const countTarget = node(page, 'demo-count').locator('.target');
+  const from = (await targetUpdater.boundingBox())!;
+  const to = (await countTarget.boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down(); await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 10 }); await page.mouse.up();
+  await expect.poll(async () => (await stored(page))?.edges.find((edge) => edge.id === 'demo-edge-read-normalize')?.target).toBe('demo-count');
+
+  const movedUpdater = page.locator('.react-flow__edge[data-id="demo-edge-read-normalize"] .react-flow__edgeupdater-target');
+  const moved = (await movedUpdater.boundingBox())!;
+  await page.mouse.move(moved.x + moved.width / 2, moved.y + moved.height / 2); await page.mouse.down(); await page.keyboard.press('Escape'); await page.mouse.up();
+  await expect.poll(async () => (await stored(page))?.edges.some((edge) => edge.id === 'demo-edge-read-normalize')).toBe(true);
+});
+
+test('releasing an edge endpoint on an empty pane disconnects only that wire', async ({ page }) => {
+  await page.goto('/');
+  const updater = page.locator('.react-flow__edge[data-id="demo-edge-read-normalize"] .react-flow__edgeupdater-target');
+  const endpoint = (await updater.boundingBox())!;
+  const pane = (await page.locator('.react-flow__pane').boundingBox())!;
+  await page.mouse.move(endpoint.x + endpoint.width / 2, endpoint.y + endpoint.height / 2); await page.mouse.down();
+  await page.mouse.move(pane.x + pane.width - 40, pane.y + 90, { steps: 10 }); await page.mouse.up();
+  await expect.poll(async () => (await stored(page))?.edges.some((edge) => edge.id === 'demo-edge-read-normalize')).toBe(false);
+  expect((await stored(page))?.edges.some((edge) => edge.id === 'demo-edge-normalize-count')).toBe(true);
 });
 
 test('pointer connection and node dragging update the independent graph', async ({ page }) => {

@@ -50,7 +50,7 @@ preview; real execution uses the Python bridge's same-origin loopback URL.
 
 Execution is sequential in dependency order, allowing branches and joins but no
 cycles. Every wire supplies a whole upstream result to an explicitly named target
-argument. Literal/edge conflicts are rejected before task invocation. An argument
+argument. Canvas and inspector share the draft edge list, so each selected task shows both incoming and outgoing wires with their target argument. A wire can be reconnected, or released over the empty canvas to disconnect it; invalid targets, Escape, and releases outside the canvas preserve it. When descriptive metadata gives exactly one unused simple input name, a new wire is mapped to it; otherwise the inspector requires an explicit mapping. Literal/edge conflicts are rejected before task invocation. An argument
 name is not proof of type compatibility or a callable signature match. A fresh
 process runs each graph; arbitrary Python objects stay in that process while the
 browser receives bounded previews. Full result persistence and automatic retries

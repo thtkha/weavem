@@ -740,3 +740,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   margin: 0 auto;
 }
 .run-log > code { display: block; color: #c6d2b4; font-size: 11px; }
+
+/* Connection inspection keeps draft.edges as the shared canvas/inspector state. */
+.connection-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(94px, .7fr) auto; align-items: center; gap: 6px; }
+.connection-row > button:first-child { appearance: none; border: 0; background: transparent; color: inherit; min-width: 0; padding: 0; text-align: left; }
+.connection-row > button:first-child small { display: block; color: #c6d2b4; margin-top: 2px; }
+.connection-row input { width: 100%; min-width: 0; color: #edf1e7; background: #080a06; border: 1px solid #374227; border-radius: 4px; padding: 5px; font-size: 10px; }
+.connection-delete { color: #d99393; background: transparent; border: 0; padding: 3px; font-size: 10px; }
+.react-flow__handle { width: 13px; height: 13px; }

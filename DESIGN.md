@@ -45,7 +45,7 @@ separate from the released application-user manual.
 One task vocabulary, another authoring surface. React Flow owns presentation,
 never Weavem execution. Node instances reference task records; duplicate instances
 are allowed. Each executable wire names its destination argument and passes the
-whole upstream result; task descriptions are not machine-validated type schemas.
+whole upstream result; task descriptions are not machine-validated type schemas. The canvas and inspector read the same draft edge list: both incoming and outgoing wires remain inspectable, mappable, selectable, and deletable. Reconnecting a wire on an empty canvas disconnects it; invalid, cancelled, and outside-canvas releases preserve it.
 Published provenance is metadata, not a claim of verified bytes or trusted code.
 Preserve current work when input is invalid; confirm before replacing a draft.
 
@@ -64,7 +64,7 @@ Motion is limited to interaction feedback. No remote fonts or image assets.
 
 Task library/search/provenance filters, metadata-driven task node with generic
 handles, graph controls/minimap, draft toolbar/status, node inspector, JSON
-parameter editor, keyboard connection controls, replacement confirmation, and
+parameter editor, incoming/outgoing connection lists with mapping controls, reconnectable wire endpoints, keyboard connection controls, replacement confirmation, and
 visible import/storage errors. Native CSS owns tokens and component states.
 Execution controls and status labels reuse these components without changing
 the sage/olive palette.
