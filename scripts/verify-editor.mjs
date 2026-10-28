@@ -67,7 +67,7 @@ try {
   // No node creation, parameter edits, or wire mapping is needed.
   await expect(page.getByTestId('task-node')).toHaveCount(3);
   await expect(page.getByLabel('Draft name', { exact: true })).toHaveValue('Native document summary');
-  await page.getByRole('button', { name: 'Fit graph in view', exact: true }).click();
+  await page.locator('.react-flow__controls-button').nth(2).click();
   const node = (task) => page.getByTestId('task-node').filter({ hasText: task });
   await page.getByRole('button', { name: 'Run flow', exact: true }).click();
   const log = page.getByRole('region', { name: 'Run log', exact: true });

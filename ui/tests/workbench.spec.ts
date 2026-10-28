@@ -31,7 +31,7 @@ test('demo renders a real canvas with execution safely unavailable', async ({ pa
   const external: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('request', (request) => {
-    if (request.url().startsWith('http') && !request.url().startsWith('http://127.0.0.1:4173/')) external.push(request.url());
+    if (request.url().startsWith('http') && !request.url().startsWith('http://127.0.0.1:')) external.push(request.url());
   });
   await page.goto('/');
   await expect(page.getByTestId('task-node')).toHaveCount(3);
@@ -433,4 +433,55 @@ test('unavailable browser storage does not prevent editing or exporting', async 
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export draft', exact: true }).click();
   expect((await download).suggestedFilename()).toMatch(/\.json$/);
+});
+
+test('places the run control apart from draft actions and resizes persistent panels', async ({ page }) => {
+  await page.goto('/');
+  const run = page.getByRole('button', { name: 'Run flow', exact: true });
+  await expect(run).toBeDisabled();
+  expect(await run.evaluate((element) => element.parentElement?.classList.contains('run-actions'))).toBe(true);
+
+  const library = page.getByRole('separator', { name: 'Resize task library' });
+  await library.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(library).toHaveAttribute('aria-valuenow', '280');
+  await page.keyboard.press('End');
+  await expect(library).toHaveAttribute('aria-valuenow', '480');
+  await page.reload();
+  await expect(page.getByRole('separator', { name: 'Resize task library' })).toHaveAttribute('aria-valuenow', '480');
+});
+
+test('replaces the header fit control with canvas fullscreen while retaining React Flow controls', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Fit graph in view', exact: true })).toHaveCount(0);
+  await expect(page.locator('.react-flow__controls button')).toHaveCount(3);
+  const fullscreen = page.getByRole('button', { name: 'Enter canvas fullscreen', exact: true });
+  await fullscreen.click();
+  await expect(page.getByRole('button', { name: 'Exit canvas fullscreen', exact: true })).toBeVisible();
+  expect(await page.locator('.canvas-area').evaluate((element) => document.fullscreenElement === element)).toBe(true);
+  await expect(page.locator('.canvas-area').getByRole('button', { name: 'Run flow', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Exit canvas fullscreen', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Enter canvas fullscreen', exact: true })).toBeVisible();
+});
+
+test('pointer resizing honors both panel bounds and retains a 430px canvas after a narrow reload', async ({ page }) => {
+  await page.goto('/');
+  const inspector = page.getByRole('separator', { name: 'Resize inspector' });
+  const initial = Number(await inspector.getAttribute('aria-valuenow'));
+  const box = (await inspector.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x - 80, box.y + box.height / 2, { steps: 8 });
+  await page.mouse.up();
+  expect(Number(await inspector.getAttribute('aria-valuenow'))).toBeGreaterThan(initial);
+  await inspector.focus();
+  await page.keyboard.press('End');
+  await expect(inspector).toHaveAttribute('aria-valuenow', '560');
+
+  await page.setViewportSize({ width: 1100, height: 1000 });
+  await page.reload();
+  const canvas = await page.getByRole('region', { name: 'Draft canvas' }).boundingBox();
+  expect(canvas?.width).toBeGreaterThanOrEqual(430);
+  expect(Number(await page.getByRole('separator', { name: 'Resize task library' }).getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(220);
+  expect(Number(await page.getByRole('separator', { name: 'Resize inspector' }).getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(260);
 });
