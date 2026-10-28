@@ -1,0 +1,124 @@
+# Design
+
+## Source of truth
+
+Status: Active · 2026-10-28 · Surface: local node-editor prototype.
+Evidence: the owner-approved interactive/dark/React Flow choices; masterplan v8
+sections 18, 26 (Visual representation), and 29.7; the existing
+[project metadata API](docs/users/reference.md#local-project-metadata-python-api).
+The owner-provided `color_shades.jpg` defines the sage/olive palette; the existing workbench layout is preserved.
+This is a prototype design contract, not a new supported Python feature.
+
+## Brand
+
+A precise, calm engineering workbench. Trust comes from visible task identity,
+version, provenance, local state, and honest prototype labels. Avoid gradients,
+glass panels, decorative charts, fake execution status, and invented task types.
+
+## Product goals
+
+Prove that people can find tasks, compose a graph, inspect its metadata, and
+save/reopen their work without writing Python. Start with a labelled demo, then
+allow an actual Project.metadata() JSON snapshot. The next slice runs canvas
+graphs through the existing Python/Prefect runtime in an explicitly selected
+local project. Success is a round-trippable draft, explicit argument wiring,
+observable execution, and no silent data replacement. Publication, accounts,
+remote execution, and code generation remain outside this prototype.
+
+## Personas and jobs
+
+Flow authors and data-oriented users exploring visual composition. Framework
+maintainers evaluate the metadata/editor boundary. Desktop browsers are primary;
+no Python installation is required to open the non-executable demo UI. Running
+real tasks requires the project's supported Python environment.
+
+## Information architecture
+
+One workbench: top application/draft toolbar; left searchable task library;
+central graph canvas; right node inspector; bottom lightweight state/graph summary.
+New/import/open/export and project-connection actions are explicit. Run/cancel,
+per-node statuses, result previews, and logs expose actual execution. Owner-facing prototype records stay
+separate from the released application-user manual.
+
+## Design principles
+
+One task vocabulary, another authoring surface. React Flow owns presentation,
+never Weavem execution. Node instances reference task records; duplicate instances
+are allowed. Each executable wire names its destination argument and passes the
+whole upstream result; task descriptions are not machine-validated type schemas.
+Published provenance is metadata, not a claim of verified bytes or trusted code.
+Preserve current work when input is invalid; confirm before replacing a draft.
+
+## Visual language
+
+Deep olive canvas (#0c0f09), dark olive panels (#080a06), muted borders (#374227),
+off-white text (#edf1e7), secondary text (#c6d2b4), and sage (#90a96e)
+for primary actions, wires, focus, and selection. Hover accents use #aabd90.
+These colors come from the owner-provided palette; warning/error colors stay distinct. Blue/purple badges distinguish provenance and
+backend without implying safety. System sans-serif UI, monospace identifiers.
+Use an 8px spacing rhythm, 6–10px corner radii, thin borders, and quiet shadows.
+Task cards have clear hierarchy and one meaningful accent; SVG icons are inline.
+Motion is limited to interaction feedback. No remote fonts or image assets.
+
+## Components
+
+Task library/search/provenance filters, metadata-driven task node with generic
+handles, graph controls/minimap, draft toolbar/status, node inspector, JSON
+parameter editor, keyboard connection controls, replacement confirmation, and
+visible import/storage errors. Native CSS owns tokens and component states.
+Execution controls and status labels reuse these components without changing
+the sage/olive palette.
+
+## Accessibility
+
+Aim for WCAG 2.2 AA patterns without claiming an audited conformance level.
+Use semantic buttons/labels, visible focus, readable contrast, and live status
+messages. Keep React Flow keyboard accessibility enabled. Provide button-based
+node creation and inspector-based connection/deletion, not drag-only workflows.
+Respect reduced-motion preferences; never communicate provenance by color alone.
+
+## Responsive behavior
+
+Full three-panel editing at desktop widths of 1100px and above. Below that,
+show a clear desktop-workbench notice instead of compressed, unusable controls;
+leave an export/recovery action available. No touch-first editor promise.
+
+## Interaction states
+
+Demo/empty/restored drafts are distinct. Invalid imports leave current work
+unchanged. Catalog replacement starts a new draft after confirmation. Import
+metadata is not graph reconstruction from Python flows. Autosave is local to
+this browser; failures remain visible and export remains available. Corrupt
+stored content is not silently overwritten by a demo fallback. Connection failures
+do not discard the draft. Running locks graph changes; results belong to the
+submitted snapshot. Failed tasks stop execution, and remaining nodes are skipped.
+
+## Content voice
+
+Use tasks, flows, drafts, catalog, local, released, and prototype. Never capabilities.
+Say what is known: descriptive metadata, argument mapping, browser autosave,
+and actual run state. Do not label editor output published or sandboxed. Synthetic
+demo tasks cannot run, and imported paths do not grant filesystem access.
+
+## Implementation constraints
+
+React + TypeScript + Vite + @xyflow/react, native CSS, npm lockfile; no state,
+layout, component, or backend framework. Weavem owns a versioned JSON-safe draft
+model containing catalog, node instances, edges, configuration, and viewport.
+Renderer state is converted to/from it; no React Flow serialization contract.
+Import only JSON in the browser; no eval, HTML injection, or outbound telemetry.
+An explicit loopback-only standard-library Python bridge serves the built UI,
+scopes execution to one project and interpreter, checks host/origin/session token,
+and starts a fresh process for each run. No JavaScript task execution engine.
+Metadata may contain local paths; browser storage and downloaded files are not
+secret stores. Tests cover pure data logic and real browser interactions.
+Keep task/flow artifact manifests, dependencies, package version and releases
+unchanged. The versioned execution graph is distinct from the layout draft and
+from a published flow. Draft schema 1 remains readable; unmapped wires cannot run.
+
+## Open questions
+
+Typed ports, result-field selection, credentials management, parallel execution,
+loops, nested flows, scheduling, collaboration, publication, and production
+deployment remain deferred. Execution is trusted local code, not a sandbox;
+cancellation cannot undo side effects.

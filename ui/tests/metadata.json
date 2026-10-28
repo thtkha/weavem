@@ -1,0 +1,84 @@
+{
+  "schema": 1,
+  "project": {
+    "root": "/projects/document-demo",
+    "config_path": "/projects/document-demo/weavem.toml",
+    "store_path": "/projects/document-demo/task-store",
+    "work_dir": "/projects/document-demo/.artifacts"
+  },
+  "tasks": [
+    {
+      "path": "/projects/document-demo/tasks/text_normalize/task.toml",
+      "metadata": {
+        "schema": 1,
+        "task_id": "text.normalize",
+        "version": "1.1.0",
+        "backend": "cython",
+        "source": "implementation.py",
+        "export": "run",
+        "dependencies": [],
+        "description": null,
+        "inputs": [],
+        "output": "Any"
+      }
+    }
+  ],
+  "flows": [
+    {
+      "path": "/projects/document-demo/flows/process_documents.toml",
+      "metadata": {
+        "schema": 1,
+        "flow_id": "text.process_documents",
+        "version": "1.1.0",
+        "source": "process_documents.py",
+        "export": "process_documents",
+        "tasks": [
+          "normalize"
+        ]
+      }
+    }
+  ],
+  "bindings": [
+    {
+      "alias": "normalize",
+      "path": null,
+      "release": "text.normalize==1.1.0",
+      "source": "task-store",
+      "manifest_sha256": "cb2bb05362b064080260f13f4a8fb904c6c138c87464212272de499e60076254"
+    }
+  ],
+  "releases": [
+    {
+      "kind": "task",
+      "root": "/projects/document-demo/task-store/text.normalize/1.1.0/cpython-315",
+      "manifest_sha256": "cb2bb05362b064080260f13f4a8fb904c6c138c87464212272de499e60076254",
+      "metadata": {
+        "schema": 1,
+        "task_id": "text.normalize",
+        "version": "1.1.0",
+        "backend": "cython",
+        "module_leaf": "_weavem_text_normalize_1_1_0_5a76173863d84ed8",
+        "export": "run",
+        "artifact_name": "_weavem_text_normalize_1_1_0_5a76173863d84ed8.cpython-315-x86_64-linux-gnu.so",
+        "artifact_sha256": "71e45693dd9becb03377abe9b2c570430be3c7870b8030d321b90e04e85da740",
+        "artifact_size": 40096,
+        "source_digest": "5a76173863d84ed88ca09efb291886e342f90cd79ac4d7ef9a901b3583b3053f",
+        "python_cache_tag": "cpython-315",
+        "platform": "linux-x86_64",
+        "ext_suffix": ".cpython-315-x86_64-linux-gnu.so",
+        "dependencies": [],
+        "description": null,
+        "inputs": [],
+        "output": "Any",
+        "build": {
+          "backend": "cython",
+          "compiler": "ziglang==0.17.0",
+          "debug_symbols": "stripped",
+          "headers": "cpython-315-0-linux-x86_64",
+          "python": "3.15.0 (main, Oct  9 2026, 15:24:40) [Clang 22.1.3 ]",
+          "target": "x86_64-linux-gnu.2.28"
+        }
+      }
+    }
+  ]
+}

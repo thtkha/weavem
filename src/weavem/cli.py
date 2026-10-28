@@ -308,6 +308,16 @@ def make_parser() -> argparse.ArgumentParser:
     parser.add_argument("--project")
     commands = parser.add_subparsers(dest="command", required=True)
 
+    editor = commands.add_parser("editor", help="Serve the local visual flow editor on loopback")
+    editor.add_argument("--project", dest="editor_project", help="Project directory (default: discover from cwd)")
+    editor.add_argument("--port", type=int, default=8765, help="Loopback port (default: 8765)")
+    editor.add_argument("--ui-dir", help="Directory containing a built editor index.html")
+    def _editor(args):
+        from .editor_server import serve_editor
+        return serve_editor(args.editor_project if args.editor_project is not None else args.project,
+                            port=args.port, ui_dir=args.ui_dir)
+    editor.set_defaults(func=_editor)
+
     doctor = commands.add_parser("doctor", help="Verify the managed native compiler, headers, and loader")
     doctor.add_argument("--work-dir")
     doctor.set_defaults(func=_doctor)

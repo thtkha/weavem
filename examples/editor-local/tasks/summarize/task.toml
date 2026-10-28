@@ -1,0 +1,11 @@
+[task]
+schema = 1
+task_id = "text.summarize"
+version = "1.0.0"
+backend = "python"
+source = "implementation.py"
+export = "run"
+description = "Format word-count statistics for display."
+inputs = ["stats: dict", "prefix: str = Document"]
+output = "str"
+dependencies = []

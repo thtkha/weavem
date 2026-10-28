@@ -1,0 +1,11 @@
+[task]
+schema = 1
+task_id = "text.count_words"
+version = "1.0.0"
+backend = "python"
+source = "implementation.py"
+export = "run"
+description = "Count whitespace-separated words and characters in text."
+inputs = ["text: str"]
+output = "dict with words and characters counts"
+dependencies = []

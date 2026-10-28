@@ -1,0 +1,14 @@
+{
+  "kind": "weavem.project-flow",
+  "schema": 1,
+  "name": "Native document summary",
+  "nodes": [
+    {"id": "normalize", "taskAlias": "normalize", "parameters": {"text": "  Hello Weavem  "}},
+    {"id": "count", "taskAlias": "count", "parameters": {}},
+    {"id": "summarize", "taskAlias": "summarize", "parameters": {"prefix": "Document"}}
+  ],
+  "edges": [
+    {"id": "normalize-count", "source": "normalize", "target": "count", "argument": "text"},
+    {"id": "count-summary", "source": "count", "target": "summarize", "argument": "stats"}
+  ]
+}

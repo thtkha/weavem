@@ -1,0 +1,11 @@
+[task]
+schema = 1
+task_id = "text.normalize"
+version = "1.0.0"
+backend = "cython"
+source = "implementation.py"
+export = "run"
+description = "Trim text and optionally lowercase it. Local native task; first execution compiles it."
+inputs = ["text: str", "lowercase: bool = True"]
+output = "str"
+dependencies = []

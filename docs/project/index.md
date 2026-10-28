@@ -23,6 +23,9 @@ not the recommendations in an earlier experiment.
 
 ## Reports and evidence
 
+The [node-editor prototype](node-editor-prototype.md) records the current
+interactive-UI experiment. It is not part of the released Python user manual.
+
 The [history index](history/index.md) organizes the preserved simulations,
 acceptance trials, compatibility investigations, and release-readiness evidence.
 Keep successes, failures, and original evidence paths together; a later passing

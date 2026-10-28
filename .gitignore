@@ -16,3 +16,8 @@ dist/
 .ruff_cache/
 .coverage
 htmlcov/
+
+# Local node editor prototype
+ui/node_modules/
+ui/dist/
+ui/.vite/

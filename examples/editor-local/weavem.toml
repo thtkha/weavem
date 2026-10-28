@@ -1,0 +1,10 @@
+[weavem]
+
+[tasks.normalize]
+path = "tasks/normalize"
+
+[tasks.count]
+path = "tasks/count"
+
+[tasks.summarize]
+path = "tasks/summarize"
