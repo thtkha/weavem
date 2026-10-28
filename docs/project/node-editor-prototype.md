@@ -62,6 +62,13 @@ Failure skips remaining nodes. Cancellation is not rollback and execution is not
 a sandbox. Local native tasks may compile on first use; the UI warns before Run.
 Run diagnostics use the configured work directory's `editor-runs/` subtree.
 
+The inspector may offer parameter fields from a local task's static Python
+signature. This is advisory editor data only: source is parsed without importing
+or executing it, annotations and defaults are never evaluated, and compiled or
+ambiguous exports retain the JSON editor. Defaults are displayed without becoming
+draft overrides; wired arguments are shown as their source rather than editable
+literals. Project metadata and published task artifacts are unchanged.
+
 ## Where to work
 
 Use the [UI README](../../ui/README.md) for exact startup, import/export,

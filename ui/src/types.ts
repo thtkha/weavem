@@ -58,6 +58,22 @@ export interface ExecutionGraph {
   edges: Array<{ id: string; source: string; target: string; argument: string }>;
 }
 
+export type ParameterKind = 'string' | 'number' | 'boolean' | 'json';
+export interface ParameterHint {
+  name: string;
+  kind: ParameterKind;
+  required: boolean;
+  hasDefault: boolean;
+  annotation?: string;
+  defaultValue?: JsonValue;
+  defaultDisplay?: string;
+  description?: string;
+}
+export interface TaskParameterHints {
+  origin: 'source' | 'metadata';
+  parameters: ParameterHint[];
+}
+
 export type RunNodeStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 export interface RunNode { status: RunNodeStatus; preview?: string; error?: string }
 export interface RunState {

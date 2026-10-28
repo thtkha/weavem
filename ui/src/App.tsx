@@ -33,6 +33,8 @@ import {
   setEdgeArgument,
 } from './model';
 import type { CatalogTask, DraftNode, EditorDraft, ExecutionGraph, Point, RunNodeStatus, RunState, Viewport } from './types';
+import type { TaskParameterHints } from './types';
+import { ParameterEditor } from './ParameterEditor';
 
 type NodeData = {
   nodeId: string;
@@ -46,7 +48,7 @@ type PendingAction =
   | { kind: 'metadata'; catalogText: string }
   | { kind: 'draft'; draftText: string };
 
-type EditorSession = { token: string; project: string; metadata: unknown; bindings: Record<string, string>; flow?: ExecutionGraph | null };
+type EditorSession = { token: string; project: string; metadata: unknown; bindings: Record<string, string>; parameterHints?: Record<string, TaskParameterHints>; flow?: ExecutionGraph | null };
 
 const nodeTypes = { task: TaskNode };
 const defaultViewport: Viewport = { x: 0, y: 0, zoom: 1 };
@@ -140,6 +142,7 @@ export default function App() {
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [flow, setFlow] = useState<ReactFlowInstance<Node<NodeData, 'task'>, Edge> | null>(null);
   const [parameterText, setParameterText] = useState('{}');
+  const [parameterPending, setParameterPending] = useState(false);
   const [connectTarget, setConnectTarget] = useState('');
   const [edgeArgument, setEdgeArgumentText] = useState('');
   const [session, setSession] = useState<EditorSession | null>(null);
@@ -184,6 +187,11 @@ export default function App() {
   );
   const selectedNode = draft.nodes.find((node) => node.id === selectedId);
   const selectedTask = taskFor(draft, selectedNode);
+  const wiredParameters = useMemo(() => {
+    if (!selectedNode) return {} as Record<string, string>;
+    return Object.fromEntries(draft.edges.filter((edge) => edge.target === selectedNode.id && edge.argument)
+      .map((edge) => [edge.argument!, draft.nodes.find((node) => node.id === edge.source)?.label ?? edge.source]));
+  }, [draft.edges, draft.nodes, selectedNode]);
   const selectedEdge = draft.edges.find((edge) => selectedEdgeIds.has(edge.id));
   const running = run?.status === 'running';
   const executionActive = Boolean(running || submitting);
@@ -195,6 +203,7 @@ export default function App() {
 
   useEffect(() => {
     setParameterText(selectedNode ? JSON.stringify(selectedNode.parameters, null, 2) : '{}');
+    setParameterPending(false);
     setConnectTarget('');
   }, [selectedId, selectedNode?.parameters]);
 
@@ -242,7 +251,7 @@ export default function App() {
     if (submittingRef.current || executionActive) return;
     if (!sessionMatchesDraft || !session) { setRunError('Connect this project and load its catalog before running.'); return; }
     try {
-      if (selectedNode && JSON.stringify(parseParameters(parameterText)) !== JSON.stringify(selectedNode.parameters)) {
+      if (parameterPending || (selectedNode && JSON.stringify(parseParameters(parameterText)) !== JSON.stringify(selectedNode.parameters))) {
         throw new Error('Apply the edited parameters before running this draft');
       }
       const graph = executionGraph(draft, session.bindings);
@@ -255,7 +264,7 @@ export default function App() {
       setRunError(null); setStatus('Run started');
     } catch (cause) { setRunError(cause instanceof Error ? cause.message : String(cause)); }
     finally { submittingRef.current = false; setSubmitting(false); }
-  }, [draft, executionActive, parameterText, requestApi, selectedNode, session, sessionMatchesDraft]);
+  }, [draft, executionActive, parameterPending, parameterText, requestApi, selectedNode, session, sessionMatchesDraft]);
 
   const cancelRun = useCallback(async () => {
     if (!run || run.status !== 'running') return;
@@ -767,19 +776,16 @@ export default function App() {
               <span>Notes</span>
               <textarea disabled={executionActive} value={selectedNode.notes} onChange={(event) => updateSelected({ notes: event.target.value })} placeholder="Private drafting note" />
             </label>
-            <label className="field">
-              <span>Draft parameters</span>
-              <textarea
-                className="code-area"
-                value={parameterText}
-                disabled={executionActive}
-                onChange={(event) => setParameterText(event.target.value)}
-                spellCheck={false}
-                aria-describedby="parameter-help"
-              />
-            </label>
-            <p id="parameter-help" className="field-help">JSON object saved only in this editor draft.</p>
-            <button className="button secondary wide" disabled={executionActive} onClick={applyParameters}>Apply parameters</button>
+            <ParameterEditor
+              key={selectedNode.id}
+              value={parameterText}
+              onChange={setParameterText}
+              onApply={applyParameters}
+              disabled={executionActive}
+              hints={session?.parameterHints?.[selectedNode.taskKey]}
+              wired={wiredParameters}
+              onPendingChange={setParameterPending}
+            />
             <section className="connection-editor">
               <h3>Connect to node</h3>
               <select aria-label="Connect to node" disabled={executionActive} value={connectTarget} onChange={(event) => setConnectTarget(event.target.value)}>

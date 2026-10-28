@@ -4,6 +4,7 @@ import { createDemoDraft, STORAGE_KEY } from '../src/model';
 import type { EditorDraft } from '../src/types';
 
 const metadataFile = new URL('./metadata.json', import.meta.url).pathname;
+const localPrefix = `http://127.0.0.1:${process.env.WEAVEM_UI_TEST_PORT || 4173}/`;
 const node = (page: Page, id: string) => page.locator(`[data-testid="task-node"][data-node-id="${id}"]`);
 
 async function stored(page: Page): Promise<EditorDraft | null> {
@@ -31,7 +32,7 @@ test('demo renders a real canvas with execution safely unavailable', async ({ pa
   const external: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('request', (request) => {
-    if (request.url().startsWith('http') && !request.url().startsWith('http://127.0.0.1:4173/')) external.push(request.url());
+    if (request.url().startsWith('http') && !request.url().startsWith(localPrefix)) external.push(request.url());
   });
   await page.goto('/');
   await expect(page.getByTestId('task-node')).toHaveCount(3);
@@ -87,6 +88,41 @@ test('reconnecting to the same project renews session without replacing the draf
   await page.getByRole('button', { name: 'Reconnect project', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByTestId('task-node')).toHaveCount(1);
+});
+
+test('guided parameters preserve empty strings, false, defaults, and JSON drafts', async ({ page }) => {
+  const snapshot = JSON.parse(await readFile(metadataFile, 'utf-8'));
+  const release = snapshot.releases[0];
+  const taskKey = `released:${release.root}:${release.manifest_sha256}`;
+  await page.route('**/api/session', async (route) => route.fulfill({ json: {
+    token: 'test-token', project: '/projects/document-demo', metadata: snapshot,
+    bindings: { [taskKey]: 'normalize' },
+    parameterHints: { [taskKey]: { origin: 'metadata', parameters: [
+      { name: 'text', kind: 'string', required: true, hasDefault: false },
+      { name: 'enabled', kind: 'boolean', required: false, hasDefault: true, defaultValue: true },
+      { name: 'settings', kind: 'json', required: false, hasDefault: false },
+    ] } },
+  } }));
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Connect project', exact: true }).click();
+  await replace(page);
+  await page.getByRole('button', { name: 'Add task text.normalize', exact: true }).last().click();
+  const id = (await page.getByTestId('task-node').getAttribute('data-node-id'))!;
+  await node(page, id).click();
+  await page.getByLabel('text', { exact: true }).fill('temporary');
+  await page.getByLabel('text', { exact: true }).fill('');
+  await page.getByLabel('enabled', { exact: true }).selectOption('false');
+  await page.getByRole('button', { name: 'Apply parameters', exact: true }).click();
+  await expect.poll(async () => (await stored(page))?.nodes[0]?.parameters).toEqual({ text: '', enabled: false });
+  await page.getByLabel('enabled', { exact: true }).selectOption('__default__');
+  const settings = page.getByLabel('settings', { exact: true });
+  await settings.fill('{"nested":');
+  await settings.blur();
+  await expect(page.getByRole('button', { name: 'Apply parameters', exact: true })).toBeDisabled();
+  await settings.fill('{"nested":[1]}');
+  await settings.blur();
+  await page.getByRole('button', { name: 'Apply parameters', exact: true }).click();
+  await expect.poll(async () => (await stored(page))?.nodes[0]?.parameters).toEqual({ text: '', settings: { nested: [1] } });
 });
 
 async function connectRunnableProject(page: Page) {
@@ -247,7 +283,7 @@ test('inspector connects and deletes; invalid parameters do not change saved dat
   await page.getByRole('button', { name: 'Delete connection to Read documents', exact: true }).click();
   await expect.poll(async () => (await stored(page))?.edges.length).toBe(2);
   await page.getByRole('textbox', { name: 'Draft parameters', exact: true }).fill('[]');
-  await page.getByRole('button', { name: 'Apply parameters', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Apply parameters', exact: true })).toBeDisabled();
   await expect(page.getByRole('alert')).toContainText('JSON object');
   expect((await stored(page))?.nodes.find((item) => item.id === 'demo-count')?.parameters).toEqual({ include_headings: false });
   await page.getByRole('button', { name: 'Delete node', exact: true }).click();

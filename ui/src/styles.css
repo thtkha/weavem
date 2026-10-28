@@ -547,6 +547,20 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
   line-height: 1.45;
 }
+.parameter-editor { display: grid; gap: 8px; }
+.parameter-heading, .parameter-label { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: #c6d2b4; font-size: 11px; font-weight: 620; }
+.parameter-mode { border: 0; background: transparent; color: #90a96e; padding: 0; font-size: 10px; }
+.parameter-fields { display: grid; gap: 10px; }
+.parameter-field { display: grid; gap: 5px; }
+.parameter-field input[type="text"], .parameter-field input[type="number"] { width: 100%; color: #edf1e7; background: #080a06; border: 1px solid #374227; border-radius: 6px; padding: 8px; }
+.parameter-field select { width: 100%; color: #edf1e7; background: #080a06; border: 1px solid #374227; border-radius: 6px; padding: 8px; }
+.parameter-json { min-height: 62px !important; }
+.parameter-unset { justify-self: start; border: 0; background: transparent; padding: 0; color: #90a96e; font-size: 10px; }
+.parameter-label small, .parameter-default { color: #c6d2b4; font-weight: 400; }
+.parameter-label em { color: #d8c28a; font-size: 10px; font-style: normal; }
+.parameter-checkbox, .parameter-wired { color: #c6d2b4; font-size: 11px; margin: 0; }
+.parameter-wired strong { color: #edf1e7; }
+.parameter-error { color: #e0ab6f; font-size: 11px; margin: 0; }
 .field-help {
   color: #c6d2b4;
   font-size: 10px;

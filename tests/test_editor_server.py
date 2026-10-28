@@ -76,6 +76,44 @@ class EditorServerTests(unittest.TestCase):
         status, _ = self.request("GET", "/api/runs/nope")
         self.assertEqual(401, status)
 
+    def test_session_exposes_static_parameter_hints_without_importing_task_code(self):
+        source = self.server.project.root / "tasks" / "echo" / "implementation.py"
+        source.write_text(
+            "raise RuntimeError('must not be imported')\n"
+            "def run(text: str, count: int = 2, enabled: bool = False, thing=object()):\n    return text\n",
+            encoding="utf-8",
+        )
+        hint = self.session()["parameterHints"][self.task_key]
+        self.assertEqual("source", hint["origin"])
+        self.assertEqual(
+            ["text", "count", "enabled", "thing"], [item["name"] for item in hint["parameters"]]
+        )
+        self.assertTrue(hint["parameters"][0]["required"])
+        self.assertEqual(2, hint["parameters"][1]["defaultValue"])
+        self.assertFalse(hint["parameters"][2]["defaultValue"])
+        self.assertEqual("object()", hint["parameters"][3]["defaultDisplay"])
+
+    def test_unresolvable_signature_does_not_break_catalog(self):
+        source = self.server.project.root / "tasks" / "echo" / "implementation.py"
+        source.write_text("def run(first, /, second, *extra): return second\n", encoding="utf-8")
+        session = self.session()
+        self.assertNotIn(self.task_key, session["parameterHints"])
+        self.assertTrue(session["metadata"]["tasks"])
+
+    def test_metadata_supplements_an_unannotated_source_and_rebound_exports_fall_back(self):
+        task = self.server.project.root / "tasks" / "echo"
+        (task / "task.toml").write_text(
+            '[task]\ntask_id="editor.echo"\nversion="1.0.0"\nsource="implementation.py"\nexport="run"\ninputs=["text: str", "enabled: bool"]\n',
+            encoding="utf-8",
+        )
+        (task / "implementation.py").write_text("def run(text, enabled=False): return text\n", encoding="utf-8")
+        hint = self.session()["parameterHints"][self.task_key]
+        self.assertEqual("string", hint["parameters"][0]["kind"])
+        self.assertEqual("boolean", hint["parameters"][1]["kind"])
+        (task / "implementation.py").write_text("def run(text): return text\nrun = other\n", encoding="utf-8")
+        fallback = self.session()["parameterHints"][self.task_key]
+        self.assertEqual("metadata", fallback["origin"])
+
     def test_connect_opens_a_project_flow_and_resolves_aliases_without_running_it(self):
         flows = self.server.project.root / "flows"
         flows.mkdir()
