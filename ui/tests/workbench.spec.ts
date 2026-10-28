@@ -286,7 +286,7 @@ test('export and reopen preserve neutral data, configuration and viewport', asyn
   await page.goto('/');
   await node(page, 'demo-read').click();
   await page.getByRole('textbox', { name: 'Notes', exact: true }).fill('Portable draft');
-  await page.getByRole('button', { name: 'Fit graph in view', exact: true }).click();
+  await page.locator('.react-flow__controls-fitview').click();
   await expect.poll(async () => (await stored(page))?.nodes[0].notes).toBe('Portable draft');
   const downloadEvent = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export draft', exact: true }).click();
@@ -340,7 +340,7 @@ test('corrupt browser storage is not silently overwritten by demo edits', async 
   await page.goto('/');
   await expect(page.getByRole('alert')).toContainText('Could not load saved draft');
   await page.getByLabel('Draft name', { exact: true }).fill('Recovered visually');
-  await page.getByRole('button', { name: 'Fit graph in view', exact: true }).click();
+  await page.locator('.react-flow__controls-fitview').click();
   await page.waitForTimeout(600);
   expect(await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY)).toBe('{broken');
   await clear(page);

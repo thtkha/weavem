@@ -775,6 +775,11 @@ export default function App() {
               <span className="eyebrow">Composition draft</span>
               <span className="canvas-summary">{draft.nodes.length} nodes · {draft.edges.length} connections</span>
             </div>
+            {canvasFullscreen && <div className="canvas-run-action">
+              {runControl()}
+              {run && <button className="button" aria-pressed={logOpen} onClick={() => setLogOpen((open) => !open)}>{logOpen ? 'Hide run log' : 'Show run log'}</button>}
+              <span className="fullscreen-status" role="status">{error || runError || (run ? `Run ${run.status}` : sessionMessage)}</span>
+            </div>}
             <button
               className="icon-button"
               aria-label={canvasFullscreen ? 'Exit canvas fullscreen' : 'Enter canvas fullscreen'}
@@ -783,11 +788,6 @@ export default function App() {
             >
               {icon(canvasFullscreen ? 'fullscreenExit' : 'fullscreen')}
             </button>
-            {canvasFullscreen && <div className="canvas-run-action">
-              {runControl()}
-              {run && <button className="button" aria-pressed={logOpen} onClick={() => setLogOpen((open) => !open)}>{logOpen ? 'Hide run log' : 'Show run log'}</button>}
-              <span className="fullscreen-status" role="status">{error || runError || (run ? `Run ${run.status}` : sessionMessage)}</span>
-            </div>}
           </div>
           <ReactFlow
             nodes={nodes}
