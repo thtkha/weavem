@@ -645,38 +645,40 @@ export default function App() {
       </section>
       <div ref={workbench} className="workbench" style={{ '--library-width': `${layout.libraryWidth}px`, '--inspector-width': `${layout.inspectorWidth}px` } as React.CSSProperties} inert={pending ? true : undefined}>
         <header className="topbar">
-          <div className="brand">
-            <span className="brand-mark">W</span>
-            <span>weavem</span>
-            <span className="prototype-badge">prototype</span>
-          </div>
-          <label className="draft-name">
-            <span>Draft name</span>
-            <input aria-label="Draft name" disabled={executionActive} value={draft.name} onChange={(event) => setName(event.target.value)} />
-          </label>
-          <div className="toolbar-actions">
-            <button className="button" disabled={executionActive} onClick={() => requestAction({ kind: 'new' })}>
-              {icon('plus')} New draft
-            </button>
-            <button className="button" disabled={executionActive} onClick={() => metadataInput.current?.click()}>
-              {icon('file')} Import metadata
-            </button>
-            <button className="button" disabled={executionActive} onClick={() => draftInput.current?.click()}>
-              {icon('folder')} Open draft
-            </button>
-            <button className="button primary" onClick={exportDraft}>
-              {icon('download')} Export draft
-            </button>
-            <button className="button" disabled={executionActive} onClick={() => void connectProject()}>
-              {session ? 'Reconnect project' : 'Connect project'}
-            </button>
-            {run && <button className="button" aria-pressed={logOpen} onClick={() => setLogOpen((open) => !open)}>{logOpen ? 'Hide run log' : 'Show run log'}</button>}
+          <div className="topbar-main">
+            <div className="brand">
+              <span className="brand-mark">W</span>
+              <span>weavem</span>
+              <span className="prototype-badge">prototype</span>
+            </div>
+            <label className="draft-name">
+              <span>Draft name</span>
+              <input aria-label="Draft name" disabled={executionActive} value={draft.name} onChange={(event) => setName(event.target.value)} />
+            </label>
+            <div className="toolbar-actions">
+              <button className="button" disabled={executionActive} onClick={() => requestAction({ kind: 'new' })}>
+                {icon('plus')} New draft
+              </button>
+              <button className="button" disabled={executionActive} onClick={() => metadataInput.current?.click()}>
+                {icon('file')} Import metadata
+              </button>
+              <button className="button" disabled={executionActive} onClick={() => draftInput.current?.click()}>
+                {icon('folder')} Open draft
+              </button>
+              <button className="button primary" onClick={exportDraft}>
+                {icon('download')} Export draft
+              </button>
+              <button className="button" disabled={executionActive} onClick={() => void connectProject()}>
+                {session ? 'Reconnect project' : 'Connect project'}
+              </button>
+              {run && <button className="button" aria-pressed={logOpen} onClick={() => setLogOpen((open) => !open)}>{logOpen ? 'Hide run log' : 'Show run log'}</button>}
+            </div>
+            <div className="run-actions">{runControl()}</div>
           </div>
           <div className="save-state" role="status">
             <span className={autosavePaused ? 'status-dot warning' : 'status-dot'} />
             {autosavePaused ? 'Autosave paused' : status}
           </div>
-          <div className="run-actions">{runControl()}</div>
           <input
             ref={metadataInput}
             className="visually-hidden"

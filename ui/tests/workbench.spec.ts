@@ -157,6 +157,14 @@ test('an active run locks mutation, supports cancellation, and clears results on
   await connectRunnableProject(page);
   await page.getByRole('button', { name: 'Run flow', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Cancel run', exact: true })).toBeVisible();
+  const cancel = page.getByRole('button', { name: 'Cancel run', exact: true });
+  await page.mouse.move(0, 0);
+  await expect(cancel).toHaveCSS('background-color', 'rgb(117, 70, 69)');
+  await expect(cancel).toHaveCSS('color', 'rgb(237, 241, 231)');
+  await expect(cancel.locator('svg')).toHaveCSS('color', 'rgb(237, 241, 231)');
+  await cancel.hover();
+  await expect(cancel).toHaveCSS('background-color', 'rgb(135, 82, 82)');
+  await expect(cancel).toHaveCSS('color', 'rgb(237, 241, 231)');
   await expect(page.getByLabel('Draft name', { exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: /^Add task / }).first()).toBeDisabled();
   await page.getByRole('button', { name: 'Cancel run', exact: true }).click();
@@ -484,4 +492,42 @@ test('pointer resizing honors both panel bounds and retains a 430px canvas after
   expect(canvas?.width).toBeGreaterThanOrEqual(430);
   expect(Number(await page.getByRole('separator', { name: 'Resize task library' }).getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(220);
   expect(Number(await page.getByRole('separator', { name: 'Resize inspector' }).getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(260);
+});
+
+test('aligns run controls with the canvas fullscreen edge while panels resize', async ({ page }) => {
+  await page.goto('/');
+  const run = page.getByRole('button', { name: 'Run flow', exact: true });
+  const aligned = async () => {
+    await expect.poll(() => page.evaluate(() => {
+      const button = document.querySelector('.run-actions button')!.getBoundingClientRect();
+      const toggle = document.querySelector('.canvas-header > .icon-button')!.getBoundingClientRect();
+      return Math.abs(button.right - toggle.right);
+    })).toBeLessThanOrEqual(1);
+    const button = (await run.boundingBox())!;
+    expect(button.x).toBeGreaterThanOrEqual(0);
+    for (const action of await page.locator('.toolbar-actions .button').all()) {
+      const other = (await action.boundingBox())!;
+      const overlapX = Math.min(button.x + button.width, other.x + other.width) - Math.max(button.x, other.x);
+      const overlapY = Math.min(button.y + button.height, other.y + other.height) - Math.max(button.y, other.y);
+      expect(overlapX <= 0 || overlapY <= 0).toBe(true);
+    }
+  };
+  await aligned();
+  const inspector = page.getByRole('separator', { name: 'Resize inspector' });
+  await inspector.focus();
+  await page.keyboard.press('End');
+  await aligned();
+  await page.setViewportSize({ width: 1100, height: 1000 });
+  await aligned();
+  await expect(page.getByRole('button', { name: 'Export draft', exact: true })).toBeInViewport();
+});
+
+test('resizers provide the single visible vertical panel boundary', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('complementary', { name: 'Task library', exact: true })).toHaveCSS('border-right-width', '0px');
+  await expect(page.getByRole('complementary', { name: 'Node inspector', exact: true })).toHaveCSS('border-left-width', '0px');
+  const divider = page.getByRole('separator', { name: 'Resize task library' });
+  expect(await divider.evaluate((element) => getComputedStyle(element, '::after').width)).toBe('1px');
+  await divider.hover();
+  await expect.poll(() => divider.evaluate((element) => getComputedStyle(element, '::after').backgroundColor)).toBe('rgb(144, 169, 110)');
 });

@@ -67,8 +67,11 @@ Motion is limited to interaction feedback. No remote fonts or image assets.
 Task library/search/provenance filters, metadata-driven task node with generic
 handles, graph controls/minimap, draft toolbar/status, node inspector, JSON
 parameter editor, and draggable/keyboard panel separators. Run/cancel is a
-separate far-right control with play/stop icons. The canvas header controls only
+separate control aligned with the canvas fullscreen button, with play/stop icons.
+The canvas header controls only
 canvas fullscreen; React Flow retains its bottom-left zoom and fit controls.
+Panel boundaries use only the resizer line. Cancel uses a muted red fill with
+bright off-white text and icons; idle Run retains the sage accent.
 Keyboard connection controls, replacement confirmation, and visible
 import/storage errors remain available. Native CSS owns tokens and component states.
 Execution controls and status labels reuse these components without changing
