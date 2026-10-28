@@ -66,8 +66,12 @@ Motion is limited to interaction feedback. No remote fonts or image assets.
 
 Task library/search/provenance filters, metadata-driven task node with generic
 handles, graph controls/minimap, draft toolbar/status, node inspector, JSON
-parameter editor, and draggable/keyboard panel separators. Run/cancel is a
-separate control aligned with the canvas fullscreen button, with play/stop icons.
+parameter editor, and draggable/keyboard panel separators. Run/cancel sits at the
+right of the shared draft-action toolbar with play/stop icons and no divider line.
+The toolbar aligns with the canvas at the default panel widths and stays anchored
+when either panel is resized; resizing the window still adapts its width.
+Task-library cards use a pointer (hand) cursor to signal interaction; their existing
+drag and Add task behaviors are unchanged.
 The canvas header controls only
 canvas fullscreen; React Flow retains its bottom-left zoom and fit controls.
 Panel boundaries use only the resizer line. Cancel uses a muted red fill with

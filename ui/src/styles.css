@@ -27,30 +27,32 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   min-height: 100vh;
 }
 .workbench {
+  --default-library-width: 272px;
+  --default-inspector-width: 308px;
   min-width: 1100px;
   height: 100vh;
   min-height: 100vh;
   display: grid;
-  grid-template-columns: var(--library-width, 272px) 8px minmax(430px, 1fr) 8px var(--inspector-width, 308px);
+  grid-template-columns: var(--library-width, var(--default-library-width)) 8px minmax(430px, 1fr) 8px var(--inspector-width, var(--default-inspector-width));
   grid-template-rows: minmax(68px, auto) minmax(0, 1fr) 34px;
   background: #0c0f09;
 }
 .topbar {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: subgrid;
+  /* Anchor actions to the default canvas, not the user's resized panel tracks. */
+  grid-template-columns: var(--default-library-width) 8px minmax(430px, 1fr) 8px var(--default-inspector-width);
   align-items: center;
   background: #080a06;
   border-bottom: 1px solid #374227;
 }
 .topbar-main {
-  grid-column: 1 / 4;
+  grid-column: 1;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  /* Match the canvas header's right inset, independently of panel widths. */
-  padding: 10px 16px 10px 12px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  padding: 10px 12px;
 }
 .brand {
   display: flex;
@@ -94,8 +96,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   color: #c6d2b4;
   font-size: 12px;
   min-width: 150px;
-  max-width: 200px;
-  flex: 1 1 150px;
+  max-width: 100%;
 }
 .draft-name input {
   min-width: 0;
@@ -107,19 +108,22 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   padding: 7px 2px;
   font-weight: 650;
 }
+.draft-name > span {
+  white-space: nowrap;
+}
 .toolbar-actions {
+  grid-column: 3;
   display: flex;
-  flex: 1 1 540px;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
   min-width: 0;
+  padding: 10px 16px;
 }
 .run-actions {
   margin-left: auto;
   display: flex;
   align-items: center;
-  padding-left: 10px;
-  border-left: 1px solid #374227;
   flex: 0 0 auto;
 }
 .run-actions .button, .canvas-run-action .button {
@@ -304,6 +308,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   gap: 8px;
 }
 .library-task {
+  cursor: pointer;
   border: 1px solid #374227;
   padding: 12px;
   border-radius: 8px;
@@ -753,7 +758,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 @media (max-width: 1270px) {
   .save-state { display: none; }
-  .topbar-main { gap: 7px; padding-left: 10px; }
+  .topbar-main { padding-left: 10px; }
   .toolbar-actions { gap: 4px; }
   .button { padding: 7px 8px; }
   .draft-name { min-width: 124px; }

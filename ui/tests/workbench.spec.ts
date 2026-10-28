@@ -443,11 +443,13 @@ test('unavailable browser storage does not prevent editing or exporting', async 
   expect((await download).suggestedFilename()).toMatch(/\.json$/);
 });
 
-test('places the run control apart from draft actions and resizes persistent panels', async ({ page }) => {
+test('includes the run control in draft actions and resizes persistent panels', async ({ page }) => {
   await page.goto('/');
   const run = page.getByRole('button', { name: 'Run flow', exact: true });
   await expect(run).toBeDisabled();
   expect(await run.evaluate((element) => element.parentElement?.classList.contains('run-actions'))).toBe(true);
+  await expect(page.locator('.toolbar-actions').getByRole('button', { name: 'Run flow', exact: true })).toHaveCount(1);
+  await expect(page.locator('.run-actions')).toHaveCSS('border-left-width', '0px');
 
   const library = page.getByRole('separator', { name: 'Resize task library' });
   await library.focus();
@@ -494,32 +496,61 @@ test('pointer resizing honors both panel bounds and retains a 430px canvas after
   expect(Number(await page.getByRole('separator', { name: 'Resize inspector' }).getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(260);
 });
 
-test('aligns run controls with the canvas fullscreen edge while panels resize', async ({ page }) => {
+test('anchors the unified toolbar to default canvas bounds independently of panel resizing', async ({ page }) => {
   await page.goto('/');
   const run = page.getByRole('button', { name: 'Run flow', exact: true });
   const aligned = async () => {
     await expect.poll(() => page.evaluate(() => {
       const button = document.querySelector('.run-actions button')!.getBoundingClientRect();
-      const toggle = document.querySelector('.canvas-header > .icon-button')!.getBoundingClientRect();
-      return Math.abs(button.right - toggle.right);
+      const toolbar = document.querySelector('.toolbar-actions')!.getBoundingClientRect();
+      return Math.abs(button.right - (toolbar.right - 16));
     })).toBeLessThanOrEqual(1);
     const button = (await run.boundingBox())!;
     expect(button.x).toBeGreaterThanOrEqual(0);
-    for (const action of await page.locator('.toolbar-actions .button').all()) {
+    for (const action of await page.locator('.toolbar-actions > .button').all()) {
       const other = (await action.boundingBox())!;
       const overlapX = Math.min(button.x + button.width, other.x + other.width) - Math.max(button.x, other.x);
       const overlapY = Math.min(button.y + button.height, other.y + other.height) - Math.max(button.y, other.y);
       expect(overlapX <= 0 || overlapY <= 0).toBe(true);
     }
   };
+  const initial = await page.locator('.toolbar-actions').boundingBox();
+  const canvas = (await page.locator('.canvas-area').boundingBox())!;
+  expect(initial!.x).toBeCloseTo(canvas.x, 0);
+  expect(initial!.width).toBeCloseTo(canvas.width, 0);
   await aligned();
   const inspector = page.getByRole('separator', { name: 'Resize inspector' });
   await inspector.focus();
   await page.keyboard.press('End');
+  const library = page.getByRole('separator', { name: 'Resize task library' });
+  await library.focus();
+  await page.keyboard.press('End');
   await aligned();
+  expect(await page.locator('.toolbar-actions').boundingBox()).toEqual(initial);
+  expect((await page.locator('.canvas-area').boundingBox())!.width).toBeLessThan(canvas.width);
+  await page.reload();
+  expect(await page.locator('.toolbar-actions').boundingBox()).toEqual(initial);
   await page.setViewportSize({ width: 1100, height: 1000 });
   await aligned();
   await expect(page.getByRole('button', { name: 'Export draft', exact: true })).toBeInViewport();
+  await expect(run).toBeInViewport();
+  await page.setViewportSize({ width: 2512, height: 1282 });
+  await aligned();
+  const wide = (await page.locator('.toolbar-actions').boundingBox())!;
+  expect(wide.x).toBeCloseTo(280, 0);
+  expect(wide.x + wide.width).toBeCloseTo(2512 - 308 - 8, 0);
+});
+
+test('task library cards show a hand cursor without changing their add action', async ({ page }) => {
+  await page.goto('/');
+  const card = page.locator('.library-task').first();
+  await card.hover();
+  await expect(card).toHaveCSS('cursor', 'pointer');
+  await expect(card.locator('code')).toHaveCSS('cursor', 'pointer');
+  await expect(card.locator('p').first()).toHaveCSS('cursor', 'pointer');
+  const before = await page.getByTestId('task-node').count();
+  await card.getByRole('button', { name: /^Add task / }).click();
+  await expect(page.getByTestId('task-node')).toHaveCount(before + 1);
 });
 
 test('resizers provide the single visible vertical panel boundary', async ({ page }) => {

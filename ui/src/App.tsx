@@ -655,24 +655,24 @@ export default function App() {
               <span>Draft name</span>
               <input aria-label="Draft name" disabled={executionActive} value={draft.name} onChange={(event) => setName(event.target.value)} />
             </label>
-            <div className="toolbar-actions">
-              <button className="button" disabled={executionActive} onClick={() => requestAction({ kind: 'new' })}>
-                {icon('plus')} New draft
-              </button>
-              <button className="button" disabled={executionActive} onClick={() => metadataInput.current?.click()}>
-                {icon('file')} Import metadata
-              </button>
-              <button className="button" disabled={executionActive} onClick={() => draftInput.current?.click()}>
-                {icon('folder')} Open draft
-              </button>
-              <button className="button primary" onClick={exportDraft}>
-                {icon('download')} Export draft
-              </button>
-              <button className="button" disabled={executionActive} onClick={() => void connectProject()}>
-                {session ? 'Reconnect project' : 'Connect project'}
-              </button>
-              {run && <button className="button" aria-pressed={logOpen} onClick={() => setLogOpen((open) => !open)}>{logOpen ? 'Hide run log' : 'Show run log'}</button>}
-            </div>
+          </div>
+          <div className="toolbar-actions" role="group" aria-label="Draft actions">
+            <button className="button" disabled={executionActive} onClick={() => requestAction({ kind: 'new' })}>
+              {icon('plus')} New draft
+            </button>
+            <button className="button" disabled={executionActive} onClick={() => metadataInput.current?.click()}>
+              {icon('file')} Import metadata
+            </button>
+            <button className="button" disabled={executionActive} onClick={() => draftInput.current?.click()}>
+              {icon('folder')} Open draft
+            </button>
+            <button className="button primary" onClick={exportDraft}>
+              {icon('download')} Export draft
+            </button>
+            <button className="button" disabled={executionActive} onClick={() => void connectProject()}>
+              {session ? 'Reconnect project' : 'Connect project'}
+            </button>
+            {run && <button className="button" aria-pressed={logOpen} onClick={() => setLogOpen((open) => !open)}>{logOpen ? 'Hide run log' : 'Show run log'}</button>}
             <div className="run-actions">{runControl()}</div>
           </div>
           <div className="save-state" role="status">
