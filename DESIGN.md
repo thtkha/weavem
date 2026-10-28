@@ -36,6 +36,8 @@ real tasks requires the project's supported Python environment.
 
 One workbench: top application/draft toolbar; left searchable task library;
 central graph canvas; right node inspector; bottom lightweight state/graph summary.
+Library and inspector widths are independently resizable and remembered locally as a
+versioned layout preference; the canvas always retains a minimum usable width.
 New/import/open/export and project-connection actions are explicit. Run/cancel,
 per-node statuses, result previews, and logs expose actual execution. Owner-facing prototype records stay
 separate from the released application-user manual.
@@ -64,8 +66,18 @@ Motion is limited to interaction feedback. No remote fonts or image assets.
 
 Task library/search/provenance filters, metadata-driven task node with generic
 handles, graph controls/minimap, draft toolbar/status, node inspector, JSON
-parameter editor, keyboard connection controls, replacement confirmation, and
-visible import/storage errors. Native CSS owns tokens and component states.
+parameter editor, and draggable/keyboard panel separators. Run/cancel sits at the
+right of the shared draft-action toolbar with play/stop icons and no divider line.
+The toolbar aligns with the canvas at the default panel widths and stays anchored
+when either panel is resized; resizing the window still adapts its width.
+Task-library cards use a pointer (hand) cursor to signal interaction; their existing
+drag and Add task behaviors are unchanged.
+The canvas header controls only
+canvas fullscreen; React Flow retains its bottom-left zoom and fit controls.
+Panel boundaries use only the resizer line. Cancel uses a muted red fill with
+bright off-white text and icons; idle Run retains the sage accent.
+Keyboard connection controls, replacement confirmation, and visible
+import/storage errors remain available. Native CSS owns tokens and component states.
 Execution controls and status labels reuse these components without changing
 the sage/olive palette.
 
@@ -79,7 +91,9 @@ Respect reduced-motion preferences; never communicate provenance by color alone.
 
 ## Responsive behavior
 
-Full three-panel editing at desktop widths of 1100px and above. Below that,
+Full three-panel editing at desktop widths of 1100px and above. Panel widths clamp
+to 220–480px (library) and 260–560px (inspector), preserving a 430px canvas.
+Below that,
 show a clear desktop-workbench notice instead of compressed, unusable controls;
 leave an export/recovery action available. No touch-first editor promise.
 

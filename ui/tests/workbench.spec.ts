@@ -31,7 +31,7 @@ test('demo renders a real canvas with execution safely unavailable', async ({ pa
   const external: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('request', (request) => {
-    if (request.url().startsWith('http') && !request.url().startsWith('http://127.0.0.1:4173/')) external.push(request.url());
+    if (request.url().startsWith('http') && !request.url().startsWith('http://127.0.0.1:')) external.push(request.url());
   });
   await page.goto('/');
   await expect(page.getByTestId('task-node')).toHaveCount(3);
@@ -157,6 +157,14 @@ test('an active run locks mutation, supports cancellation, and clears results on
   await connectRunnableProject(page);
   await page.getByRole('button', { name: 'Run flow', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Cancel run', exact: true })).toBeVisible();
+  const cancel = page.getByRole('button', { name: 'Cancel run', exact: true });
+  await page.mouse.move(0, 0);
+  await expect(cancel).toHaveCSS('background-color', 'rgb(117, 70, 69)');
+  await expect(cancel).toHaveCSS('color', 'rgb(237, 241, 231)');
+  await expect(cancel.locator('svg')).toHaveCSS('color', 'rgb(237, 241, 231)');
+  await cancel.hover();
+  await expect(cancel).toHaveCSS('background-color', 'rgb(135, 82, 82)');
+  await expect(cancel).toHaveCSS('color', 'rgb(237, 241, 231)');
   await expect(page.getByLabel('Draft name', { exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: /^Add task / }).first()).toBeDisabled();
   await page.getByRole('button', { name: 'Cancel run', exact: true }).click();
@@ -286,7 +294,7 @@ test('export and reopen preserve neutral data, configuration and viewport', asyn
   await page.goto('/');
   await node(page, 'demo-read').click();
   await page.getByRole('textbox', { name: 'Notes', exact: true }).fill('Portable draft');
-  await page.getByRole('button', { name: 'Fit graph in view', exact: true }).click();
+  await page.locator('.react-flow__controls-fitview').click();
   await expect.poll(async () => (await stored(page))?.nodes[0].notes).toBe('Portable draft');
   const downloadEvent = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export draft', exact: true }).click();
@@ -340,7 +348,7 @@ test('corrupt browser storage is not silently overwritten by demo edits', async 
   await page.goto('/');
   await expect(page.getByRole('alert')).toContainText('Could not load saved draft');
   await page.getByLabel('Draft name', { exact: true }).fill('Recovered visually');
-  await page.getByRole('button', { name: 'Fit graph in view', exact: true }).click();
+  await page.locator('.react-flow__controls-fitview').click();
   await page.waitForTimeout(600);
   expect(await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY)).toBe('{broken');
   await clear(page);
@@ -433,4 +441,124 @@ test('unavailable browser storage does not prevent editing or exporting', async 
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export draft', exact: true }).click();
   expect((await download).suggestedFilename()).toMatch(/\.json$/);
+});
+
+test('includes the run control in draft actions and resizes persistent panels', async ({ page }) => {
+  await page.goto('/');
+  const run = page.getByRole('button', { name: 'Run flow', exact: true });
+  await expect(run).toBeDisabled();
+  expect(await run.evaluate((element) => element.parentElement?.classList.contains('run-actions'))).toBe(true);
+  await expect(page.locator('.toolbar-actions').getByRole('button', { name: 'Run flow', exact: true })).toHaveCount(1);
+  await expect(page.locator('.run-actions')).toHaveCSS('border-left-width', '0px');
+
+  const library = page.getByRole('separator', { name: 'Resize task library' });
+  await library.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(library).toHaveAttribute('aria-valuenow', '280');
+  await page.keyboard.press('End');
+  await expect(library).toHaveAttribute('aria-valuenow', '480');
+  await page.reload();
+  await expect(page.getByRole('separator', { name: 'Resize task library' })).toHaveAttribute('aria-valuenow', '480');
+});
+
+test('replaces the header fit control with canvas fullscreen while retaining React Flow controls', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Fit graph in view', exact: true })).toHaveCount(0);
+  await expect(page.locator('.react-flow__controls button')).toHaveCount(3);
+  const fullscreen = page.getByRole('button', { name: 'Enter canvas fullscreen', exact: true });
+  await fullscreen.click();
+  await expect(page.getByRole('button', { name: 'Exit canvas fullscreen', exact: true })).toBeVisible();
+  expect(await page.locator('.canvas-area').evaluate((element) => document.fullscreenElement === element)).toBe(true);
+  await expect(page.locator('.canvas-area').getByRole('button', { name: 'Run flow', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Exit canvas fullscreen', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Enter canvas fullscreen', exact: true })).toBeVisible();
+});
+
+test('pointer resizing honors both panel bounds and retains a 430px canvas after a narrow reload', async ({ page }) => {
+  await page.goto('/');
+  const inspector = page.getByRole('separator', { name: 'Resize inspector' });
+  const initial = Number(await inspector.getAttribute('aria-valuenow'));
+  const box = (await inspector.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x - 80, box.y + box.height / 2, { steps: 8 });
+  await page.mouse.up();
+  expect(Number(await inspector.getAttribute('aria-valuenow'))).toBeGreaterThan(initial);
+  await inspector.focus();
+  await page.keyboard.press('End');
+  await expect(inspector).toHaveAttribute('aria-valuenow', '560');
+
+  await page.setViewportSize({ width: 1100, height: 1000 });
+  await page.reload();
+  const canvas = await page.getByRole('region', { name: 'Draft canvas' }).boundingBox();
+  expect(canvas?.width).toBeGreaterThanOrEqual(430);
+  expect(Number(await page.getByRole('separator', { name: 'Resize task library' }).getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(220);
+  expect(Number(await page.getByRole('separator', { name: 'Resize inspector' }).getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(260);
+});
+
+test('anchors the unified toolbar to default canvas bounds independently of panel resizing', async ({ page }) => {
+  await page.goto('/');
+  const run = page.getByRole('button', { name: 'Run flow', exact: true });
+  const aligned = async () => {
+    await expect.poll(() => page.evaluate(() => {
+      const button = document.querySelector('.run-actions button')!.getBoundingClientRect();
+      const toolbar = document.querySelector('.toolbar-actions')!.getBoundingClientRect();
+      return Math.abs(button.right - (toolbar.right - 16));
+    })).toBeLessThanOrEqual(1);
+    const button = (await run.boundingBox())!;
+    expect(button.x).toBeGreaterThanOrEqual(0);
+    for (const action of await page.locator('.toolbar-actions > .button').all()) {
+      const other = (await action.boundingBox())!;
+      const overlapX = Math.min(button.x + button.width, other.x + other.width) - Math.max(button.x, other.x);
+      const overlapY = Math.min(button.y + button.height, other.y + other.height) - Math.max(button.y, other.y);
+      expect(overlapX <= 0 || overlapY <= 0).toBe(true);
+    }
+  };
+  const initial = await page.locator('.toolbar-actions').boundingBox();
+  const canvas = (await page.locator('.canvas-area').boundingBox())!;
+  expect(initial!.x).toBeCloseTo(canvas.x, 0);
+  expect(initial!.width).toBeCloseTo(canvas.width, 0);
+  await aligned();
+  const inspector = page.getByRole('separator', { name: 'Resize inspector' });
+  await inspector.focus();
+  await page.keyboard.press('End');
+  const library = page.getByRole('separator', { name: 'Resize task library' });
+  await library.focus();
+  await page.keyboard.press('End');
+  await aligned();
+  expect(await page.locator('.toolbar-actions').boundingBox()).toEqual(initial);
+  expect((await page.locator('.canvas-area').boundingBox())!.width).toBeLessThan(canvas.width);
+  await page.reload();
+  expect(await page.locator('.toolbar-actions').boundingBox()).toEqual(initial);
+  await page.setViewportSize({ width: 1100, height: 1000 });
+  await aligned();
+  await expect(page.getByRole('button', { name: 'Export draft', exact: true })).toBeInViewport();
+  await expect(run).toBeInViewport();
+  await page.setViewportSize({ width: 2512, height: 1282 });
+  await aligned();
+  const wide = (await page.locator('.toolbar-actions').boundingBox())!;
+  expect(wide.x).toBeCloseTo(280, 0);
+  expect(wide.x + wide.width).toBeCloseTo(2512 - 308 - 8, 0);
+});
+
+test('task library cards show a hand cursor without changing their add action', async ({ page }) => {
+  await page.goto('/');
+  const card = page.locator('.library-task').first();
+  await card.hover();
+  await expect(card).toHaveCSS('cursor', 'pointer');
+  await expect(card.locator('code')).toHaveCSS('cursor', 'pointer');
+  await expect(card.locator('p').first()).toHaveCSS('cursor', 'pointer');
+  const before = await page.getByTestId('task-node').count();
+  await card.getByRole('button', { name: /^Add task / }).click();
+  await expect(page.getByTestId('task-node')).toHaveCount(before + 1);
+});
+
+test('resizers provide the single visible vertical panel boundary', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('complementary', { name: 'Task library', exact: true })).toHaveCSS('border-right-width', '0px');
+  await expect(page.getByRole('complementary', { name: 'Node inspector', exact: true })).toHaveCSS('border-left-width', '0px');
+  const divider = page.getByRole('separator', { name: 'Resize task library' });
+  expect(await divider.evaluate((element) => getComputedStyle(element, '::after').width)).toBe('1px');
+  await divider.hover();
+  await expect.poll(() => divider.evaluate((element) => getComputedStyle(element, '::after').backgroundColor)).toBe('rgb(144, 169, 110)');
 });

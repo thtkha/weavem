@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { LAYOUT_BOUNDS, constrainedLayout, loadEditorLayout, saveEditorLayout, type EditorLayout } from './layout';
 import {
   Background,
   BackgroundVariant,
@@ -50,6 +51,50 @@ type EditorSession = { token: string; project: string; metadata: unknown; bindin
 
 const nodeTypes = { task: TaskNode };
 const defaultViewport: Viewport = { x: 0, y: 0, zoom: 1 };
+
+type ResizeSide = 'library' | 'inspector';
+
+function ResizeHandle({ side, width, onResize }: { side: ResizeSide; width: number; onResize: (width: number) => void }) {
+  const start = useRef<{ x: number; width: number } | null>(null);
+  const direction = side === 'library' ? 1 : -1;
+  const label = side === 'library' ? 'Resize task library' : 'Resize inspector';
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    start.current = { x: event.clientX, width };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!start.current) return;
+    onResize(start.current.width + (event.clientX - start.current.x) * direction);
+  };
+  const releasePointer = (event: React.PointerEvent<HTMLDivElement>) => {
+    start.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+  return (
+    <div
+      className={`panel-resizer panel-resizer-${side}`}
+      role="separator"
+      aria-label={label}
+      aria-orientation="vertical"
+      aria-valuemin={LAYOUT_BOUNDS[side].min}
+      aria-valuemax={LAYOUT_BOUNDS[side].max}
+      aria-valuenow={Math.round(width)}
+      tabIndex={0}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={releasePointer}
+      onPointerCancel={releasePointer}
+      onLostPointerCapture={() => { start.current = null; }}
+      onKeyDown={(event) => {
+        const step = event.shiftKey ? 24 : 8;
+        if (event.key === 'ArrowLeft') { event.preventDefault(); onResize(width - step * direction); }
+        if (event.key === 'ArrowRight') { event.preventDefault(); onResize(width + step * direction); }
+        if (event.key === 'Home') { event.preventDefault(); onResize(LAYOUT_BOUNDS[side].min); }
+        if (event.key === 'End') { event.preventDefault(); onResize(LAYOUT_BOUNDS[side].max); }
+      }}
+    />
+  );
+}
 
 function TaskNode({ data, selected }: NodeProps<Node<NodeData, 'task'>>) {
   const { task } = data;
@@ -109,13 +154,16 @@ function safeStorage(): Pick<Storage, 'getItem' | 'setItem'> {
   }
 }
 
-function icon(name: 'plus' | 'folder' | 'download' | 'file' | 'fit' | 'x') {
+function icon(name: 'plus' | 'folder' | 'download' | 'file' | 'play' | 'stop' | 'fullscreen' | 'fullscreenExit' | 'x') {
   const paths = {
     plus: <path d="M12 5v14M5 12h14" />,
     folder: <path d="M3 7.8A2.8 2.8 0 0 1 5.8 5H10l2 2h6.2A2.8 2.8 0 0 1 21 9.8v7.4a2.8 2.8 0 0 1-2.8 2.8H5.8A2.8 2.8 0 0 1 3 17.2Z" />,
     download: <><path d="M12 3v12" /><path d="m7 10 5 5 5-5M5 20h14" /></>,
     file: <path d="M7 3h7l4 4v14H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Zm6 0v5h5" />,
-    fit: <path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5" />,
+    play: <path d="m9 5 10 7-10 7Z" fill="currentColor" stroke="none" />,
+    stop: <path d="M6 6h12v12H6Z" fill="currentColor" stroke="none" />,
+    fullscreen: <path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5" />,
+    fullscreenExit: <path d="M9 3v6H3M15 3v6h6M21 15h-6v6M3 15h6v6" />,
     x: <path d="m6 6 12 12M18 6 6 18" />,
   };
   return (
@@ -128,6 +176,7 @@ function icon(name: 'plus' | 'folder' | 'download' | 'file' | 'fit' | 'x') {
 export default function App() {
   const storage = useMemo(safeStorage, []);
   const initial = useMemo(() => loadStoredDraft(storage), [storage]);
+  const initialLayout = useMemo(() => loadEditorLayout(storage), [storage]);
   const [draft, setDraft] = useState<EditorDraft>(() => initial.draft ?? createDemoDraft());
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [measurements, setMeasurements] = useState<Record<string, { width: number; height: number }>>({});
@@ -148,9 +197,12 @@ export default function App() {
   const [runError, setRunError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [logOpen, setLogOpen] = useState(true);
+  const [layout, setLayout] = useState<EditorLayout>(initialLayout);
+  const [canvasFullscreen, setCanvasFullscreen] = useState(false);
   const metadataInput = useRef<HTMLInputElement>(null);
   const draftInput = useRef<HTMLInputElement>(null);
   const canvas = useRef<HTMLElement>(null);
+  const workbench = useRef<HTMLDivElement>(null);
   const dialog = useRef<HTMLElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const submittingRef = useRef(false);
@@ -201,6 +253,56 @@ export default function App() {
   useEffect(() => {
     setEdgeArgumentText(selectedEdge?.argument ?? '');
   }, [selectedEdge?.id, selectedEdge?.argument]);
+
+  const updatePanelWidth = useCallback((side: ResizeSide, requestedWidth: number) => {
+    const availableWidth = workbench.current?.clientWidth ?? window.innerWidth;
+    setLayout((current) => constrainedLayout({ ...current, [side === 'library' ? 'libraryWidth' : 'inspectorWidth']: requestedWidth }, availableWidth));
+  }, []);
+
+  useEffect(() => {
+    saveEditorLayout(storage, layout);
+  }, [layout, storage]);
+
+  useEffect(() => {
+    const constrainToViewport = () => {
+      const availableWidth = workbench.current?.clientWidth ?? window.innerWidth;
+      setLayout((current) => constrainedLayout(current, availableWidth));
+    };
+    constrainToViewport();
+    window.addEventListener('resize', constrainToViewport);
+    return () => window.removeEventListener('resize', constrainToViewport);
+  }, []);
+
+  useEffect(() => {
+    const onFullscreenChange = () => setCanvasFullscreen(document.fullscreenElement === canvas.current);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && document.fullscreenElement === canvas.current) {
+        void document.exitFullscreen().catch(() => undefined);
+      }
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, []);
+
+  const toggleCanvasFullscreen = useCallback(async () => {
+    try {
+      if (document.fullscreenElement === canvas.current) await document.exitFullscreen();
+      else if (canvas.current?.requestFullscreen) await canvas.current.requestFullscreen();
+      else throw new Error('Canvas fullscreen is unavailable in this browser.');
+    } catch (cause) {
+      setError(cause instanceof Error ? `Could not change canvas fullscreen: ${cause.message}` : 'Could not change canvas fullscreen.');
+    }
+  }, []);
+
+  const runControl = (className = 'button primary') => (
+    running
+      ? <button className={`${className} danger`} onClick={() => void cancelRun()}>{icon('stop')} Cancel run</button>
+      : <button className={className} disabled={executionActive || !sessionMatchesDraft || draft.catalog.kind === 'demo'} onClick={() => void startRun()}>{icon('play')} Run flow</button>
+  );
 
   const requestApi = useCallback(async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
     if (!session && path !== '/api/session') throw new Error('Connect a project before running');
@@ -541,18 +643,20 @@ export default function App() {
           {icon('download')} Export draft
         </button>
       </section>
-      <div className="workbench" inert={pending ? true : undefined}>
+      <div ref={workbench} className="workbench" style={{ '--library-width': `${layout.libraryWidth}px`, '--inspector-width': `${layout.inspectorWidth}px` } as React.CSSProperties} inert={pending ? true : undefined}>
         <header className="topbar">
-          <div className="brand">
-            <span className="brand-mark">W</span>
-            <span>weavem</span>
-            <span className="prototype-badge">prototype</span>
+          <div className="topbar-main">
+            <div className="brand">
+              <span className="brand-mark">W</span>
+              <span>weavem</span>
+              <span className="prototype-badge">prototype</span>
+            </div>
+            <label className="draft-name">
+              <span>Draft name</span>
+              <input aria-label="Draft name" disabled={executionActive} value={draft.name} onChange={(event) => setName(event.target.value)} />
+            </label>
           </div>
-          <label className="draft-name">
-            <span>Draft name</span>
-            <input aria-label="Draft name" disabled={executionActive} value={draft.name} onChange={(event) => setName(event.target.value)} />
-          </label>
-          <div className="toolbar-actions">
+          <div className="toolbar-actions" role="group" aria-label="Draft actions">
             <button className="button" disabled={executionActive} onClick={() => requestAction({ kind: 'new' })}>
               {icon('plus')} New draft
             </button>
@@ -568,8 +672,8 @@ export default function App() {
             <button className="button" disabled={executionActive} onClick={() => void connectProject()}>
               {session ? 'Reconnect project' : 'Connect project'}
             </button>
-            {running ? <button className="button danger" onClick={() => void cancelRun()}>Cancel run</button> : <button className="button primary" disabled={executionActive || !sessionMatchesDraft || draft.catalog.kind === 'demo'} onClick={() => void startRun()}>Run flow</button>}
             {run && <button className="button" aria-pressed={logOpen} onClick={() => setLogOpen((open) => !open)}>{logOpen ? 'Hide run log' : 'Show run log'}</button>}
+            <div className="run-actions">{runControl()}</div>
           </div>
           <div className="save-state" role="status">
             <span className={autosavePaused ? 'status-dot warning' : 'status-dot'} />
@@ -655,6 +759,7 @@ export default function App() {
             {visibleTasks.length === 0 && <p className="empty-list">No tasks match this search.</p>}
           </div>
         </aside>
+        <ResizeHandle side="library" width={layout.libraryWidth} onResize={(width) => updatePanelWidth('library', width)} />
 
         <section
           ref={canvas}
@@ -672,13 +777,18 @@ export default function App() {
               <span className="eyebrow">Composition draft</span>
               <span className="canvas-summary">{draft.nodes.length} nodes · {draft.edges.length} connections</span>
             </div>
+            {canvasFullscreen && <div className="canvas-run-action">
+              {runControl()}
+              {run && <button className="button" aria-pressed={logOpen} onClick={() => setLogOpen((open) => !open)}>{logOpen ? 'Hide run log' : 'Show run log'}</button>}
+              <span className="fullscreen-status" role="status">{error || runError || (run ? `Run ${run.status}` : sessionMessage)}</span>
+            </div>}
             <button
               className="icon-button"
-              aria-label="Fit graph in view"
-              title="Fit graph in view"
-              onClick={() => flow?.fitView({ padding: 0.18 })}
+              aria-label={canvasFullscreen ? 'Exit canvas fullscreen' : 'Enter canvas fullscreen'}
+              title={canvasFullscreen ? 'Exit canvas fullscreen' : 'Enter canvas fullscreen'}
+              onClick={() => void toggleCanvasFullscreen()}
             >
-              {icon('fit')}
+              {icon(canvasFullscreen ? 'fullscreenExit' : 'fullscreen')}
             </button>
           </div>
           <ReactFlow
@@ -729,7 +839,9 @@ export default function App() {
             </div>
           )}
           <div className="canvas-footer">{executionActive ? `Run ${run?.runId ?? 'submission'} is active; editing is locked` : sessionMatchesDraft ? 'Ready to run · connections require target argument mapping' : 'Draft wiring · connect a local project to run'}</div>
+          {run && logOpen && <section className="run-log panel" aria-label="Run log"><div className="panel-heading"><div><p className="eyebrow">Local run</p><h2>{run.status}</h2></div><button className="icon-button" aria-label="Hide run log" onClick={() => setLogOpen(false)}>{icon('x')}</button></div><code>{run.runId}</code><pre>{run.logs || 'Waiting for task output…'}</pre>{run.error && <p role="alert">{run.error}</p>}</section>}
         </section>
+        <ResizeHandle side="inspector" width={layout.inspectorWidth} onResize={(width) => updatePanelWidth('inspector', width)} />
 
         <aside className="inspector panel" aria-label="Node inspector">
           <div className="panel-heading">
@@ -810,7 +922,6 @@ export default function App() {
           <span>{error || runError ? 'Attention needed' : sessionMessage}</span>
           {error || runError ? <span role="alert">{error ?? runError}</span> : <span>{run ? `Run ${run.status}. ${run.error ?? ''}` : 'Autosaved locally in this browser. Export a file to move the draft.'}</span>}
         </footer>
-        {run && logOpen && <section className="run-log panel" aria-label="Run log"><div className="panel-heading"><div><p className="eyebrow">Local run</p><h2>{run.status}</h2></div><button className="icon-button" aria-label="Hide run log" onClick={() => setLogOpen(false)}>{icon('x')}</button></div><code>{run.runId}</code><pre>{run.logs || 'Waiting for task output…'}</pre>{run.error && <p role="alert">{run.error}</p>}</section>}
       </div>
 
       {pending && <div className="modal-backdrop" role="presentation"><section ref={dialog} className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="replace-title"><p className="eyebrow">Replace current draft?</p><h2 id="replace-title">Your current graph will be replaced.</h2><p>Export it first if you need a portable copy. Invalid files never change the current draft.</p><div className="dialog-actions"><button className="button" onClick={() => setPending(null)}>Cancel</button><button className="button primary" onClick={() => executePending(pending)}>Replace draft</button></div></section></div>}
