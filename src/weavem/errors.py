@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 
-@dataclass(frozen=True)
+@dataclass
 class TaskError(Exception):
     """Optional public error contract; Prefect retry policy remains authoritative."""
     code: str
@@ -25,6 +25,9 @@ class TaskError(Exception):
         if self.retryable is not None and type(self.retryable) is not bool:
             raise ValueError("TaskError retryable must be a boolean or None")
         Exception.__init__(self, self.message)
+
+    def __reduce__(self):
+        return (type(self), (self.code, self.message, self.input, self.remediation, self.retryable))
 
 
 def serialize_error(error: BaseException, *, limit: int = 4096) -> dict[str, Any]:

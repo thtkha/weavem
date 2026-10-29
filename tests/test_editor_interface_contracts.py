@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import pickle
 import unittest
+import json
 
 from weavem.editor_hints import source_parameter_hint
 from weavem.editor_values import safe_preview
@@ -23,6 +25,22 @@ class InterfaceContractsTests(unittest.TestCase):
             self.assertEqual(["fast", "safe"], hint["parameters"][0]["choices"])
             self.assertTrue(hint["parameters"][1]["nullable"])
             self.assertEqual("label", hint["output"]["fields"][0]["name"])
+
+    def test_source_hints_expand_nested_typed_dicts_without_running_source(self):
+        with workspace() as raw:
+            task = Path(raw) / "task"
+            task.mkdir()
+            marker = task / "executed"
+            source = "from typing import TypedDict, NotRequired, Optional\n" + repr(str(marker)) + " and open(" + repr(str(marker)) + ", 'w')\n" + "class Address(TypedDict, total=False):\n    street: str\nclass Request(TypedDict):\n    address: Address\n    enabled: NotRequired[bool]\ndef run(payload: Request, count: Optional[int]) -> Request:\n    return payload\n"
+            (task / "impl.py").write_text(source)
+            spec = SourceSpec(schema=1, task_id="demo.nested", version="1.0.0", source_path="impl.py", export="run", backend="python", inputs=(), output="object")
+            hint = source_parameter_hint(task / "task.toml", spec)
+            assert hint is not None
+            self.assertFalse(marker.exists())
+            payload = hint["parameters"][0]
+            self.assertEqual("street", payload["fields"][0]["fields"][0]["name"])
+            self.assertFalse(payload["fields"][1]["required"])
+            self.assertTrue(hint["parameters"][1]["nullable"])
 
     def test_safe_preview_never_uses_custom_protocols(self):
         class Untrusted:
@@ -49,6 +67,18 @@ class InterfaceContractsTests(unittest.TestCase):
         self.assertEqual("bad_input", payload["code"])
         self.assertEqual("customer_id", payload["input"])
         self.assertFalse(payload["retryable"])
+        restored = pickle.loads(pickle.dumps(error))
+        self.assertEqual(error.code, restored.code)
+        self.assertEqual(error.remediation, restored.remediation)
+
+    def test_safe_preview_is_globally_bounded_for_hostile_builtin_values(self):
+        wide = [["x" * 1024 for _ in range(100)] for _ in range(100)]
+        nested = []; nested.append(nested)
+        huge = 10 ** 10_000
+        for value in (wide, nested, {"é" * 500: "x" * 10_000}, huge):
+            preview = safe_preview(value)
+            self.assertLessEqual(len(json.dumps(preview, ensure_ascii=False).encode("utf-8")), 15 * 1024)
+            self.assertTrue(preview["truncated"])
 
 class GraphSourcePathTests(unittest.TestCase):
     def test_graph_schema_two_allows_path_but_schema_one_rejects_it(self):
