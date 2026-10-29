@@ -15,6 +15,8 @@ from typing import Any, Callable, Mapping
 
 from .bindings import binding_store, manifest_digest, read_bindings
 from .config import resolve_project
+from .contracts import ContractError, Manifest, SourceSpec
+from .editor_hints import metadata_parameter_hint, source_parameter_hint
 from .project import Project
 from .runtime import validate_artifact
 
@@ -107,6 +109,20 @@ def editor_catalog(project: Project | str | Path) -> dict[str, Any]:
     metadata = active.metadata()
     config = _project_config(active)
     bindings: dict[str, str] = {}
+    hints: dict[str, Any] = {}
+    # Metadata is the existing, read-only project inspection surface.  Editor
+    # hints are deliberately derived here rather than added to Project.metadata.
+    for entry in metadata["tasks"]:
+        task_toml = Path(entry["path"])
+        try:
+            spec = SourceSpec.from_toml(task_toml)
+            key = _task_key_for_local(task_toml)
+            hint = source_parameter_hint(task_toml, spec, spec.inputs) or metadata_parameter_hint(spec.inputs)
+            if hint is not None:
+                hints[key] = hint
+        except (ContractError, OSError, ValueError):
+            # Catalog availability must not depend on optional editor advice.
+            continue
     for alias, binding in read_bindings(config).items():
         if binding.path is not None:
             bindings[_task_key_for_local(binding.path / "task.toml")] = alias
@@ -117,8 +133,18 @@ def editor_catalog(project: Project | str | Path) -> dict[str, Any]:
         # The key includes the current resolved location and canonical pin, so a
         # browser cannot swap a released artifact after importing metadata.
         digest = manifest_digest(ref.manifest_path)
-        bindings[_task_key_for_release(ref.root, digest)] = alias
-    return {"metadata": metadata, "bindings": bindings}
+        key = _task_key_for_release(ref.root, digest)
+        bindings[key] = alias
+        # Released/native tasks are never reverse engineered.  Their existing
+        # descriptive metadata can still provide conservative JSON fields.
+        try:
+            published = Manifest.from_json_bytes(ref.manifest_path.read_bytes())
+            hint = metadata_parameter_hint(published.inputs)
+            if hint is not None:
+                hints[key] = hint
+        except (ContractError, OSError, ValueError):
+            pass
+    return {"metadata": metadata, "bindings": bindings, "parameterHints": hints}
 
 
 def _mapping(value: Any, field: str) -> dict[str, Any]:

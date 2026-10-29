@@ -4,6 +4,7 @@ import { createDemoDraft, STORAGE_KEY } from '../src/model';
 import type { EditorDraft } from '../src/types';
 
 const metadataFile = new URL('./metadata.json', import.meta.url).pathname;
+const localPrefix = `http://127.0.0.1:${process.env.WEAVEM_UI_TEST_PORT || 4173}/`;
 const node = (page: Page, id: string) => page.locator(`[data-testid="task-node"][data-node-id="${id}"]`);
 
 async function stored(page: Page): Promise<EditorDraft | null> {
@@ -26,12 +27,17 @@ async function clear(page: Page) {
   await expect(page.getByTestId('task-node')).toHaveCount(0);
 }
 
+async function openInspectorDetails(page: Page) {
+  const details = page.locator('details.inspector-section').filter({ has: page.locator('summary', { hasText: 'Details' }) });
+  if (await details.getAttribute('open') === null) await details.locator('summary').click();
+}
+
 test('demo renders a real canvas with execution safely unavailable', async ({ page }, info) => {
   const errors: string[] = [];
   const external: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('request', (request) => {
-    if (request.url().startsWith('http') && new URL(request.url()).hostname !== '127.0.0.1') external.push(request.url());
+    if (request.url().startsWith('http') && !request.url().startsWith(localPrefix)) external.push(request.url());
   });
   await page.goto('/');
   await expect(page.getByTestId('task-node')).toHaveCount(3);
@@ -46,7 +52,7 @@ test('demo renders a real canvas with execution safely unavailable', async ({ pa
   expect(external).toEqual([]);
 });
 
-test('connects an explicit project and displays completed run results', async ({ page }) => {
+test('connects an explicit project and displays completed run results', async ({ page }, info) => {
   const snapshot = JSON.parse(await readFile(metadataFile, 'utf-8'));
   let nodeId = '';
   await page.route('**/api/session', async (route) => route.fulfill({ json: {
@@ -69,7 +75,10 @@ test('connects an explicit project and displays completed run results', async ({
   await expect(page.getByRole('region', { name: 'Run log' })).toContainText('completed');
   await expect(node(page, nodeId)).toContainText('completed');
   await expect(page.getByText('done', { exact: true })).toBeVisible();
+  const result = page.locator('details.inspector-section').filter({ has: page.locator('summary', { hasText: 'Result' }) });
+  await expect(result).toHaveAttribute('open', '');
   await page.getByLabel('Hide run log', { exact: true }).click();
+  await page.screenshot({ path: info.outputPath('inspector-result.png'), fullPage: true });
   await expect(page.getByRole('region', { name: 'Run log' })).toHaveCount(0);
 });
 
@@ -87,6 +96,78 @@ test('reconnecting to the same project renews session without replacing the draf
   await page.getByRole('button', { name: 'Reconnect project', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByTestId('task-node')).toHaveCount(1);
+});
+
+test('guided parameters preserve empty strings, false, defaults, and JSON drafts', async ({ page }) => {
+  const snapshot = JSON.parse(await readFile(metadataFile, 'utf-8'));
+  const release = snapshot.releases[0];
+  const taskKey = `released:${release.root}:${release.manifest_sha256}`;
+  await page.route('**/api/session', async (route) => route.fulfill({ json: {
+    token: 'test-token', project: '/projects/document-demo', metadata: snapshot,
+    bindings: { [taskKey]: 'normalize' },
+    parameterHints: { [taskKey]: { origin: 'metadata', parameters: [
+      { name: 'text', kind: 'string', required: true, hasDefault: false },
+      { name: 'enabled', kind: 'boolean', required: false, hasDefault: true, defaultValue: true },
+      { name: 'settings', kind: 'json', required: false, hasDefault: false },
+    ] } },
+  } }));
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Connect project', exact: true }).click();
+  await replace(page);
+  await page.getByRole('button', { name: 'Add task text.normalize', exact: true }).last().click();
+  const id = (await page.getByTestId('task-node').getAttribute('data-node-id'))!;
+  await node(page, id).click();
+  await page.getByLabel('text', { exact: true }).fill('temporary');
+  await page.getByLabel('text', { exact: true }).fill('');
+  await page.getByLabel('enabled', { exact: true }).selectOption('false');
+  await page.getByRole('button', { name: 'Apply parameters', exact: true }).click();
+  await expect.poll(async () => (await stored(page))?.nodes[0]?.parameters).toEqual({ text: '', enabled: false });
+  await page.getByLabel('enabled', { exact: true }).selectOption('__default__');
+  const settings = page.getByLabel('settings', { exact: true });
+  await settings.fill('{"nested":');
+  await settings.blur();
+  await expect(page.getByRole('button', { name: 'Apply parameters', exact: true })).toBeDisabled();
+  await settings.fill('{"nested":[1]}');
+  await settings.blur();
+  await page.getByRole('button', { name: 'Apply parameters', exact: true }).click();
+  await expect.poll(async () => (await stored(page))?.nodes[0]?.parameters).toEqual({ text: '', settings: { nested: [1] } });
+});
+
+test('guided fields track canvas wiring and become editable after disconnection', async ({ page }) => {
+  const snapshot = JSON.parse(await readFile(metadataFile, 'utf-8'));
+  snapshot.tasks[0].metadata.inputs = ['text: str'];
+  const taskKey = `local:${snapshot.tasks[0].path}`;
+  await page.route('**/api/session', async (route) => route.fulfill({ json: {
+    token: 'test-token', project: '/projects/document-demo', metadata: snapshot,
+    bindings: { [taskKey]: 'normalize' },
+    parameterHints: { [taskKey]: { origin: 'source', parameters: [
+      { name: 'text', kind: 'string', required: true, hasDefault: false },
+    ] } },
+    flow: { kind: 'weavem.graph', schema: 1, name: 'Wired parameters', nodes: [
+      { id: 'source', taskKey, parameters: { text: 'Hello' } },
+      { id: 'target', taskKey, parameters: {} },
+    ], edges: [{ id: 'wire', source: 'source', target: 'target', argument: 'text' }] },
+  } }));
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Connect project', exact: true }).click();
+  await replace(page);
+  await node(page, 'target').click();
+  const parameters = page.getByRole('region', { name: 'Draft parameters', exact: true });
+  await expect(parameters).toContainText('Connected from text.normalize');
+  await expect(parameters.getByLabel('text', { exact: true })).toHaveCount(0);
+  await page.getByRole('region', { name: 'Incoming connections', exact: true })
+    .getByRole('button', { name: 'Delete connection to text.normalize', exact: true }).click();
+  await expect(parameters.getByLabel('text', { exact: true })).toBeEditable();
+  await expect(page.locator('.react-flow__edge')).toHaveCount(0);
+  const from = (await node(page, 'source').getByLabel('Draft output', { exact: true }).boundingBox())!;
+  const to = (await node(page, 'target').getByLabel('Draft input', { exact: true }).boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 10 });
+  await page.mouse.up();
+  await expect(parameters).toContainText('Connected from text.normalize');
+  await expect(parameters.getByLabel('text', { exact: true })).toHaveCount(0);
+  await expect(page.locator('.react-flow__edge')).toHaveCount(1);
 });
 
 async function connectRunnableProject(page: Page) {
@@ -170,6 +251,7 @@ test('an active run locks mutation, supports cancellation, and clears results on
   await page.getByRole('button', { name: 'Cancel run', exact: true }).click();
   await expect.poll(() => cancelled).toBe(true);
   await expect(page.getByRole('region', { name: 'Run log' })).toContainText('cancelled');
+  await openInspectorDetails(page);
   await page.getByLabel('Node label', { exact: true }).fill('after run');
   await expect(page.getByRole('region', { name: 'Run log' })).toHaveCount(0);
 });
@@ -209,6 +291,7 @@ test('search, filters, keyboard add, edits and reload preserve a draft', async (
   await page.getByRole('button', { name: 'Add task documents.read', exact: true }).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('task-node')).toHaveCount(1);
+  await openInspectorDetails(page);
   await page.getByLabel('Node label', { exact: true }).fill('Review documents');
   await page.getByRole('textbox', { name: 'Notes', exact: true }).fill('Keep this author note');
   await page.getByRole('textbox', { name: 'Draft parameters', exact: true }).fill('{"paths":["report.md"],"limit":5}');
@@ -219,6 +302,7 @@ test('search, filters, keyboard add, edits and reload preserve a draft', async (
   await page.reload();
   await expect(page.getByLabel('Draft name', { exact: true })).toHaveValue('Quarterly review');
   await page.getByTestId('task-node').click();
+  await openInspectorDetails(page);
   await expect(page.getByRole('textbox', { name: 'Notes', exact: true })).toHaveValue('Keep this author note');
   await expect(page.getByRole('textbox', { name: 'Draft parameters', exact: true })).toHaveValue(/report\.md/);
 });
@@ -257,12 +341,38 @@ test('inspector connects and deletes; invalid parameters do not change saved dat
   await page.getByRole('button', { name: 'Delete connection to Read documents', exact: true }).click();
   await expect.poll(async () => (await stored(page))?.edges.length).toBe(2);
   await page.getByRole('textbox', { name: 'Draft parameters', exact: true }).fill('[]');
-  await page.getByRole('button', { name: 'Apply parameters', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Apply parameters', exact: true })).toBeDisabled();
   await expect(page.getByRole('alert')).toContainText('JSON object');
   expect((await stored(page))?.nodes.find((item) => item.id === 'demo-count')?.parameters).toEqual({ include_headings: false });
   await page.getByRole('button', { name: 'Delete node', exact: true }).click();
   await expect.poll(async () => (await stored(page))?.edges.length).toBe(1);
   await expect(page.getByTestId('task-node')).toHaveCount(2);
+});
+
+test('collapsible inspector keeps pending parameter edits and exposes details deliberately', async ({ page }, info) => {
+  await page.goto('/');
+  await node(page, 'demo-count').click();
+  const inspector = page.getByRole('complementary', { name: 'Node inspector', exact: true });
+  const sections = inspector.locator('details.inspector-section');
+  await expect(sections.locator('summary')).toHaveText(['Parameters', 'Connections', 'Details']);
+  await expect(sections.nth(0)).toHaveAttribute('open', '');
+  await expect(sections.nth(1)).toHaveAttribute('open', '');
+  await expect(sections.nth(2)).not.toHaveAttribute('open', '');
+
+  const parameters = page.getByRole('region', { name: 'Draft parameters', exact: true });
+  const draft = parameters.getByRole('textbox', { name: 'Draft parameters', exact: true });
+  await draft.fill('[');
+  await expect(parameters.getByRole('button', { name: 'Apply parameters', exact: true })).toBeDisabled();
+  await sections.nth(0).locator('summary').click();
+  await expect(sections.nth(0)).not.toHaveAttribute('open', '');
+  await sections.nth(0).locator('summary').click();
+  await expect(draft).toHaveValue('[');
+  await expect(parameters.getByRole('alert')).toContainText('valid JSON');
+
+  await expect(page.getByLabel('Node label', { exact: true })).toBeHidden();
+  await sections.nth(2).locator('summary').click();
+  await expect(page.getByLabel('Node label', { exact: true })).toHaveValue('Count words');
+  await page.screenshot({ path: info.outputPath('inspector-details.png'), fullPage: true });
 });
 
 test('the inspector reflects existing incoming and outgoing canvas wires', async ({ page }) => {
@@ -273,6 +383,9 @@ test('the inspector reflects existing incoming and outgoing canvas wires', async
   await expect(page.getByRole('heading', { name: 'Outgoing connections' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Select connection to Count words' })).toBeVisible();
   await page.getByRole('button', { name: 'Select connection to Count words' }).click();
+  await expect(page.getByRole('heading', { name: 'Connection', exact: true })).toBeVisible();
+  await expect(page.getByRole('complementary', { name: 'Node inspector', exact: true })).toContainText('Normalize text → Count words');
+  await expect(page.getByRole('heading', { name: 'Nothing selected', exact: true })).toHaveCount(0);
   await expect(page.getByLabel('Connection target argument', { exact: true })).toBeVisible();
 });
 
@@ -435,6 +548,7 @@ test('library dragging adds a task onto the empty canvas', async ({ page }) => {
 test('export and reopen preserve neutral data, configuration and viewport', async ({ page }) => {
   await page.goto('/');
   await node(page, 'demo-read').click();
+  await openInspectorDetails(page);
   await page.getByRole('textbox', { name: 'Notes', exact: true }).fill('Portable draft');
   await page.locator('.react-flow__controls-fitview').click();
   await expect.poll(async () => (await stored(page))?.nodes[0].notes).toBe('Portable draft');
@@ -524,6 +638,7 @@ test('keyboard deletes nodes/edges but not while editing text', async ({ page })
   await page.keyboard.press('Delete');
   await expect(page.getByTestId('task-node')).toHaveCount(2);
   await node(page, 'demo-read').click();
+  await openInspectorDetails(page);
   await page.getByLabel('Node label', { exact: true }).focus();
   await page.keyboard.press('Backspace');
   await expect(page.getByTestId('task-node')).toHaveCount(2);
@@ -585,6 +700,59 @@ test('unavailable browser storage does not prevent editing or exporting', async 
   expect((await download).suggestedFilename()).toMatch(/\.json$/);
 });
 
+test('JSON pending state spans fields and guided values follow raw JSON edits', async ({ page }) => {
+  const snapshot = JSON.parse(await readFile(metadataFile, 'utf-8'));
+  const release = snapshot.releases[0];
+  const taskKey = `released:${release.root}:${release.manifest_sha256}`;
+  let starts = 0;
+  await page.route('**/api/session', async (route) => route.fulfill({ json: {
+    token: 'test-token', project: '/projects/document-demo', metadata: snapshot,
+    bindings: { [taskKey]: 'normalize' },
+    parameterHints: { [taskKey]: { origin: 'metadata', parameters: [
+      { name: 'settingsA', kind: 'json', required: false, hasDefault: false },
+      { name: 'settingsB', kind: 'json', required: false, hasDefault: false },
+    ] } },
+  } }));
+  await page.route('**/api/runs', async (route) => {
+    starts += 1;
+    await route.fulfill({ status: 400, json: { error: 'Unexpected run request' } });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Connect project', exact: true }).click();
+  await replace(page);
+  await page.getByRole('button', { name: 'Add task text.normalize', exact: true }).last().click();
+  const first = (await page.getByTestId('task-node').getAttribute('data-node-id'))!;
+  await node(page, first).click();
+  const a = page.getByLabel('settingsA', { exact: true });
+  const b = page.getByLabel('settingsB', { exact: true });
+  await a.fill('{');
+  await b.focus();
+  await b.blur();
+  await expect(page.getByRole('button', { name: 'Edit JSON', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Run flow', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Apply the edited parameters' })).toBeVisible();
+  expect(starts).toBe(0);
+
+  await a.fill('{"old":1}');
+  await a.blur();
+  await page.getByRole('button', { name: 'Apply parameters', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit JSON', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Draft parameters', exact: true }).fill('{"settingsA":{"new":2},"unknown":0}');
+  await page.getByRole('button', { name: 'Apply parameters', exact: true }).click();
+  await page.getByRole('button', { name: 'Guided fields', exact: true }).click();
+  await expect(a).toHaveValue('{"new":2}');
+  await a.fill('null');
+  await a.blur();
+  await page.getByRole('button', { name: 'Apply parameters', exact: true }).click();
+  await expect.poll(async () => (await stored(page))?.nodes[0]?.parameters).toEqual({ settingsA: null, unknown: 0 });
+
+  await a.fill('{');
+  await a.blur();
+  await page.getByRole('button', { name: 'Add task text.normalize', exact: true }).last().click();
+  await expect(page.getByLabel('settingsA', { exact: true })).toHaveValue('');
+  await expect(page.getByRole('button', { name: 'Edit JSON', exact: true })).toBeEnabled();
+});
+
 test('includes the run control in draft actions and resizes persistent panels', async ({ page }) => {
   await page.goto('/');
   const run = page.getByRole('button', { name: 'Run flow', exact: true });
@@ -616,7 +784,7 @@ test('replaces the header fit control with canvas fullscreen while retaining Rea
   await expect(page.getByRole('button', { name: 'Enter canvas fullscreen', exact: true })).toBeVisible();
 });
 
-test('pointer resizing honors both panel bounds and retains a 430px canvas after a narrow reload', async ({ page }) => {
+test('pointer resizing honors both panel bounds and retains a 430px canvas after a narrow reload', async ({ page }, info) => {
   await page.goto('/');
   const inspector = page.getByRole('separator', { name: 'Resize inspector' });
   const initial = Number(await inspector.getAttribute('aria-valuenow'));
@@ -636,6 +804,8 @@ test('pointer resizing honors both panel bounds and retains a 430px canvas after
   expect(canvas?.width).toBeGreaterThanOrEqual(430);
   expect(Number(await page.getByRole('separator', { name: 'Resize task library' }).getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(220);
   expect(Number(await page.getByRole('separator', { name: 'Resize inspector' }).getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(260);
+  await node(page, 'demo-normalize').click();
+  await page.screenshot({ path: info.outputPath('inspector-narrow.png'), fullPage: true });
 });
 
 test('anchors the unified toolbar to default canvas bounds independently of panel resizing', async ({ page }) => {
