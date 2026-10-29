@@ -33,7 +33,9 @@ class TaskError(Exception):
 def serialize_error(error: BaseException, *, limit: int = 4096) -> dict[str, Any]:
     """Return bounded, explicit public error fields without leaking locals."""
     current: BaseException | None = error
-    while current is not None:
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
         if isinstance(current, TaskError):
             result: dict[str, Any] = {"type": type(error).__name__, "code": current.code,
                                       "message": current.message}
@@ -54,9 +56,9 @@ def _bound(value: dict[str, Any], limit: int) -> dict[str, Any]:
     bounded: dict[str, Any] = {}
     for key, item in value.items():
         if isinstance(item, str):
-            text = item[:remaining]
+            text = item.encode("utf-8", errors="replace")[:remaining].decode("utf-8", errors="ignore")
             bounded[key] = text
-            remaining -= len(text)
+            remaining -= len(text.encode("utf-8"))
         else:
             bounded[key] = item
     return bounded

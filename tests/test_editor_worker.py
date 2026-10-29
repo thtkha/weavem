@@ -39,8 +39,8 @@ class EditorWorkerTests(unittest.TestCase):
                                          expected_source_sha256=None,
                                          expected_metadata_sha256=None)
             self.assertIn({"type": "node", "nodeId": "first", "status": "running"}, events)
-            self.assertIn({"type": "node", "nodeId": "first", "status": "completed", "preview": "'a'"}, events)
-            self.assertIn({"type": "node", "nodeId": "second", "status": "completed", "preview": "'ab'"}, events)
+            self.assertTrue(any(event.get("nodeId") == "first" and event.get("status") == "completed" and event.get("preview") == "'a'" and event.get("value", {}).get("value") == "a" for event in events))
+            self.assertTrue(any(event.get("nodeId") == "second" and event.get("status") == "completed" and event.get("preview") == "'ab'" and event.get("value", {}).get("value") == "ab" for event in events))
             self.assertEqual("completed", events[-1]["status"])
             self.assertEqual("{'second': 'ab'}", events[-1]["result"])
 

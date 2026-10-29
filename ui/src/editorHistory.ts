@@ -32,7 +32,7 @@ export function commitDraft(history: DraftHistory, next: EditorDraft): DraftHist
   };
 }
 
-export function replaceDraftHistory(history: DraftHistory, draft: EditorDraft): DraftHistory {
+export function replaceDraftHistory(_history: DraftHistory, draft: EditorDraft): DraftHistory {
   return { past: [], present: copy(draft), future: [] };
 }
 

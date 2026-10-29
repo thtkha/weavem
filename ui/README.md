@@ -284,3 +284,75 @@ licenses; React Flow core is MIT and Pro is not required.
 References: [React Flow](https://reactflow.dev/learn),
 [accessibility](https://reactflow.dev/learn/advanced-use/accessibility),
 [browser testing](https://reactflow.dev/learn/advanced-use/testing).
+
+## Editor experience branch
+
+The `feature/editor-experience` branch adds these development features; they are
+not part of the released Python wheel:
+
+- **Parameters:** ordinary Python signatures, defaults, docstrings, explicit
+  `Literal` choices, nullable types, and locally declared `TypedDict` fields
+  supply advisory controls. Inspection parses source without importing it.
+  Unresolved types and compiled releases without source retain JSON/metadata
+  fallbacks. Task authors do not write frontend definitions.
+- **Field mapping:** select a connection or its inspector row. Choose the whole
+  upstream result, a declared field, an observed field, or enter a JSON path such
+  as `["customers", 0, "email"]`. This saves ordinary Python indexing, not a
+  browser expression. Missing fields fail at execution. Observed values are
+  examples from the labelled run; truncated samples do not supply field choices.
+- **Editing:** Undo/Redo and Copy/Paste selection use toolbar buttons or
+  Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl/Cmd+C, and Ctrl/Cmd+V outside text fields.
+  Copy/paste uses an editor-local clipboard, not the operating-system clipboard.
+  Select several nodes with Ctrl/Cmd-click. Internal connections are copied with
+  new identities. History retains 100 actions; viewport/panel changes and run
+  results are not history. Undo cannot reverse task side effects.
+- **Last run:** inspect the selected flow's most recently started recorded run
+  without changing the draft. The read-only record contains its source, revision,
+  parameters, connections, statuses, and bounded results. It survives bridge
+  restart, but execution control does not. A previously running, untracked record
+  is labelled as such—not presented as a restored live process. Changed local
+  task code, dependencies, and external services prevent reproducibility promises.
+- **Results:** supported built-in values have expandable tree views; lists of
+  records offer a table view. Other Python objects have textual previews.
+- **Toolbar:** flow authoring, history, project/import/export, and execution use
+  grouped controls. On narrower screens, open **More** for secondary actions.
+
+Saved mapping drafts use editor schema 3; schemas 1 and 2 still import. Executable
+editing graphs use schema 2 only when an indexed upstream field is selected;
+existing whole-result schema-1 graphs remain readable. Neither graph is a new
+published artifact format. The Python source remains authoritative.
+
+### Structured task errors
+
+Task authors may optionally raise a normal Python exception with explicit fields:
+
+```python
+from weavem import TaskError
+
+raise TaskError(
+    "customer.not_found",
+    "No customer exists with this ID",
+    input="customer_id",
+    remediation="Choose an existing customer ID",
+    retryable=False,
+)
+```
+
+Python callers can catch `TaskError`. The CLI prints its human message and a JSON
+error record to stderr and exits nonzero. The GUI shows the same details.
+Ordinary exceptions continue to work and remain unclassified. Retryability is
+advice, not permission to repeat a side effect: Prefect's configured policy is
+unchanged.
+
+### Local evidence and privacy
+
+Run records live in the configured artifact directory's `editor-runs/` folders.
+Definition snapshots retain exact JSON/source up to 8 MiB and reject larger
+records; results are previews, not datasets. Preview limits include six levels,
+100 items across a value, and a 15 KiB serialized envelope. Truncation is labelled.
+No files, URLs, getters, or custom container protocols are traversed for previews.
+
+Parameters, source, task descriptions, logs, exception messages, and previews may
+contain sensitive information. Automatic secret detection/redaction is **not**
+guaranteed. Do not use production secrets/data for development evidence. Keep
+these folders private and gitignored; use project-specific retention policies.

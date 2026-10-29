@@ -408,6 +408,7 @@ def make_parser() -> argparse.ArgumentParser:
 def main(argv=None) -> int:
     from .flows import FlowError
     from .native import NativeError
+    from .errors import TaskError, serialize_error
     try:
         args = make_parser().parse_args(argv)
         result = args.func(args)
@@ -418,6 +419,10 @@ def main(argv=None) -> int:
             target = args.directory if args.command == "task" else args.name
             print(f"{args.command} {action} passed: {target}")
         return 0
+    except TaskError as exc:
+        print(f"weavem: {exc}", file=sys.stderr)
+        print(json.dumps({"error": serialize_error(exc)}), file=sys.stderr)
+        return 2
     except (BuildError, FlowError, NativeError, CompatibilityError, ContractError, IntegrityError, PolicyError, StoreError, ValueError, OSError) as exc:
         print(f"weavem: {exc}", file=sys.stderr)
         return 2

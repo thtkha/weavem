@@ -217,3 +217,20 @@ Typed ports, result-field selection, credentials management, parallel execution,
 loops, nested flows, scheduling, collaboration, publication, and production
 deployment remain deferred. Execution is trusted local code, not a sandbox;
 cancellation cannot undo side effects.
+
+## Editor experience extension
+
+Task authors own Python behavior and ordinary interfaces; the editor owns control
+presentation. Declared and observed output structures are labelled separately.
+Selecting upstream dictionary keys/list indexes generates normal Python code.
+Unknown types remain unknown and supported JSON editing remains available.
+
+Draft history records meaningful authoring actions, not selection, viewport,
+panel changes, or execution status. Copy/paste preserves internal wires with fresh
+identities. Execution side effects are never described as undoable.
+
+Edit flow and Last run are separate views: the former is the current working
+code; the latter is read-only recorded evidence tied to a source revision.
+Standard tree/table viewers suffice; no task-bundled JavaScript or plugin system.
+Toolbar controls share sizing and typography, with execution anchored to the
+canvas boundary and secondary actions accessible through More when constrained.

@@ -17,7 +17,7 @@ from typing import Any
 # A definition may include a 1 MiB source module and a request can be up to 5 MiB.
 # Preserve it exactly or reject it; inspection must never misrepresent a run.
 _MAX_FILE = 8 * 1024 * 1024
-_MAX_STATE = 256 * 1024
+_MAX_STATE = 8 * 1024 * 1024
 _MAX_LOG = 64 * 1024
 _MAX_DEPTH = 64
 _SNAPSHOT = "inspection.json"
@@ -185,7 +185,7 @@ def latest_run(work_dir: str | Path, flow_name: str) -> dict[str, Any] | None:
             if snapshot is None or snapshot["flowName"] != flow_name:
                 continue
             state = _read(directory, _STATE)
-            found.append((directory.stat().st_mtime_ns, {"runId": directory.name, "snapshot": snapshot, "state": state}))
+            found.append(((directory / _SNAPSHOT).stat().st_mtime_ns, {"runId": directory.name, "snapshot": snapshot, "state": state}))
         except (OSError, RunInspectionError):
             continue
-    return max(found, key=lambda item: item[0])[1] if found else None
+    return max(found, key=lambda item: (item[0], item[1]["runId"]))[1] if found else None

@@ -912,3 +912,23 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .toolbar-overflow-menu { position: absolute; z-index: 20; right: 0; top: calc(100% + 6px); display: grid; gap: 4px; min-width: 172px; padding: 6px; border: 1px solid var(--color-line); border-radius: 7px; background: var(--color-panel); box-shadow: 0 12px 28px #0008; }.toolbar-overflow-menu .button { justify-content: flex-start; }
 @media (min-width: 1520px) { .toolbar-overflow { order: -1; }.toolbar-overflow > summary { display: none; }.toolbar-overflow-menu { position: static; display: flex; min-width: 0; padding: 0; border: 0; background: none; box-shadow: none; }.toolbar-overflow-menu .button { justify-content: center; } }
 @media (max-width: 1260px) { .editor-toolbar { grid-template-columns: 1fr; }.toolbar-group-run { justify-self: start; } }
+
+.editor-view-tabs { grid-column: 3; display:flex; gap:6px; padding:0 16px 8px; }
+.last-run-overlay { position:fixed; inset:140px 16px 40px; z-index:30; background:var(--color-canvas); overflow:auto; border:1px solid var(--color-line); }
+
+/* Keep execution anchored to the default canvas boundary, not the viewport. */
+.editor-toolbar { grid-column:3; display:flex; flex-wrap:wrap; padding:10px 16px; }
+.toolbar-group-run { margin-left:auto; }
+.editor-toolbar .flow-picker select { font:var(--font-control); font-size:12px; max-width:180px; }
+.last-run-overlay .run-inspection { position:static; width:100%; max-height:none; }
+
+.result-viewer { overflow:auto; max-height:360px; overflow-wrap:anywhere; }
+.result-tree { margin:6px 0; padding-left:12px; }
+.result-tree dd { margin-left:12px; }.result-tree dt { color:var(--color-muted); }
+.result-table { border-collapse:collapse; font-size:12px; }.result-table th,.result-table td { border:1px solid var(--color-line); padding:6px; text-align:left; }
+section[aria-label="Upstream field mapping"] { min-width:0; display:grid; gap:6px; }
+section[aria-label="Upstream field mapping"] label { min-width:0; display:grid; gap:4px; }
+section[aria-label="Upstream field mapping"] input, section[aria-label="Upstream field mapping"] select { width:100%; min-width:0; max-width:100%; }
+
+section[aria-label="Upstream field mapping"] select { background:var(--color-surface); color:var(--color-ink); border:1px solid var(--color-line); border-radius:var(--radius-control); min-height:32px; font:inherit; font-size:12px; padding:6px; }
+section[aria-label="Upstream field mapping"] label { color:var(--color-muted); font-size:12px; }

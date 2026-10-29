@@ -16,6 +16,7 @@ import signal
 import subprocess
 import sys
 import threading
+from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import unquote, urlsplit
@@ -45,14 +46,14 @@ def _ui_directory(value: str | Path | None) -> Path:
 
 
 def _json_bytes(value: object) -> bytes:
-    return json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
 
 def _bounded_preview(value: object) -> object:
     """Keep browser response/event handling bounded even for a bad worker event."""
     try:
         raw = _json_bytes(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, RecursionError):
         return str(value)[:4096]
     if len(raw) <= 16 * 1024:
         return value
@@ -75,6 +76,8 @@ class Run:
     terminal_status: str | None = None
     error: str | None = None
     result: object | None = None
+    result_value: object | None = None
+    error_details: object | None = None
     phase: str | None = None
     message: str | None = None
     cancelled: bool = False
@@ -118,6 +121,10 @@ class RunManager:
             run_id = str(uuid4())
             directory = self.project.work_dir / "editor-runs" / run_id
             directory.mkdir(parents=True, exist_ok=False)
+            from .editor_runs import capture_snapshot, write_snapshot
+            from .editor_graph import editor_catalog
+            write_snapshot(directory, capture_snapshot(opened, editor_catalog(self.project.root), params,
+                           started_at=datetime.now(timezone.utc).isoformat()))
             request_path = directory / "request.json"
             events_path = directory / "events.jsonl"
             stdout_path = directory / "worker.stdout.log"
@@ -155,6 +162,15 @@ class RunManager:
             with self._lock:
                 self._runs[run_id] = run
                 self._active = run_id
+            self.state(run.run_id)
+            def persist_on_exit():
+                try:
+                    process.wait()
+                    self.state(run.run_id)
+                except (OSError, ValueError, subprocess.SubprocessError):
+                    # Polling still exposes the run; diagnostics must not crash its worker.
+                    return
+            threading.Thread(target=persist_on_exit, daemon=True).start()
             return run
         except Exception:
             with self._lock:
@@ -248,6 +264,10 @@ class RunManager:
             node = run.nodes[node_id]
             if isinstance(status, str) and status in {"pending", "running", "completed", "failed", "skipped"}:
                 node["status"] = status
+            if "value" in event:
+                node["value"] = _bounded_preview(event["value"])
+            if "errorDetails" in event:
+                node["errorDetails"] = _bounded_preview(event["errorDetails"])
             if "preview" in event:
                 node["preview"] = _bounded_preview(event["preview"])
             if isinstance(event.get("error"), str):
@@ -256,6 +276,10 @@ class RunManager:
             run.terminal_status = status
             if isinstance(event.get("error"), str):
                 run.error = event["error"][:4096]
+            if "resultValue" in event:
+                run.result_value = _bounded_preview(event["resultValue"])
+            if "errorDetails" in event:
+                run.error_details = _bounded_preview(event["errorDetails"])
             if "result" in event:
                 run.result = _bounded_preview(event["result"])
 
@@ -281,6 +305,10 @@ class RunManager:
                 payload: dict[str, object] = {"runId": run.run_id, "status": run.status,
                                               "flowName": run.flow_name, "revision": run.revision,
                                               "nodes": run.nodes, "logs": self._tail(run.stdout_path) + self._tail(run.stderr_path)}
+                if run.result_value is not None:
+                    payload["resultValue"] = run.result_value
+                if run.error_details is not None:
+                    payload["errorDetails"] = run.error_details
                 if run.error:
                     payload["error"] = run.error
                 if run.phase is not None:
@@ -289,6 +317,14 @@ class RunManager:
                     payload["message"] = run.message
                 if run.result is not None:
                     payload["result"] = _bounded_preview(run.result)
+                from .editor_runs import write_run_state
+                if run.status != 'running':
+                    payload['finishedAt'] = getattr(run, 'finished_at', None) or datetime.now(timezone.utc).isoformat()
+                    run.finished_at = payload['finishedAt']
+                try:
+                    write_run_state(run.directory, payload)
+                except (OSError, ValueError) as exc:
+                    payload['inspectionError'] = f'Could not persist run inspection: {exc}'
                 return payload
 
     def cancel(self, run_id: str) -> dict[str, object] | None:
@@ -332,6 +368,7 @@ class RunManager:
                     self._terminate(run.process)
                 if run.status == "running":
                     run.status = "cancelled"
+            self.state(run.run_id)
 
 
 class EditorHTTPServer(ThreadingHTTPServer):
@@ -453,6 +490,23 @@ class EditorHandler(BaseHTTPRequestHandler):
                 from .editor_flows import list_flows
                 try:
                     self._json(HTTPStatus.OK, {"flows": list_flows(project=self.server.project.root)})
+                except (ContractError, OSError, ValueError) as exc:
+                    self._error(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            if path.startswith('/api/flows/') and path.endswith('/last-run'):
+                from .editor_runs import latest_run
+                from .editor_flows import _name
+                try:
+                    name = _name(unquote(path[len('/api/flows/'):-len('/last-run')]))
+                    # Reconcile any in-memory worker before selecting its persisted record.
+                    with self.server.runs._lock:
+                        ids = list(self.server.runs._runs)
+                    for run_id in ids:
+                        self.server.runs.state(run_id)
+                    inspection = latest_run(self.server.project.work_dir, name)
+                    if inspection is not None:
+                        inspection['tracking'] = 'active' if inspection['runId'] in ids else 'untracked'
+                    self._json(HTTPStatus.OK, inspection if inspection else {'inspection': None})
                 except (ContractError, OSError, ValueError) as exc:
                     self._error(HTTPStatus.BAD_REQUEST, str(exc))
                 return

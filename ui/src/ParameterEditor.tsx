@@ -57,6 +57,15 @@ function ParameterField({
 
   if (wiredFrom) {
     control = <p className="parameter-wired">Connected from <strong>{wiredFrom}</strong></p>;
+  } else if (choices?.length) {
+    control = <><select id={`parameter-${field.name}`} disabled={disabled}
+      value={!hasValue ? '__unset__' : choices.some((choice) => JSON.stringify(choice) === JSON.stringify(current)) ? `choice:${JSON.stringify(current)}` : '__custom__'}
+      onChange={(event) => { if (event.target.value === '__unset__') onRemove(field.name); else if (event.target.value.startsWith('choice:')) onUpdate(field.name, JSON.parse(event.target.value.slice(7)) as JsonValue); }}>
+      <option value="__unset__">{field.hasDefault ? 'Use default' : 'Unset'}</option>
+      {choices.map((choice, index) => <option key={index} value={`choice:${JSON.stringify(choice)}`}>{JSON.stringify(choice)}</option>)}
+      {hasValue && <option value="__custom__">Custom value (JSON)</option>}
+    </select><button type="button" disabled={disabled} onClick={() => onJsonDraftChange(field.name, JSON.stringify(current ?? null))}>Edit JSON value</button>
+    {jsonDraft !== undefined && <textarea aria-label={`${field.name} JSON value`} value={jsonDraft} disabled={disabled} onChange={(event) => onJsonDraftChange(field.name, event.target.value)} onBlur={() => onJsonBlur(field.name, jsonDraft)} />}</>;
   } else {
     switch (field.kind) {
       case 'boolean':
@@ -137,6 +146,7 @@ function ParameterField({
       {field.required && <em>required</em>}
     </div>
     {control}
+    {field.nullable && !wiredFrom && <button type="button" disabled={disabled} onClick={() => onUpdate(field.name, null)}>Set null</button>}
     {!wiredFrom && !hasValue && defaultText && <small className="parameter-default">Default: {defaultText}</small>}
   </div>;
 }

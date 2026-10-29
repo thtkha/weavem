@@ -789,7 +789,7 @@ test('includes the run control in draft actions and resizes persistent panels', 
   const run = page.getByRole('button', { name: 'Run flow', exact: true });
   await expect(run).toBeDisabled();
   expect(await run.evaluate((element) => element.parentElement?.classList.contains('run-actions'))).toBe(true);
-  await expect(page.locator('.toolbar-actions').getByRole('button', { name: 'Run flow', exact: true })).toHaveCount(1);
+  await expect(page.locator('.editor-toolbar').getByRole('button', { name: 'Run flow', exact: true })).toHaveCount(1);
   await expect(page.locator('.run-actions')).toHaveCSS('border-left-width', '0px');
 
   const library = page.getByRole('separator', { name: 'Resize task library' });
@@ -845,19 +845,19 @@ test('anchors the unified toolbar to default canvas bounds independently of pane
   const aligned = async () => {
     await expect.poll(() => page.evaluate(() => {
       const button = document.querySelector('.run-actions button')!.getBoundingClientRect();
-      const toolbar = document.querySelector('.toolbar-actions')!.getBoundingClientRect();
+      const toolbar = document.querySelector('.editor-toolbar')!.getBoundingClientRect();
       return Math.abs(button.right - (toolbar.right - 16));
     })).toBeLessThanOrEqual(1);
     const button = (await run.boundingBox())!;
     expect(button.x).toBeGreaterThanOrEqual(0);
-    for (const action of await page.locator('.toolbar-actions > .button').all()) {
+    for (const action of await page.locator('.editor-toolbar > .button').all()) {
       const other = (await action.boundingBox())!;
       const overlapX = Math.min(button.x + button.width, other.x + other.width) - Math.max(button.x, other.x);
       const overlapY = Math.min(button.y + button.height, other.y + other.height) - Math.max(button.y, other.y);
       expect(overlapX <= 0 || overlapY <= 0).toBe(true);
     }
   };
-  const initial = await page.locator('.toolbar-actions').boundingBox();
+  const initial = await page.locator('.editor-toolbar').boundingBox();
   const canvas = (await page.locator('.canvas-area').boundingBox())!;
   expect(initial!.x).toBeCloseTo(canvas.x, 0);
   expect(initial!.width).toBeCloseTo(canvas.width, 0);
@@ -869,17 +869,19 @@ test('anchors the unified toolbar to default canvas bounds independently of pane
   await library.focus();
   await page.keyboard.press('End');
   await aligned();
-  expect(await page.locator('.toolbar-actions').boundingBox()).toEqual(initial);
+  expect(await page.locator('.editor-toolbar').boundingBox()).toEqual(initial);
   expect((await page.locator('.canvas-area').boundingBox())!.width).toBeLessThan(canvas.width);
   await page.reload();
-  expect(await page.locator('.toolbar-actions').boundingBox()).toEqual(initial);
+  expect(await page.locator('.editor-toolbar').boundingBox()).toEqual(initial);
   await page.setViewportSize({ width: 1100, height: 1000 });
   await aligned();
+  await page.getByLabel('More flow actions', { exact: true }).click();
   await expect(page.getByRole('button', { name: 'Export draft', exact: true })).toBeInViewport();
+  await page.getByLabel('More flow actions', { exact: true }).click();
   await expect(run).toBeInViewport();
   await page.setViewportSize({ width: 2512, height: 1282 });
   await aligned();
-  const wide = (await page.locator('.toolbar-actions').boundingBox())!;
+  const wide = (await page.locator('.editor-toolbar').boundingBox())!;
   expect(wide.x).toBeCloseTo(280, 0);
   expect(wide.x + wide.width).toBeCloseTo(2512 - 308 - 8, 0);
 });
@@ -911,8 +913,8 @@ test('shared run control keeps the compact toolbar spacing', async ({ page }) =>
   await page.setViewportSize({ width: 1200, height: 750 });
   await page.goto('/');
   const run = page.getByRole('button', { name: 'Run flow', exact: true });
-  await expect(run).toHaveCSS('padding', '7px 8px');
+  await expect(run).toHaveCSS('min-height', '32px');
   await expect(run).toHaveCSS('min-width', '96px');
   await page.setViewportSize({ width: 1600, height: 1000 });
-  await expect(run).toHaveCSS('padding', '8px 10px');
+  await expect(run).toHaveCSS('min-height', '32px');
 });

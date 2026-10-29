@@ -97,3 +97,16 @@ class GraphSourcePathTests(unittest.TestCase):
             graph["schema"] = 1
             with self.assertRaisesRegex(EditorGraphError, "requires schema 2"):
                 validate_graph(graph, root)
+
+class UnicodeTransportTests(unittest.TestCase):
+    def test_unicode_previews_keep_their_structured_envelope(self):
+        from weavem.editor_server import _bounded_preview
+        value = safe_preview({"text": "😀" * 5000})
+        self.assertIsInstance(_bounded_preview(value), dict)
+        details = serialize_error(TaskError("unicode", "😀" * 5000))
+        self.assertLessEqual(len(json.dumps(details, ensure_ascii=False).encode()), 4300)
+
+    def test_error_cause_cycles_do_not_hang_serialization(self):
+        error = RuntimeError("original")
+        error.__cause__ = error
+        self.assertEqual("original", serialize_error(error)["message"])

@@ -89,7 +89,7 @@ try {
   }
   await node('text.summarize').click();
   await expect(page.locator('.run-result')).toContainText('Document: 2 words, 12 characters');
-  const preview = page.locator('.run-result pre');
+  const preview = page.locator('.run-result pre, .run-result code').first();
   await preview.scrollIntoViewIfNeeded();
   expect(await preview.evaluate((element) => {
     const box = element.getBoundingClientRect();
@@ -97,12 +97,19 @@ try {
     return visible === element || element.contains(visible);
   })).toBe(true);
   const session = await (await page.request.get(`${url}/api/session`)).json();
-  const runId = (await log.locator('code').innerText()).split(' · ')[0];
+  const runId = (await log.locator(':scope > code').innerText()).split(' · ')[0];
   const response = await page.request.get(`${url}/api/runs/${runId}`, { headers: { 'X-Weavem-Token': session.token } });
   expect(response.ok()).toBe(true);
   const state = await response.json();
   expect(Object.values(state.nodes).map((entry) => entry.status)).toEqual(['completed', 'completed', 'completed']);
   expect(state.logs).not.toMatch(/Error emitting event|Service 'EventsWorker' failed|Traceback \(most recent call last\)/);
+  const inspectionResponse = await page.request.get(`${url}/api/flows/visual_summary/last-run`, { headers: { 'X-Weavem-Token': session.token } });
+  expect(inspectionResponse.ok()).toBe(true);
+  const inspection = await inspectionResponse.json();
+  expect(inspection.runId).toBe(runId);
+  expect(inspection.snapshot.source).toBe(savedSource);
+  expect(inspection.state.status).toBe('completed');
+  expect(inspection.snapshot.graph.nodes).toHaveLength(3);
   expect(pageErrors).toEqual([]);
   expect(dialogs).toEqual([]);
   await page.screenshot({ path: path.join(output, 'completed.png'), fullPage: true });

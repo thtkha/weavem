@@ -34,6 +34,7 @@ import {
   executionGraph,
   flowLayout,
   setEdgeArgument,
+  setEdgeSourcePath,
   reconnectNodes,
   clearEdgeArgument,
   eligibleTargetArguments,
@@ -43,6 +44,11 @@ import type { TaskParameterHints } from './types';
 import { ParameterEditor } from './ParameterEditor';
 import { Button } from './components/Button';
 import { Field } from './components/Field';
+import { FieldMapping } from './FieldMapping';
+import { ResultViewer } from './ResultViewer';
+import { createDraftHistory, commitDraft, undoDraft, redoDraft, canUndo, canRedo, copySelection, pasteSelection, type DraftClipboard } from './editorHistory';
+import { RunInspection, type RunInspectionRecord } from './RunInspection';
+import { EditorToolbar } from './components/EditorToolbar';
 
 type NodeData = {
   nodeId: string;
@@ -254,6 +260,7 @@ export default function App() {
   const [session, setSession] = useState<EditorSession | null>(null);
   const [sessionMessage, setSessionMessage] = useState('Disconnected: run this editor with weavem editor --project PATH');
   const [run, setRun] = useState<RunState | null>(null);
+  const [sampleRun, setSampleRun] = useState<RunState | null>(null);
   const [loadedFlow, setLoadedFlow] = useState<LoadedFlow | null>(null);
   const [flowSummaries, setFlowSummaries] = useState<FlowSummary[]>([]);
   const [dirty, setDirty] = useState(false);
@@ -281,10 +288,24 @@ export default function App() {
   const submittingRef = useRef(false);
   const reconnecting = useRef(new Map<string, { updated: boolean; escaped: boolean }>());
   const draftRef = useRef(draft);
+  const history = useRef(createDraftHistory(draft));
+  const editGroup = useRef<string | null>(null);
+  const clipboard = useRef<DraftClipboard | null>(null);
+  const [, refreshHistory] = useState(0);
+  const [selectedNodeIds, setSelectedNodeIds] = useState(new Set<string>());
+  const [inspection, setInspection] = useState<RunInspectionRecord | null>(null);
+  const [inspectRun, setInspectRun] = useState(false);
   const resultAutoOpenedFor = useRef<string | null>(null);
   const revisionMismatchedRun = useRef<string | null>(null);
 
   useEffect(() => { draftRef.current = draft; }, [draft]);
+
+  useEffect(() => { if (run) setSampleRun(run); }, [run]);
+
+  const onSelectionChange = useCallback(({ nodes: selected }: { nodes: Array<{ id: string }> }) => {
+    const next = new Set(selected.map((node) => node.id));
+    setSelectedNodeIds((current) => current.size === next.size && [...current].every((id) => next.has(id)) ? current : next);
+  }, []);
 
   const nodes = useMemo<Node<NodeData, 'task'>[]>(
     () => draft.nodes.flatMap((node) => {
@@ -294,14 +315,14 @@ export default function App() {
             id: node.id,
             type: 'task',
             position: node.position,
-            selected: node.id === selectedId,
+            selected: selectedNodeIds.has(node.id) || node.id === selectedId,
             measured: measurements[node.id],
             data: { nodeId: node.id, label: node.label, task, runStatus: run?.nodes[node.id]?.status },
           }]
         : [];
     }),
     // Viewport-only updates must not replace nodes during initial port measurement.
-    [draft.nodes, draft.catalog.tasks, measurements, run, selectedId],
+    [draft.nodes, draft.catalog.tasks, measurements, run, selectedId, selectedNodeIds],
   );
   const edges = useMemo<Edge[]>(
     () => draft.edges.map((edge) => ({
@@ -446,9 +467,11 @@ export default function App() {
     if (!opened.graph) throw new Error(opened.reason ?? 'This flow cannot be displayed as a complete editable graph.');
     const next = projectFlowDraft(catalog, opened.graph, normalizedFlowLayout(opened.layout));
     setDraft(next);
+    history.current = createDraftHistory(next); editGroup.current = null; setRun(null); setSampleRun(null);
     setLoadedFlow({ name: opened.name, revision: opened.revision, editable: opened.editable, reason: opened.reason, source: opened.source });
     setDirty(false);
     setSelectedId(null);
+    setSelectedNodeIds(new Set());
     setSelectedEdgeIds(new Set());
     window.requestAnimationFrame(() => flow?.setViewport(next.viewport));
   }, [flow]);
@@ -459,9 +482,10 @@ export default function App() {
     const opened = await requestApi<ProjectFlow>(`/api/flows/${encoded}`);
     const catalog = importMetadata(JSON.stringify(session.metadata));
     if (!opened.graph) {
-      setDraft({ ...createEmptyDraft(catalog), name: opened.name });
+      const sourceDraft = { ...createEmptyDraft(catalog), name: opened.name };
+      setDraft(sourceDraft); history.current = createDraftHistory(sourceDraft); editGroup.current = null; setRun(null); setSampleRun(null);
       setLoadedFlow({ name: opened.name, revision: opened.revision, editable: false, reason: opened.reason, source: opened.source });
-      setDirty(false); setSelectedId(null); setSelectedEdgeIds(new Set());
+      setDirty(false); setSelectedId(null); setSelectedNodeIds(new Set()); setSelectedEdgeIds(new Set());
       setStatus(`Opened ${opened.name}: visual editing is unavailable`);
       return { name: opened.name, revision: opened.revision, editable: false, reason: opened.reason, source: opened.source } satisfies LoadedFlow;
     }
@@ -641,10 +665,18 @@ export default function App() {
 
   const updateDraft = useCallback(
     (next: EditorDraft, message?: string, resumeAutosave = false) => {
-      if (executionActive) {
+      if (executionActive || (!canvasEditingAllowed && !resumeAutosave)) {
         setError('The draft is locked while a run is active. Cancel or wait for it to finish.');
         return;
       }
+      if (resumeAutosave) { history.current = createDraftHistory(next); setSampleRun(null); }
+      else {
+        const group = message === 'Nodes moving' ? 'drag' : message === 'Editing flow name' ? 'name' : message === 'Editing node details' ? 'details' : null;
+        if (group && editGroup.current === group) history.current = { ...history.current, present: structuredClone(next) };
+        else history.current = commitDraft({ ...history.current, present: structuredClone(draftRef.current) }, next);
+        editGroup.current = group;
+      }
+      refreshHistory((value) => value + 1);
       draftRef.current = next;
       setDraft(next);
       if (next.catalog.kind === 'project') setDirty(true);
@@ -657,7 +689,7 @@ export default function App() {
       // leave that result attached to a subsequently edited draft.
       setRun(null);
     },
-    [executionActive],
+    [executionActive, canvasEditingAllowed],
   );
 
   const centerPosition = useCallback((): Point | undefined => {
@@ -705,7 +737,8 @@ export default function App() {
       if (change.type === 'select' && change.selected) setSelectedId(change.id);
       if (change.type === 'select' && !change.selected && selectedId === change.id) setSelectedId(null);
     }
-    if (next !== draft) updateDraft(next, 'Draft updated');
+    if (next !== draft) updateDraft(next, changes.some((change) => change.type === 'position') ? 'Nodes moving' : 'Draft updated');
+    if (changes.some((change) => change.type === 'position' && change.dragging === false)) editGroup.current = null;
   }, [draft, selectedId, updateDraft]);
 
   const onEdgesChange = useCallback((changes: EdgeChange[]) => {
@@ -740,7 +773,7 @@ export default function App() {
 
   const addConnection = useCallback(
     (connection: Connection | { source: string | null; target: string | null }) => {
-      if (executionActive || !connection.source || !connection.target) return;
+      if (!canvasEditingAllowed || !connection.source || !connection.target) return;
       try {
         const next = connectNodes(draft, connection.source, connection.target);
         const edge = next.edges.at(-1);
@@ -755,14 +788,14 @@ export default function App() {
   }, []);
 
   const reconnectEdge = useCallback((oldEdge: Edge, connection: Connection) => {
-    if (executionActive || !connection.source || !connection.target) return;
+    if (!canvasEditingAllowed || !connection.source || !connection.target) return;
     try {
       const next = reconnectNodes(draft, oldEdge.id, connection.source, connection.target);
       reconnecting.current.set(oldEdge.id, { updated: true, escaped: false });
       updateDraft(next, oldEdge.target === connection.target ? 'Connection reconnected' : 'Connection reconnected; check mapping');
       selectEdge(oldEdge.id);
     } catch (cause) { setError(String(cause)); }
-  }, [draft, executionActive, selectEdge, updateDraft]);
+  }, [draft, canvasEditingAllowed, selectEdge, updateDraft]);
 
   const onReconnectStart = useCallback((_event: React.MouseEvent, edge: Edge) => {
     if (!executionActive) reconnecting.current.set(edge.id, { updated: false, escaped: false });
@@ -782,33 +815,47 @@ export default function App() {
   }, [deleteEdge, executionActive]);
 
   const deleteSelected = useCallback(() => {
-    if (selectedEdgeIds.size > 0) {
-      updateDraft(
-        { ...draft, edges: draft.edges.filter((edge) => !selectedEdgeIds.has(edge.id)) },
-        'Connection deleted',
-      );
-      setSelectedEdgeIds(new Set());
-      return;
-    }
-    if (!selectedId) return;
-    updateDraft(removeNode(draft, selectedId), 'Node and its connections deleted');
-    setSelectedEdgeIds(new Set());
-    setSelectedId(null);
-  }, [draft, selectedEdgeIds, selectedId, updateDraft]);
+    if (!canvasEditingAllowed) return;
+    const ids = selectedNodeIds.size ? selectedNodeIds : new Set(selectedId ? [selectedId] : []);
+    if (!ids.size && !selectedEdgeIds.size) return;
+    updateDraft({ ...draft, nodes: draft.nodes.filter((node) => !ids.has(node.id)),
+      edges: draft.edges.filter((edge) => !ids.has(edge.source) && !ids.has(edge.target) && !selectedEdgeIds.has(edge.id)) }, 'Selection deleted');
+    setSelectedEdgeIds(new Set()); setSelectedNodeIds(new Set()); setSelectedId(null);
+  }, [canvasEditingAllowed, draft, selectedNodeIds, selectedEdgeIds, selectedId, updateDraft]);
 
-  const onKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key === 'Escape') reconnecting.current.forEach((attempt) => { attempt.escaped = true; });
+  const restoreHistory = (direction: 'undo' | 'redo') => {
+    if (!canvasEditingAllowed) return;
+    history.current = direction === 'undo' ? undoDraft(history.current) : redoDraft(history.current);
+    const restored = { ...history.current.present, viewport: draftRef.current.viewport };
+    draftRef.current = restored; setDraft(restored); setDirty(true); setRun(null);
+    setSelectedId(null); setSelectedNodeIds(new Set()); setSelectedEdgeIds(new Set());
+    editGroup.current = null; refreshHistory((value) => value + 1);
+  };
+  const copyNodes = () => {
+    clipboard.current = copySelection(draft, selectedNodeIds.size ? selectedNodeIds : new Set(selectedId ? [selectedId] : []));
+    refreshHistory((value) => value + 1);
+  };
+  const pasteNodes = () => {
+    if (!canvasEditingAllowed || !clipboard.current) return;
+    const pasted = pasteSelection(draft, clipboard.current);
+    updateDraft(pasted.draft, 'Selection pasted'); setSelectedNodeIds(pasted.nodeIds); setSelectedId([...pasted.nodeIds][0] ?? null);
+  };
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (pending) return;
-    if (event.key === 'Delete' || event.key === 'Backspace') {
-      const target = event.target as HTMLElement;
-      if (!['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName) && !target.isContentEditable) {
-        event.preventDefault();
-        deleteSelected();
-      }
+    const target = event.target as HTMLElement;
+    if (target.closest('input, textarea, select, [contenteditable=true]')) return;
+    if ((event.ctrlKey || event.metaKey) && canvasEditingAllowed) {
+      const key = event.key.toLowerCase();
+      if (key === 'z') { event.preventDefault(); restoreHistory(event.shiftKey ? 'redo' : 'undo'); return; }
+      if (key === 'y') { event.preventDefault(); restoreHistory('redo'); return; }
+      if (key === 'c') { event.preventDefault(); copyNodes(); return; }
+      if (key === 'v') { event.preventDefault(); pasteNodes(); return; }
     }
-  }, [deleteSelected, pending]);
+    if (event.key === 'Escape') reconnecting.current.forEach((attempt) => { attempt.escaped = true; });
+    if ((event.key === 'Delete' || event.key === 'Backspace') && target.tagName !== 'BUTTON') { event.preventDefault(); deleteSelected(); }
+  };
 
-  const setName = (name: string) => updateDraft({ ...draft, name });
+  const setName = (name: string) => updateDraft({ ...draft, name }, 'Editing flow name');
   const updateSelected = (changes: Partial<Pick<DraftNode, 'label' | 'notes' | 'parameters'>>) => {
     if (!selectedNode) return;
     updateDraft({
@@ -816,7 +863,7 @@ export default function App() {
       nodes: draft.nodes.map((node) => (
         node.id === selectedNode.id ? { ...node, ...changes } : node
       )),
-    });
+    }, changes.parameters ? 'Parameters applied' : 'Editing node details');
   };
 
   useEffect(() => {
@@ -884,6 +931,7 @@ export default function App() {
         setLoadedFlow(null); setDirty(next.catalog.kind === 'project');
       }
       setSelectedId(null);
+      setSelectedNodeIds(new Set());
       setSelectedEdgeIds(new Set());
       window.requestAnimationFrame(() => flow?.setViewport(next.viewport));
       setPending(null);
@@ -949,47 +997,23 @@ export default function App() {
               <span>weavem</span>
               <span className="prototype-badge">prototype</span>
             </div>
-            <label className="draft-name">
-              <span>Flow name</span>
-              <input aria-label="Flow name" disabled={executionActive || loadedFlow?.editable === false} value={draft.name} onChange={(event) => setName(event.target.value)} />
-            </label>
           </div>
-          <div className="toolbar-actions" role="group" aria-label="Flow actions">
-            <Button disabled={executionActive || (!sessionMatchesDraft && draft.catalog.kind !== 'demo')} onClick={() => requestAction({ kind: 'new' })}>
-              {icon('plus')} {sessionMatchesDraft ? 'New flow' : 'New draft'}
-            </Button>
-            <Button disabled={executionActive} onClick={() => metadataInput.current?.click()}>
-              {icon('file')} Import metadata
-            </Button>
-            <label className="flow-picker">
-              <span className="visually-hidden">Open project flow</span>
-              <select aria-label="Open project flow" disabled={executionActive || !sessionMatchesDraft || flowSummaries.length === 0} value="" onChange={(event) => { if (event.target.value) requestAction({ kind: 'flow', name: event.target.value }); }}>
-                <option value="">Open flow…</option>
-                {flowSummaries.map((item) => <option key={item.name} value={item.name}>{item.name}{item.editable ? '' : ' (source only)'}</option>)}
-              </select>
-            </label>
-            <Button variant="primary" disabled={executionActive || !sessionMatchesDraft || !visualEditingAllowed} onClick={() => void saveFlow(false).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))}>
-              {icon('file')} Save
-            </Button>
-            <Button disabled={executionActive || !sessionMatchesDraft || !visualEditingAllowed} onClick={() => { setSaveAsName(`${draft.name.trim() || 'new_flow'}_copy`); setSaveAsOpen(true); }}>
-              Save as
-            </Button>
-            <Button disabled={executionActive} onClick={() => draftInput.current?.click()}>
-              {icon('folder')} Open draft
-            </Button>
-            <Button onClick={exportDraft}>
-              {icon('download')} Export draft
-            </Button>
-            <Button disabled={executionActive} onClick={() => void connectProject()}>
-              {session ? 'Refresh project' : 'Connect project'}
-            </Button>
-            <label className="run-parameters">
-              <span>Run parameters</span>
-              <input aria-label="Run parameters JSON" disabled={executionActive || !sessionMatchesDraft} value={runParametersText} onChange={(event) => setRunParametersText(event.target.value)} placeholder="{}" />
-            </label>
+          <EditorToolbar busy={executionActive} isProjectFlow={sessionMatchesDraft} canEdit={canvasEditingAllowed}
+            flowName={draft.name} onFlowNameChange={setName} onFlowNameBlur={() => { editGroup.current = null; }} onNew={() => requestAction({ kind: 'new' })}
+            onImportMetadata={() => metadataInput.current?.click()} onOpenFlow={(name) => requestAction({ kind: 'flow', name })}
+            flows={flowSummaries} onSave={() => void saveFlow(false).catch((cause: unknown) => setError(String(cause)))}
+            onSaveAs={() => { setSaveAsName(`${draft.name.trim() || 'new_flow'}_copy`); setSaveAsOpen(true); }}
+            onOpenDraft={() => draftInput.current?.click()} onExportDraft={exportDraft} onConnectProject={() => void connectProject()}
+            connected={Boolean(session)} canUndo={canvasEditingAllowed && canUndo(history.current)} canRedo={canvasEditingAllowed && canRedo(history.current)}
+            canCopy={Boolean(selectedId || selectedNodeIds.size)} canPaste={canvasEditingAllowed && Boolean(clipboard.current)}
+            onUndo={() => restoreHistory('undo')} onRedo={() => restoreHistory('redo')} onCopy={copyNodes} onPaste={pasteNodes}
+            runParameters={runParametersText} onRunParametersChange={setRunParametersText} canRun={sessionMatchesDraft} runControl={runControl()}
+            icons={{ plus: icon('plus'), file: icon('file'), folder: icon('folder'), download: icon('download') }} />
+          <nav className="editor-view-tabs" aria-label="Editor view">
+            <Button aria-pressed={!inspectRun} onClick={() => setInspectRun(false)}>Edit flow</Button>
+            <Button disabled={!sessionMatchesDraft || !loadedFlow} aria-pressed={inspectRun} onClick={() => { void requestApi<RunInspectionRecord | { inspection: null }>(`/api/flows/${encodeURIComponent(loadedFlow!.name)}/last-run`).then((value) => { setInspection('inspection' in value ? null : value); setInspectRun(true); }).catch((cause: unknown) => setError(String(cause))); }}>Last run</Button>
             {run && <Button aria-pressed={logOpen} onClick={() => setLogOpen((open) => !open)}>{logOpen ? 'Hide run log' : 'Show run log'}</Button>}
-            <div className="run-actions">{runControl()}</div>
-          </div>
+          </nav>
           <div className="save-state" role="status">
             <span className={autosavePaused ? 'status-dot warning' : 'status-dot'} />
             {autosavePaused ? 'Autosave paused' : status}
@@ -1076,6 +1100,7 @@ export default function App() {
         </aside>
         <ResizeHandle side="library" width={layout.libraryWidth} onResize={(width) => updatePanelWidth('library', width)} />
 
+        {inspectRun && <div className="last-run-overlay">{inspection ? <RunInspection inspection={inspection} onClose={() => setInspectRun(false)} /> : <section className="panel"><h2>Last run</h2><p>No recorded run for this flow.</p><Button onClick={() => setInspectRun(false)}>Edit flow</Button></section>}</div>}
         <section
           ref={canvas}
           className="canvas-area"
@@ -1118,7 +1143,7 @@ export default function App() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={addConnection}
-            edgesReconnectable={!executionActive}
+            edgesReconnectable={canvasEditingAllowed}
             onReconnectStart={onReconnectStart}
             onReconnect={reconnectEdge}
             onReconnectEnd={onReconnectEnd}
@@ -1126,6 +1151,7 @@ export default function App() {
             nodesDraggable={canvasEditingAllowed}
             nodesConnectable={canvasEditingAllowed}
             elementsSelectable={!executionActive}
+            onSelectionChange={onSelectionChange}
             onNodeClick={(_, node) => {
               setSelectedId(node.id);
               setSelectedEdgeIds(new Set());
@@ -1161,7 +1187,7 @@ export default function App() {
             </div>
           )}
           <div className="canvas-footer">{executionActive ? (run?.phase === 'preparing' ? (run.message ?? 'Preparing flow…') : `Run ${run?.runId ?? 'submission'} is active; editing is locked`) : sessionMatchesDraft ? 'Ready to run · connections require target argument mapping' : 'Draft wiring · connect a local project to run'}</div>
-          {run && logOpen && <section className="run-log panel" aria-label="Run log"><div className="panel-heading"><div><p className="eyebrow">Local run</p><h2>{run.status === 'running' && run.phase === 'preparing' ? (run.message ?? 'Preparing flow…') : run.status}</h2></div><button className="icon-button" aria-label="Hide run log" onClick={() => setLogOpen(false)}>{icon('x')}</button></div><code>{run.runId}{run.flowName ? ` · ${run.flowName}${run.revision ? ` @ ${run.revision}` : ''}` : ''}</code><pre>{run.logs || 'Waiting for task output…'}</pre>{run.result && <pre>{run.result}</pre>}{run.error && <p role="alert">{run.error}</p>}</section>}
+          {run && logOpen && <section className="run-log panel" aria-label="Run log"><div className="panel-heading"><div><p className="eyebrow">Local run</p><h2>{run.status === 'running' && run.phase === 'preparing' ? (run.message ?? 'Preparing flow…') : run.status}</h2></div><button className="icon-button" aria-label="Hide run log" onClick={() => setLogOpen(false)}>{icon('x')}</button></div><code>{run.runId}{run.flowName ? ` · ${run.flowName}${run.revision ? ` @ ${run.revision}` : ''}` : ''}</code><pre>{run.logs || 'Waiting for task output…'}</pre><ResultViewer value={run.resultValue} fallback={run.result} />{run.error && <p role="alert">{run.error}</p>}{run.errorDetails && <pre aria-label="Failure details">{JSON.stringify(run.errorDetails, null, 2)}</pre>}</section>}
         </section>
         <ResizeHandle side="inspector" width={layout.inspectorWidth} onResize={(width) => updatePanelWidth('inspector', width)} />
 
@@ -1216,6 +1242,10 @@ export default function App() {
                           updateDraft(value ? setEdgeArgument(draft, edge.id, value) : clearEdgeArgument(draft, edge.id), value ? 'Connection argument mapped' : 'Connection mapping cleared');
                         } catch (cause) { setError(String(cause)); }
                       }} />
+                      <FieldMapping key={`${edge.id}:${JSON.stringify(edge.sourcePath)}`} path={edge.sourcePath} disabled={!canvasEditingAllowed}
+                        fields={session?.parameterHints?.[draft.nodes.find((node) => node.id === edge.source)?.taskKey ?? '']?.output?.fields}
+                        observed={sampleRun?.nodes[edge.source]?.value} runId={sampleRun?.runId}
+                        onApply={(path) => updateDraft(setEdgeSourcePath(draft, edge.id, path), 'Upstream field mapped')} />
                       <datalist id={`connection-arguments-${edge.id}`}>
                         {eligibleTargetArguments(draft, edge.target, edge.id).map((argument) => <option key={argument} value={argument} />)}
                       </datalist>
@@ -1235,14 +1265,14 @@ export default function App() {
               })}
             </InspectorSection>
             {selectedRunResult && <InspectorSection name="result" title="Result" open={inspectorSections.result} onToggle={toggleInspectorSection}>
-              <section className="run-result" aria-label="Run result"><p className={`run-result-status ${selectedRunResult.status}`}>{selectedRunResult.status}</p>{selectedRunResult.preview && <pre>{selectedRunResult.preview}</pre>}{selectedRunResult.error && <p role="alert">{selectedRunResult.error}</p>}</section>
+              <section className="run-result" aria-label="Run result"><p className={`run-result-status ${selectedRunResult.status}`}>{selectedRunResult.status}</p><ResultViewer value={selectedRunResult.value} fallback={selectedRunResult.preview} />{selectedRunResult.error && <p role="alert">{selectedRunResult.error}</p>}{selectedRunResult.errorDetails && <dl className="metadata-list"><div><dt>Code</dt><dd>{selectedRunResult.errorDetails.code ?? 'Unclassified'}</dd></div><div><dt>Input</dt><dd>{selectedRunResult.errorDetails.input ?? 'Unknown'}</dd></div><div><dt>Remediation</dt><dd>{selectedRunResult.errorDetails.remediation ?? 'None supplied'}</dd></div><div><dt>Retryable</dt><dd>{selectedRunResult.errorDetails.retryable === undefined || selectedRunResult.errorDetails.retryable === null ? 'Unknown' : String(selectedRunResult.errorDetails.retryable)}</dd></div></dl>}</section>
             </InspectorSection>}
             <InspectorSection name="details" title="Details" open={inspectorSections.details} onToggle={toggleInspectorSection}>
               <Field label="Node label">
-                <input disabled={!canvasEditingAllowed} value={selectedNode.label} onChange={(event) => updateSelected({ label: event.target.value })} />
+                <input disabled={!canvasEditingAllowed} value={selectedNode.label} onBlur={() => { editGroup.current = null; }} onChange={(event) => updateSelected({ label: event.target.value })} />
               </Field>
               <Field label="Notes">
-                <textarea disabled={!canvasEditingAllowed} value={selectedNode.notes} onChange={(event) => updateSelected({ notes: event.target.value })} placeholder="Private drafting note" />
+                <textarea disabled={!canvasEditingAllowed} value={selectedNode.notes} onBlur={() => { editGroup.current = null; }} onChange={(event) => updateSelected({ notes: event.target.value })} placeholder="Private drafting note" />
               </Field>
               <dl className="metadata-list">
                 <div><dt>Inputs</dt><dd>{selectedTask.inputs.length ? selectedTask.inputs.join(', ') : 'None declared'}</dd></div>
@@ -1254,7 +1284,11 @@ export default function App() {
             <button className="delete-button" disabled={!canvasEditingAllowed} onClick={deleteSelected}>Delete node</button>
           </div> : selectedEdge ? <div className="inspector-content connection-inspector-content">
             <section className="connection-editor" aria-label="Connection mapping">
-              <p className="field-help">Pass this connection’s whole result to a named argument on the target task.</p>
+              <p className="field-help">Pass the whole upstream result or select a nested field for a target argument.</p>
+              <FieldMapping key={`${selectedEdge.id}:${JSON.stringify(selectedEdge.sourcePath)}`} path={selectedEdge.sourcePath} disabled={!canvasEditingAllowed}
+                fields={session?.parameterHints?.[selectedEdgeSource?.taskKey ?? '']?.output?.fields}
+                observed={sampleRun?.nodes[selectedEdge.source]?.value} runId={sampleRun?.runId}
+                onApply={(path) => updateDraft(setEdgeSourcePath(draft, selectedEdge.id, path), 'Upstream field mapped')} />
               <Field label="Target argument"><input aria-label="Connection target argument" disabled={!canvasEditingAllowed} value={edgeArgument} placeholder="for example: text" onChange={(event) => setEdgeArgumentText(event.target.value)} /></Field>
               <Button variant="secondary" className="wide" disabled={!canvasEditingAllowed || !edgeArgument.trim()} onClick={() => { try { updateDraft(setEdgeArgument(draft, selectedEdge.id, edgeArgument), 'Connection argument mapped'); } catch (cause) { setError(String(cause)); } }}>Apply mapping</Button>
             </section>

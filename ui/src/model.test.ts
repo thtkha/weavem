@@ -216,7 +216,7 @@ describe('draft model', () => {
     const legacy = createDemoDraft() as unknown as { schema: number };
     legacy.schema = 1;
     const migrated = parseDraft(JSON.stringify(legacy));
-    expect(migrated.schema).toBe(2);
+    expect(migrated.schema).toBe(3);
     expect(migrated.edges[0].argument).toBeUndefined();
   });
 
@@ -322,4 +322,13 @@ describe('project flow presentation', () => {
     });
     expect(executionGraph(draft, { [catalog.tasks[0].key]: 'local' })).toEqual(graph);
   });
+});
+
+// A field reference is saved as code semantics, never dropped as UI metadata.
+it('preserves indexed upstream paths across draft import and executable graph conversion', () => {
+  const draft = createDemoDraft();
+  draft.edges[0].argument = 'text';
+  draft.edges[0].sourcePath = ['customers', 0, 'email'];
+  const reopened = parseDraft(serializeDraft(draft));
+  expect(reopened.edges[0].sourcePath).toEqual(['customers', 0, 'email']);
 });

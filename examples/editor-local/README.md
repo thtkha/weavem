@@ -122,6 +122,7 @@ on all interfaces to resolve a connection issue.
 **Goal:** Connect to tasks authorized by the selected project.
 **Run from:** Browser, printed loopback URL.
 **Action:** Choose **Connect project**, then **Replace draft** if prompted.
+If **Connect project** is hidden, open **More** first.
 Select `document_summary` in **Open flow** and confirm **Replace draft**.
 Export the previous draft first if you need it.
 **Expected result:** **document_summary**, with three connected nodes,

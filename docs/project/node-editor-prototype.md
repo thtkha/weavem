@@ -3,6 +3,38 @@
 **Status: prototype, not a released framework feature.** Branch:
 `prototype/node-editor`. Audience: project owner and prototype contributors.
 
+## Editor experience feature branch — ready for review
+
+The six approved improvements are implemented on `feature/editor-experience`:
+Python-derived parameter/output hints and field mapping; bounded undo/redo and
+selection copy/paste; read-only Last run evidence; standard tree/table result
+viewers; optional structured task errors; and grouped, consistent toolbar controls.
+The three implementation branches remain available as `feature/task-interfaces`,
+`feature/editor-interactions`, and `feature/run-inspection`. Their reviewed commits
+were integrated with leader-owned application/server wiring. Nothing from this
+slice has been merged back into `prototype/node-editor` or `main`.
+
+Validation on Linux/CPython 3.15: the full Python regression run passed 226 tests;
+after final integration fixes, 36 focused backend/native tests and 13 transport/
+snapshot tests passed (overlapping counts, not an aggregate). TypeScript, ESLint,
+37 frontend unit tests, the static build, strict example runbook lint, and all
+56 Chromium tests passed. The final real-native browser run
+`8a76dfea-ff4b-4cfd-b121-edad1c395134` saved/reopened ordinary Python, verified its
+exact Last run snapshot, then closed the browser/bridge and returned the same
+result through CLI and Python. A separate indexed-field test exercises a local
+native downstream task through the saved loader, CLI, and worker.
+
+Evidence: `.artifacts/node-editor/experience/` contains `full-python.log`,
+`accepted-python.log`, `transport-tests.log`, `accepted-browser.log`, and `live/`
+with the screenshot, run record, and headless result. Earlier failed attempts are
+retained where separate filenames were used. Browser mocks cover error/history
+interaction scenarios; the native smoke uses the real backend. Remote CI and
+fresh-machine/cross-browser certification were not performed. No new dependency,
+release, tag, or publication is included.
+
+See the [editor experience guide](../../ui/README.md#editor-experience-branch)
+for controls, field-path syntax, error API, privacy, and preview limits.
+
 ## Current direction — Python-backed local authoring
 
 The current implementation supersedes the graph-only execution and browser-only

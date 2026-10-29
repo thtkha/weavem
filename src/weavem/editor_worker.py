@@ -12,6 +12,9 @@ import re
 import sys
 from typing import Any, Callable
 
+from .editor_values import safe_preview
+from .errors import serialize_error
+
 
 def _event_writer(path: Path) -> Callable[[dict[str, object]], None]:
     def emit(event: dict[str, object]) -> None:
@@ -92,6 +95,7 @@ class _GeneratedFlowTrace:
         try:
             if variable in local_values:
                 event["preview"] = _preview(local_values[variable])
+                event["value"] = safe_preview(local_values[variable])
         except (KeyError, TypeError):
             pass
         self.emit(event)
@@ -121,7 +125,7 @@ class _GeneratedFlowTrace:
         elif event == "exception" and self.current is not None:
             node_id, _ = self.current
             error = _arg[1] if isinstance(_arg, tuple) and len(_arg) > 1 else RuntimeError("flow failed")
-            self.emit({"type": "node", "nodeId": node_id, "status": "failed", "error": _error_text(error)})
+            self.emit({"type": "node", "nodeId": node_id, "status": "failed", "error": _error_text(error), "errorDetails": serialize_error(error)})
             self.current = None
         return self
 
@@ -167,12 +171,12 @@ def _run_saved_flow(request: dict[str, Any], emit: Callable[[dict[str, object]],
                 node_id = node.get("id") if isinstance(node, dict) else None
                 if isinstance(node_id, str) and node_id not in trace.seen and node_id != trace.current:
                     emit({"type": "node", "nodeId": node_id, "status": "skipped"})
-        emit({"type": "run", "status": "failed", "error": _error_text(exc)})
+        emit({"type": "run", "status": "failed", "error": _error_text(exc), "errorDetails": serialize_error(exc)})
         raise
     finally:
         if trace is not None:
             sys.settrace(previous_trace)
-    emit({"type": "run", "status": "completed", "result": _preview(result)})
+    emit({"type": "run", "status": "completed", "result": _preview(result), "resultValue": safe_preview(result)})
     return result
 
 
@@ -201,7 +205,7 @@ def main(argv: list[str] | None = None) -> int:
         _run_saved_flow(request, emit)
     except BaseException as exc:
         if not terminal_emitted:
-            emit({"type": "run", "status": "failed", "error": _error_text(exc)})
+            emit({"type": "run", "status": "failed", "error": _error_text(exc), "errorDetails": serialize_error(exc)})
         return 1
     return 0
 

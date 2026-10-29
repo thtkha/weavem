@@ -43,3 +43,17 @@ class EditorRunTests(unittest.TestCase):
             with self.assertRaises(RunInspectionError): write_snapshot(directory,snap)
             self.assertFalse((directory/"inspection.json").exists())
 if __name__ == '__main__': unittest.main()
+
+class LastStartedRunTests(unittest.TestCase):
+    def test_polling_old_run_does_not_make_it_latest(self):
+        import os
+        from weavem.editor_runs import capture_snapshot, write_snapshot, write_run_state, latest_run
+        with workspace() as raw:
+            root = Path(raw); runs = root / "editor-runs"; runs.mkdir()
+            old = runs / "old"; new = runs / "new"; old.mkdir(); new.mkdir()
+            snap = capture_snapshot({"name": "demo", "revision": "r1", "source": "x"}, {}, {})
+            write_snapshot(old, snap); write_snapshot(new, snap)
+            os.utime(old / "inspection.json", ns=(1, 1))
+            os.utime(new / "inspection.json", ns=(2, 2))
+            write_run_state(old, {"status": "completed"})
+            self.assertEqual("new", latest_run(root, "demo")["runId"])

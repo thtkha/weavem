@@ -68,7 +68,7 @@ def _convert(value: object, depth: int, items: list[int], budget: list[int], see
                 if not ok:
                     return None, False, False
                 if converted is None and cut:
-                    truncated = True; continue
+                    output.append(None); truncated = True; continue
                 output.append(converted); truncated |= cut
             return output, truncated, True
         output_dict: dict[str, Any] = {}
