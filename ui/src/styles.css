@@ -894,3 +894,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .run-parameters > span { color: var(--color-muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; }
 .run-parameters input { width: 96px; font-family: var(--font-mono); }
 .source-only-notice { position: absolute; z-index: 5; top: 58px; left: 18px; max-width: min(520px, calc(100% - 36px)); padding: 10px 12px; border: 1px solid var(--color-warning); border-radius: 7px; background: var(--color-surface); color: var(--color-muted); font-size: .8rem; }
+.run-inspection { position: absolute; z-index: 12; right: 18px; top: 58px; width: min(430px, calc(100% - 36px)); max-height: calc(100% - 90px); overflow: auto; padding: 14px; }
+.run-inspection dl { display:grid; grid-template-columns: 96px minmax(0,1fr); gap: 6px 10px; font-size:.8rem; }
+.run-inspection dt { color: var(--color-muted); }.run-inspection dd { margin:0; overflow-wrap:anywhere; }
+.run-inspection details { margin-top: 12px; }.run-inspection pre { max-height: 180px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; }
+.run-inspection ol { padding-left: 20px; }.run-inspection li { margin: 9px 0; }
