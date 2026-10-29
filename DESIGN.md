@@ -90,6 +90,23 @@ every card.
 Execution controls and status labels reuse these components without changing
 the sage/olive palette.
 
+### Inspector comparison: collapsible sections
+
+The collapsible inspector variant gives each selected task a compact identity
+header followed by Parameters, Connections, Result (when execution data exists),
+and Details. Parameters and Connections begin open; Details begins closed.
+Native disclosure sections preserve their mounted bodies, so temporarily
+collapsing Parameters never loses an unapplied value or JSON validation state.
+The panel remembers section openness while moving between task selections.
+Details owns node label, notes, and descriptive task metadata. A destructive
+action appears once at the bottom of the inspector, outside collapsed Details.
+Selecting a wire changes the
+header to identify that connection rather than incorrectly describing the
+inspector as empty. Connection rows name their peer once and expose one
+argument-mapping control; they do not repeat the same mapping as decorative
+text. Section headings use 13px, field labels and controls 12px, helper
+metadata 11px, and the established 8/12/16px spacing rhythm.
+
 ## Accessibility
 
 Aim for WCAG 2.2 AA patterns without claiming an audited conformance level.

@@ -560,36 +560,80 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   pointer-events: none;
 }
 .inspector-content {
-  padding: 7px 18px 24px;
+  padding: 2px 18px 24px;
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
-.task-overview {
-  border: 1px solid #374227;
-  padding: 10px;
-  border-radius: 7px;
-  background: #080a06;
+.inspector-panel-heading { padding-bottom: 14px; }
+.inspector-header-identity {
+  display: grid;
+  gap: 6px;
+  margin-top: 7px;
 }
-.inspector-label {
-  font-size: 10px;
+.inspector-header-identity > code {
+  color: #edf1e7;
+  font: 650 12px ui-monospace, SFMono-Regular, Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+.inspector-connection-route {
   color: #c6d2b4;
-  margin-bottom: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  margin: 7px 0 0;
 }
-.task-overview .task-tags {
-  margin-top: 9px;
+.inspector-identity-tags { margin: 0; }
+.inspector-identity-tags .node-run-status { margin: 0; }
+.inspector-section {
+  border: 0;
+  border-top: 1px solid #374227;
+  margin: 0;
+  padding: 0;
+}
+.inspector-section > summary {
+  align-items: center;
+  color: #edf1e7;
+  cursor: pointer;
+  display: flex;
+  font-size: 13px;
+  font-weight: 650;
+  justify-content: space-between;
+  list-style: none;
+  min-height: 43px;
+  outline: none;
+  user-select: none;
+}
+.inspector-section > summary::-webkit-details-marker { display: none; }
+.inspector-section > summary::after {
+  color: #90a96e;
+  content: '›';
+  font-size: 19px;
+  line-height: 1;
+  transform: rotate(0deg);
+  transition: transform .15s ease;
+}
+.inspector-section[open] > summary::after { transform: rotate(90deg); }
+.inspector-section > summary:focus-visible {
+  box-shadow: 0 0 0 2px #90a96e;
+  border-radius: 5px;
+}
+.inspector-section-content {
+  display: grid;
+  gap: 12px;
+  padding: 0 0 16px;
 }
 .metadata-list {
   margin: 0;
   display: grid;
-  gap: 9px;
+  gap: 12px;
 }
 .metadata-list div {
   display: grid;
-  gap: 3px;
+  gap: 4px;
 }
 .metadata-list dt {
   color: #c6d2b4;
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 620;
 }
 .metadata-list dd {
   margin: 0;
@@ -610,17 +654,28 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
   line-height: 1.45;
 }
-.parameter-editor { display: grid; gap: 8px; }
-.parameter-heading, .parameter-label { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: #c6d2b4; font-size: 11px; font-weight: 620; }
-.parameter-mode { border: 0; background: transparent; color: #90a96e; padding: 0; font-size: 10px; }
-.parameter-fields { display: grid; gap: 10px; }
-.parameter-field { display: grid; gap: 5px; }
-.parameter-field input[type="text"], .parameter-field input[type="number"] { width: 100%; color: #edf1e7; background: #080a06; border: 1px solid #374227; border-radius: 6px; padding: 8px; }
-.parameter-field select { width: 100%; color: #edf1e7; background: #080a06; border: 1px solid #374227; border-radius: 6px; padding: 8px; }
+.inspector .field { gap: 6px; font-size: 12px; }
+.inspector .field input, .inspector .field textarea, .inspector .connection-add-form select,
+.inspector .parameter-field input[type="text"], .inspector .parameter-field input[type="number"],
+.inspector .parameter-field select, .inspector .connection-row input {
+  background: #080a06;
+  border: 1px solid #374227;
+  border-radius: 6px;
+  color: #edf1e7;
+  font-size: 12px;
+  padding: 8px;
+}
+.parameter-editor { display: grid; gap: 12px; }
+.parameter-heading, .parameter-label { display: flex; justify-content: space-between; align-items: center; gap: 8px; color: #c6d2b4; font-size: 12px; font-weight: 620; }
+.parameter-heading { justify-content: flex-end; }
+.parameter-mode { border: 0; background: transparent; color: #90a96e; padding: 0; font-size: 11px; }
+.parameter-fields { display: grid; gap: 12px; }
+.parameter-field { display: grid; gap: 6px; }
 .parameter-json { min-height: 62px !important; }
-.parameter-unset { justify-self: start; border: 0; background: transparent; padding: 0; color: #90a96e; font-size: 10px; }
-.parameter-label small, .parameter-default { color: #c6d2b4; font-weight: 400; }
-.parameter-label em { color: #d8c28a; font-size: 10px; font-style: normal; }
+.parameter-unset { justify-self: start; border: 0; background: transparent; padding: 0; color: #90a96e; font-size: 11px; }
+.parameter-label small, .parameter-default { color: #c6d2b4; font-size: 11px; font-weight: 400; }
+.parameter-label label { align-items: baseline; display: inline-flex; gap: 4px; }
+.parameter-label em { color: #d8c28a; font-size: 11px; font-style: normal; }
 .parameter-checkbox, .parameter-wired { color: #c6d2b4; font-size: 11px; margin: 0; }
 .parameter-wired strong { color: #edf1e7; }
 .parameter-error { color: #e0ab6f; font-size: 11px; margin: 0; }
@@ -630,14 +685,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   line-height: 1.4;
   margin: -9px 0 0;
 }
-.connection-editor,.outgoing {
-  border-top: 1px solid #374227;
-  padding-top: 14px;
+.inspector .field-help { font-size: 11px; margin: 0; }
+.connection-editor,.connection-group {
+  display: grid;
+  gap: 12px;
 }
-.connection-editor h3,.outgoing h3 {
+.connection-group + .connection-group {
+  border-top: 1px solid #374227;
+  padding-top: 16px;
+}
+.connection-editor h3,.connection-group h3 {
   color: #edf1e7;
   font-size: 12px;
-  margin: 0 0 8px;
+  margin: 0;
 }
 .connection-heading {
   display: flex;
@@ -645,7 +705,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  margin-bottom: 8px;
 }
 .connection-heading h3 { margin: 0; }
 .connection-add-toggle {
@@ -656,16 +715,18 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   border: 0;
   padding: 3px 0;
   color: #c6d2b4;
-  font-size: 10px;
+  font-size: 11px;
 }
 .connection-add-toggle:hover { color: #edf1e7; }
 .connection-add-toggle svg { width: 12px; height: 12px; }
-.connection-add-form { margin-top: 10px; }
-.connection-add-form select { margin-bottom: 8px; font-size: 11px; }
+.connection-add-form { display: grid; gap: 8px; }
+.connection-add-form[hidden] { display: none; }
+.connection-add-form select { margin: 0; }
 .outgoing p {
   color: #c6d2b4;
   font-size: 11px;
 }
+.connection-empty { color: #c6d2b4; font-size: 11px; line-height: 1.45; margin: 0; }
 .connection-row {
   border: 1px solid #374227;
   background: #212818;
@@ -679,9 +740,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   border-radius: 5px;
   margin-bottom: 5px;
 }
-.connection-row span:last-child {
-  color: #d99393;
-}
 .delete-button {
   color: #efb1ae;
   background: transparent;
@@ -690,6 +748,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   padding: 8px;
   font-size: 12px;
 }
+.inspector-content > .delete-button { margin-top: 4px; }
+.inspector .run-result { border: 0; display: grid; gap: 8px; margin: 0; padding: 0; }
+.run-result-status { color: #c6d2b4; font-size: 12px; font-weight: 650; margin: 0; text-transform: capitalize; }
+.run-result-status.completed { color: #c2cfaf; }
+.run-result-status.failed { color: #f0a19a; }
+.run-result-status.skipped { color: #bdc5c7; }
 .inspector-empty {
   padding: 42px 24px;
   color: #c6d2b4;
@@ -839,10 +903,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .run-log > code { display: block; color: #c6d2b4; font-size: 11px; }
 
 /* Connection inspection keeps draft.edges as the shared canvas/inspector state. */
-.connection-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(94px, .7fr) auto; align-items: center; gap: 6px; }
+.connection-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
 .connection-row > button:first-child { appearance: none; border: 0; background: transparent; color: inherit; min-width: 0; padding: 0; text-align: left; }
 .connection-row > button:first-child small { display: block; color: #c6d2b4; margin-top: 2px; }
-.connection-row input { width: 100%; min-width: 0; color: #edf1e7; background: #080a06; border: 1px solid #374227; border-radius: 4px; padding: 5px; font-size: 10px; }
+.connection-row input { grid-column: 1 / -1; width: 100%; min-width: 0; }
 .connection-delete { color: #d99393; background: transparent; border: 0; padding: 3px; font-size: 10px; }
 
 .canvas-area:fullscreen {

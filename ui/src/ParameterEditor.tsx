@@ -52,7 +52,7 @@ export function ParameterEditor({ value, onChange, onApply, disabled, hints, wir
   const unresolvedJson = Object.keys(jsonDrafts).length > 0 || Object.keys(jsonErrors).length > 0;
   useEffect(() => { onPendingChange(unresolvedJson); }, [onPendingChange, unresolvedJson]);
   return <section className="parameter-editor" aria-label="Draft parameters">
-    <div className="parameter-heading"><span>Draft parameters</span>{canGuide && <button type="button" className="parameter-mode" disabled={disabled || unresolvedJson} onClick={() => setGuided((current) => !current)}>{guided ? 'Edit JSON' : 'Guided fields'}</button>}</div>
+    {canGuide && <div className="parameter-heading"><button type="button" className="parameter-mode" disabled={disabled || unresolvedJson} onClick={() => setGuided((current) => !current)}>{guided ? 'Edit JSON' : 'Guided fields'}</button></div>}
     {guided && unresolvedJson && <p className="parameter-error" role="alert">Finish or clear the JSON field before switching views or running.</p>}
     {guided && canGuide && parsed.value ? <div className="parameter-fields">
       <p className="field-help">Suggestions from {hints?.origin === 'source' ? 'the local source signature' : 'descriptive metadata'}; runtime remains authoritative.</p>

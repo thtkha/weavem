@@ -27,6 +27,11 @@ async function clear(page: Page) {
   await expect(page.getByTestId('task-node')).toHaveCount(0);
 }
 
+async function openInspectorDetails(page: Page) {
+  const details = page.locator('details.inspector-section').filter({ has: page.locator('summary', { hasText: 'Details' }) });
+  if (await details.getAttribute('open') === null) await details.locator('summary').click();
+}
+
 test('demo renders a real canvas with execution safely unavailable', async ({ page }, info) => {
   const errors: string[] = [];
   const external: string[] = [];
@@ -47,7 +52,7 @@ test('demo renders a real canvas with execution safely unavailable', async ({ pa
   expect(external).toEqual([]);
 });
 
-test('connects an explicit project and displays completed run results', async ({ page }) => {
+test('connects an explicit project and displays completed run results', async ({ page }, info) => {
   const snapshot = JSON.parse(await readFile(metadataFile, 'utf-8'));
   let nodeId = '';
   await page.route('**/api/session', async (route) => route.fulfill({ json: {
@@ -70,7 +75,10 @@ test('connects an explicit project and displays completed run results', async ({
   await expect(page.getByRole('region', { name: 'Run log' })).toContainText('completed');
   await expect(node(page, nodeId)).toContainText('completed');
   await expect(page.getByText('done', { exact: true })).toBeVisible();
+  const result = page.locator('details.inspector-section').filter({ has: page.locator('summary', { hasText: 'Result' }) });
+  await expect(result).toHaveAttribute('open', '');
   await page.getByLabel('Hide run log', { exact: true }).click();
+  await page.screenshot({ path: info.outputPath('inspector-result.png'), fullPage: true });
   await expect(page.getByRole('region', { name: 'Run log' })).toHaveCount(0);
 });
 
@@ -243,6 +251,7 @@ test('an active run locks mutation, supports cancellation, and clears results on
   await page.getByRole('button', { name: 'Cancel run', exact: true }).click();
   await expect.poll(() => cancelled).toBe(true);
   await expect(page.getByRole('region', { name: 'Run log' })).toContainText('cancelled');
+  await openInspectorDetails(page);
   await page.getByLabel('Node label', { exact: true }).fill('after run');
   await expect(page.getByRole('region', { name: 'Run log' })).toHaveCount(0);
 });
@@ -282,6 +291,7 @@ test('search, filters, keyboard add, edits and reload preserve a draft', async (
   await page.getByRole('button', { name: 'Add task documents.read', exact: true }).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('task-node')).toHaveCount(1);
+  await openInspectorDetails(page);
   await page.getByLabel('Node label', { exact: true }).fill('Review documents');
   await page.getByRole('textbox', { name: 'Notes', exact: true }).fill('Keep this author note');
   await page.getByRole('textbox', { name: 'Draft parameters', exact: true }).fill('{"paths":["report.md"],"limit":5}');
@@ -292,6 +302,7 @@ test('search, filters, keyboard add, edits and reload preserve a draft', async (
   await page.reload();
   await expect(page.getByLabel('Draft name', { exact: true })).toHaveValue('Quarterly review');
   await page.getByTestId('task-node').click();
+  await openInspectorDetails(page);
   await expect(page.getByRole('textbox', { name: 'Notes', exact: true })).toHaveValue('Keep this author note');
   await expect(page.getByRole('textbox', { name: 'Draft parameters', exact: true })).toHaveValue(/report\.md/);
 });
@@ -338,6 +349,32 @@ test('inspector connects and deletes; invalid parameters do not change saved dat
   await expect(page.getByTestId('task-node')).toHaveCount(2);
 });
 
+test('collapsible inspector keeps pending parameter edits and exposes details deliberately', async ({ page }, info) => {
+  await page.goto('/');
+  await node(page, 'demo-count').click();
+  const inspector = page.getByRole('complementary', { name: 'Node inspector', exact: true });
+  const sections = inspector.locator('details.inspector-section');
+  await expect(sections.locator('summary')).toHaveText(['Parameters', 'Connections', 'Details']);
+  await expect(sections.nth(0)).toHaveAttribute('open', '');
+  await expect(sections.nth(1)).toHaveAttribute('open', '');
+  await expect(sections.nth(2)).not.toHaveAttribute('open', '');
+
+  const parameters = page.getByRole('region', { name: 'Draft parameters', exact: true });
+  const draft = parameters.getByRole('textbox', { name: 'Draft parameters', exact: true });
+  await draft.fill('[');
+  await expect(parameters.getByRole('button', { name: 'Apply parameters', exact: true })).toBeDisabled();
+  await sections.nth(0).locator('summary').click();
+  await expect(sections.nth(0)).not.toHaveAttribute('open', '');
+  await sections.nth(0).locator('summary').click();
+  await expect(draft).toHaveValue('[');
+  await expect(parameters.getByRole('alert')).toContainText('valid JSON');
+
+  await expect(page.getByLabel('Node label', { exact: true })).toBeHidden();
+  await sections.nth(2).locator('summary').click();
+  await expect(page.getByLabel('Node label', { exact: true })).toHaveValue('Count words');
+  await page.screenshot({ path: info.outputPath('inspector-details.png'), fullPage: true });
+});
+
 test('the inspector reflects existing incoming and outgoing canvas wires', async ({ page }) => {
   await page.goto('/');
   await node(page, 'demo-normalize').click();
@@ -346,6 +383,9 @@ test('the inspector reflects existing incoming and outgoing canvas wires', async
   await expect(page.getByRole('heading', { name: 'Outgoing connections' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Select connection to Count words' })).toBeVisible();
   await page.getByRole('button', { name: 'Select connection to Count words' }).click();
+  await expect(page.getByRole('heading', { name: 'Connection', exact: true })).toBeVisible();
+  await expect(page.getByRole('complementary', { name: 'Node inspector', exact: true })).toContainText('Normalize text → Count words');
+  await expect(page.getByRole('heading', { name: 'Nothing selected', exact: true })).toHaveCount(0);
   await expect(page.getByLabel('Connection target argument', { exact: true })).toBeVisible();
 });
 
@@ -508,6 +548,7 @@ test('library dragging adds a task onto the empty canvas', async ({ page }) => {
 test('export and reopen preserve neutral data, configuration and viewport', async ({ page }) => {
   await page.goto('/');
   await node(page, 'demo-read').click();
+  await openInspectorDetails(page);
   await page.getByRole('textbox', { name: 'Notes', exact: true }).fill('Portable draft');
   await page.locator('.react-flow__controls-fitview').click();
   await expect.poll(async () => (await stored(page))?.nodes[0].notes).toBe('Portable draft');
@@ -597,6 +638,7 @@ test('keyboard deletes nodes/edges but not while editing text', async ({ page })
   await page.keyboard.press('Delete');
   await expect(page.getByTestId('task-node')).toHaveCount(2);
   await node(page, 'demo-read').click();
+  await openInspectorDetails(page);
   await page.getByLabel('Node label', { exact: true }).focus();
   await page.keyboard.press('Backspace');
   await expect(page.getByTestId('task-node')).toHaveCount(2);
@@ -742,7 +784,7 @@ test('replaces the header fit control with canvas fullscreen while retaining Rea
   await expect(page.getByRole('button', { name: 'Enter canvas fullscreen', exact: true })).toBeVisible();
 });
 
-test('pointer resizing honors both panel bounds and retains a 430px canvas after a narrow reload', async ({ page }) => {
+test('pointer resizing honors both panel bounds and retains a 430px canvas after a narrow reload', async ({ page }, info) => {
   await page.goto('/');
   const inspector = page.getByRole('separator', { name: 'Resize inspector' });
   const initial = Number(await inspector.getAttribute('aria-valuenow'));
@@ -762,6 +804,8 @@ test('pointer resizing honors both panel bounds and retains a 430px canvas after
   expect(canvas?.width).toBeGreaterThanOrEqual(430);
   expect(Number(await page.getByRole('separator', { name: 'Resize task library' }).getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(220);
   expect(Number(await page.getByRole('separator', { name: 'Resize inspector' }).getAttribute('aria-valuenow'))).toBeGreaterThanOrEqual(260);
+  await node(page, 'demo-normalize').click();
+  await page.screenshot({ path: info.outputPath('inspector-narrow.png'), fullPage: true });
 });
 
 test('anchors the unified toolbar to default canvas bounds independently of panel resizing', async ({ page }) => {
