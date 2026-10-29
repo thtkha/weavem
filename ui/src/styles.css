@@ -899,3 +899,16 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .run-inspection dt { color: var(--color-muted); }.run-inspection dd { margin:0; overflow-wrap:anywhere; }
 .run-inspection details { margin-top: 12px; }.run-inspection pre { max-height: 180px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; }
 .run-inspection ol { padding-left: 20px; }.run-inspection li { margin: 9px 0; }
+
+/* Shared editor toolbar: actions, inputs, and selects use one control rhythm. */
+.editor-toolbar { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; min-width: 0; padding: 8px 12px; }
+.toolbar-group { display: flex; min-width: 0; align-items: center; gap: 6px; }
+.toolbar-group-flow { flex-wrap: wrap; }.toolbar-group-edit { flex: 0 0 auto; }.toolbar-group-run { justify-self: end; flex: 0 0 auto; }
+.toolbar-flow-name { display: grid; gap: 2px; min-width: 142px; color: var(--color-muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; }
+.toolbar-flow-name input, .editor-toolbar .flow-picker select, .editor-toolbar .run-parameters input { min-height: 32px; border: 1px solid var(--color-line); border-radius: var(--radius-control, 6px); background: var(--color-surface); color: var(--color-ink); padding: 0 9px; }
+.toolbar-flow-name input { min-width: 0; width: 100%; font: 650 .82rem var(--font-sans); text-transform: none; letter-spacing: normal; }
+.editor-toolbar .button { min-height: 32px; padding-block: 6px; }.editor-toolbar .run-parameters { min-width: 104px; }
+.toolbar-overflow { position: relative; flex: 0 0 auto; }.toolbar-overflow > summary { min-height: 32px; display: inline-flex; align-items: center; padding: 0 9px; border: 1px solid var(--color-line); border-radius: var(--radius-control, 6px); background: var(--color-control); color: var(--color-ink); cursor: pointer; font: 650 .76rem var(--font-sans); list-style: none; }.toolbar-overflow > summary::-webkit-details-marker { display: none; }
+.toolbar-overflow-menu { position: absolute; z-index: 20; right: 0; top: calc(100% + 6px); display: grid; gap: 4px; min-width: 172px; padding: 6px; border: 1px solid var(--color-line); border-radius: 7px; background: var(--color-panel); box-shadow: 0 12px 28px #0008; }.toolbar-overflow-menu .button { justify-content: flex-start; }
+@media (min-width: 1520px) { .toolbar-overflow { order: -1; }.toolbar-overflow > summary { display: none; }.toolbar-overflow-menu { position: static; display: flex; min-width: 0; padding: 0; border: 0; background: none; box-shadow: none; }.toolbar-overflow-menu .button { justify-content: center; } }
+@media (max-width: 1260px) { .editor-toolbar { grid-template-columns: 1fr; }.toolbar-group-run { justify-self: start; } }
