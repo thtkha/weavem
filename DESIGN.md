@@ -93,7 +93,7 @@ canvas fullscreen; React Flow retains its bottom-left zoom and fit controls.
 Panel boundaries use only the resizer line. Cancel uses a muted red fill with
 bright off-white text and icons; idle Run retains the sage accent.
 Keyboard connection controls, replacement confirmation, and visible
-import/storage errors remain available. Native CSS owns tokens and component states.
+import/storage errors remain available. Tailwind theme tokens own the shared palette and control styles; native CSS retains canvas and layout integration.
 Outgoing connections contain a collapsible Add connection control. Its choices
 reflect the same graph and eligibility rules as pointer wiring: existing targets
 are marked connected and duplicate wires cannot be added. Wire parameter labels
@@ -121,6 +121,31 @@ inspector as empty. Connection rows name their peer once and expose one
 argument-mapping control; they do not repeat the same mapping as decorative
 text. Section headings use 13px, field labels and controls 12px, helper
 metadata 11px, and the established 8/12/16px spacing rhythm.
+
+### Styling and component boundaries
+
+Preserve the approved appearance while migrating incrementally. `ui/src/theme.css`
+is the semantic palette, typography, spacing, and radius source for both Tailwind
+utilities and remaining CSS. Shared control recipes use Tailwind `@apply`; new
+one-off layout can use explicit utility classes. Do not construct utility names
+from runtime strings or duplicate palette literals in new controls.
+
+Cascade order is theme → base → React Flow → components → utilities. React Flow's
+stylesheet is imported into its own layer from the editor stylesheet. Tailwind
+Preflight is deliberately omitted: existing base styles and native form behavior
+are part of this prototype's approved baseline. Revisiting the reset requires a
+separate visual and accessibility review.
+
+Button and Field components own only repeated presentation/native semantics.
+Callers own state, actions, validation and execution. ParameterEditor owns pending
+JSON state; its field renderer owns only the type-specific control markup. Keep
+these mounted when inspector sections collapse. Do not add generic component
+factories, inheritance or a parallel graph state model to satisfy DRY/SOLID.
+
+Keep custom CSS for the grid/resizers, React Flow ports and edges, fullscreen,
+responsive rules and 6px native scrollbars. Metadata/raw-JSON and browser
+scrollbar fallbacks remain intentional compatibility paths. Tailwind is a build
+dependency, not a runtime service: static output and the local bridge are unchanged.
 
 ## Accessibility
 
@@ -167,8 +192,8 @@ demo tasks cannot run, and imported paths do not grant filesystem access.
 
 ## Implementation constraints
 
-React + TypeScript + Vite + @xyflow/react, native CSS, npm lockfile; no state,
-layout, component, or backend framework. Weavem owns a versioned JSON-safe draft
+React + TypeScript + Vite + @xyflow/react, Tailwind CSS via its Vite plugin, and
+an npm lockfile; no new state, component-library, or backend framework. Weavem owns a versioned JSON-safe draft
 model containing catalog, node instances, edges, configuration, and viewport.
 Renderer state is converted to/from it; no React Flow serialization contract.
 Import only JSON in the browser; no eval, HTML injection, or outbound telemetry.

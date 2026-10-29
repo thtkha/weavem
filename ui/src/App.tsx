@@ -40,6 +40,8 @@ import {
 import type { CatalogTask, DraftNode, EditorDraft, ExecutionGraph, Point, RunNodeStatus, RunState, Viewport } from './types';
 import type { TaskParameterHints } from './types';
 import { ParameterEditor } from './ParameterEditor';
+import { Button } from './components/Button';
+import { Field } from './components/Field';
 
 type NodeData = {
   nodeId: string;
@@ -381,10 +383,10 @@ export default function App() {
     }
   }, []);
 
-  const runControl = (className = 'button primary') => (
+  const runControl = () => (
     running
-      ? <button className={`${className} danger`} onClick={() => void cancelRun()}>{icon('stop')} Cancel run</button>
-      : <button className={className} disabled={executionActive || !sessionMatchesDraft || draft.catalog.kind === 'demo'} onClick={() => void startRun()}>{icon('play')} Run flow</button>
+      ? <Button variant="danger" onClick={() => void cancelRun()}>{icon('stop')} Cancel run</Button>
+      : <Button variant="primary" disabled={executionActive || !sessionMatchesDraft || draft.catalog.kind === 'demo'} onClick={() => void startRun()}>{icon('play')} Run flow</Button>
   );
 
   const requestApi = useCallback(async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
@@ -757,9 +759,9 @@ export default function App() {
           <strong>Weavem node editor is a desktop workbench.</strong>
           <span>Open this draft on a screen at least 1100px wide to edit it.</span>
         </div>
-        <button className="button primary" onClick={exportDraft}>
+        <Button variant="primary" onClick={exportDraft}>
           {icon('download')} Export draft
-        </button>
+        </Button>
       </section>
       <div ref={workbench} className="workbench" style={{ '--library-width': `${layout.libraryWidth}px`, '--inspector-width': `${layout.inspectorWidth}px` } as React.CSSProperties} inert={pending ? true : undefined}>
         <header className="topbar">
@@ -775,22 +777,22 @@ export default function App() {
             </label>
           </div>
           <div className="toolbar-actions" role="group" aria-label="Draft actions">
-            <button className="button" disabled={executionActive} onClick={() => requestAction({ kind: 'new' })}>
+            <Button disabled={executionActive} onClick={() => requestAction({ kind: 'new' })}>
               {icon('plus')} New draft
-            </button>
-            <button className="button" disabled={executionActive} onClick={() => metadataInput.current?.click()}>
+            </Button>
+            <Button disabled={executionActive} onClick={() => metadataInput.current?.click()}>
               {icon('file')} Import metadata
-            </button>
-            <button className="button" disabled={executionActive} onClick={() => draftInput.current?.click()}>
+            </Button>
+            <Button disabled={executionActive} onClick={() => draftInput.current?.click()}>
               {icon('folder')} Open draft
-            </button>
-            <button className="button primary" onClick={exportDraft}>
+            </Button>
+            <Button variant="primary" onClick={exportDraft}>
               {icon('download')} Export draft
-            </button>
-            <button className="button" disabled={executionActive} onClick={() => void connectProject()}>
+            </Button>
+            <Button disabled={executionActive} onClick={() => void connectProject()}>
               {session ? 'Reconnect project' : 'Connect project'}
-            </button>
-            {run && <button className="button" aria-pressed={logOpen} onClick={() => setLogOpen((open) => !open)}>{logOpen ? 'Hide run log' : 'Show run log'}</button>}
+            </Button>
+            {run && <Button aria-pressed={logOpen} onClick={() => setLogOpen((open) => !open)}>{logOpen ? 'Hide run log' : 'Show run log'}</Button>}
             <div className="run-actions">{runControl()}</div>
           </div>
           <div className="save-state" role="status">
@@ -897,7 +899,7 @@ export default function App() {
             </div>
             {canvasFullscreen && <div className="canvas-run-action">
               {runControl()}
-              {run && <button className="button" aria-pressed={logOpen} onClick={() => setLogOpen((open) => !open)}>{logOpen ? 'Hide run log' : 'Show run log'}</button>}
+              {run && <Button aria-pressed={logOpen} onClick={() => setLogOpen((open) => !open)}>{logOpen ? 'Hide run log' : 'Show run log'}</Button>}
               <span className="fullscreen-status" role="status">{error || runError || (run ? `Run ${run.status}` : sessionMessage)}</span>
             </div>}
             <button
@@ -1023,14 +1025,13 @@ export default function App() {
                     </div>;
                   }) : <p className="connection-empty">No {direction} draft connections.</p>}
                   {direction === 'outgoing' && <div id="add-outgoing-connection" className="connection-add-form" hidden={!connectionAdderOpen}>
-                    <label className="field">
-                      <span>Connect to</span>
+                    <Field label="Connect to">
                       <select aria-label="Add connection target" disabled={executionActive} value={targetAvailable ? connectTarget : ''} onChange={(event) => setConnectTarget(event.target.value)}>
                         <option value="" disabled>Select a draft node</option>
                         {connectionTargets.map(({ node, connected, available }) => <option key={node.id} value={node.id} disabled={!available}>{node.label}{connected ? available ? ' (connected · another input available)' : ' (connected)' : ''}</option>)}
                       </select>
-                    </label>
-                    <button className="button secondary wide" onClick={() => { if (targetAvailable) { addConnection({ source: selectedNode.id, target: connectTarget }); setConnectTarget(''); setConnectionAdderOpen(false); } }} disabled={!targetAvailable || executionActive}>Connect</button>
+                    </Field>
+                    <Button variant="secondary" className="wide" onClick={() => { if (targetAvailable) { addConnection({ source: selectedNode.id, target: connectTarget }); setConnectTarget(''); setConnectionAdderOpen(false); } }} disabled={!targetAvailable || executionActive}>Connect</Button>
                   </div>}
                 </section>;
               })}
@@ -1039,14 +1040,12 @@ export default function App() {
               <section className="run-result" aria-label="Run result"><p className={`run-result-status ${selectedRunResult.status}`}>{selectedRunResult.status}</p>{selectedRunResult.preview && <pre>{selectedRunResult.preview}</pre>}{selectedRunResult.error && <p role="alert">{selectedRunResult.error}</p>}</section>
             </InspectorSection>}
             <InspectorSection name="details" title="Details" open={inspectorSections.details} onToggle={toggleInspectorSection}>
-              <label className="field">
-                <span>Node label</span>
+              <Field label="Node label">
                 <input disabled={executionActive} value={selectedNode.label} onChange={(event) => updateSelected({ label: event.target.value })} />
-              </label>
-              <label className="field">
-                <span>Notes</span>
+              </Field>
+              <Field label="Notes">
                 <textarea disabled={executionActive} value={selectedNode.notes} onChange={(event) => updateSelected({ notes: event.target.value })} placeholder="Private drafting note" />
-              </label>
+              </Field>
               <dl className="metadata-list">
                 <div><dt>Inputs</dt><dd>{selectedTask.inputs.length ? selectedTask.inputs.join(', ') : 'None declared'}</dd></div>
                 <div><dt>Output</dt><dd>{selectedTask.output || 'None declared'}</dd></div>
@@ -1058,8 +1057,8 @@ export default function App() {
           </div> : selectedEdge ? <div className="inspector-content connection-inspector-content">
             <section className="connection-editor" aria-label="Connection mapping">
               <p className="field-help">Pass this connection’s whole result to a named argument on the target task.</p>
-              <label className="field"><span>Target argument</span><input aria-label="Connection target argument" disabled={executionActive} value={edgeArgument} placeholder="for example: text" onChange={(event) => setEdgeArgumentText(event.target.value)} /></label>
-              <button className="button secondary wide" disabled={executionActive || !edgeArgument.trim()} onClick={() => { try { updateDraft(setEdgeArgument(draft, selectedEdge.id, edgeArgument), 'Connection argument mapped'); } catch (cause) { setError(String(cause)); } }}>Apply mapping</button>
+              <Field label="Target argument"><input aria-label="Connection target argument" disabled={executionActive} value={edgeArgument} placeholder="for example: text" onChange={(event) => setEdgeArgumentText(event.target.value)} /></Field>
+              <Button variant="secondary" className="wide" disabled={executionActive || !edgeArgument.trim()} onClick={() => { try { updateDraft(setEdgeArgument(draft, selectedEdge.id, edgeArgument), 'Connection argument mapped'); } catch (cause) { setError(String(cause)); } }}>Apply mapping</Button>
             </section>
             <button className="delete-button" disabled={executionActive} onClick={() => deleteEdge(selectedEdge.id)}>Delete connection</button>
           </div> : <div className="inspector-empty"><span className="empty-mark">↖</span><p>Select a task node to view descriptive metadata and edit this draft instance.</p><small>Connections need explicit argument mappings before a run.</small></div>}
@@ -1070,7 +1069,7 @@ export default function App() {
         </footer>
       </div>
 
-      {pending && <div className="modal-backdrop" role="presentation"><section ref={dialog} className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="replace-title"><p className="eyebrow">Replace current draft?</p><h2 id="replace-title">Your current graph will be replaced.</h2><p>Export it first if you need a portable copy. Invalid files never change the current draft.</p><div className="dialog-actions"><button className="button" onClick={() => setPending(null)}>Cancel</button><button className="button primary" onClick={() => executePending(pending)}>Replace draft</button></div></section></div>}
+      {pending && <div className="modal-backdrop" role="presentation"><section ref={dialog} className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="replace-title"><p className="eyebrow">Replace current draft?</p><h2 id="replace-title">Your current graph will be replaced.</h2><p>Export it first if you need a portable copy. Invalid files never change the current draft.</p><div className="dialog-actions"><Button onClick={() => setPending(null)}>Cancel</Button><Button variant="primary" onClick={() => executePending(pending)}>Replace draft</Button></div></section></div>}
     </main>
   );
 }

@@ -389,6 +389,20 @@ test('the inspector reflects existing incoming and outgoing canvas wires', async
   await expect(page.getByLabel('Connection target argument', { exact: true })).toBeVisible();
 });
 
+test('wires retain distinct selected and keyboard-focused styling', async ({ page }) => {
+  await page.goto('/');
+  const edge = page.locator('.react-flow__edge').first();
+  const path = edge.locator('.react-flow__edge-path');
+  await expect(path).toHaveCSS('stroke', 'rgb(144, 169, 110)');
+  await edge.focus();
+  await expect(path).toHaveCSS('stroke', 'rgb(85, 85, 85)');
+  await node(page, 'demo-normalize').click();
+  await expect(path).toHaveCSS('stroke', 'rgb(144, 169, 110)');
+  await page.getByRole('button', { name: 'Select connection from Read documents' }).click();
+  await expect(edge).toHaveClass(/selected/);
+  await expect(path).toHaveCSS('stroke', 'rgb(85, 85, 85)');
+});
+
 test('dragged wires and the outgoing add control stay synchronized', async ({ page }) => {
   await page.goto('/');
   await node(page, 'demo-read').click();
@@ -873,4 +887,15 @@ test('resizers provide the single visible vertical panel boundary', async ({ pag
   expect(await divider.evaluate((element) => getComputedStyle(element, '::after').width)).toBe('1px');
   await divider.hover();
   await expect.poll(() => divider.evaluate((element) => getComputedStyle(element, '::after').backgroundColor)).toBe('rgb(144, 169, 110)');
+});
+
+
+test('shared run control keeps the compact toolbar spacing', async ({ page }) => {
+  await page.setViewportSize({ width: 1200, height: 750 });
+  await page.goto('/');
+  const run = page.getByRole('button', { name: 'Run flow', exact: true });
+  await expect(run).toHaveCSS('padding', '7px 8px');
+  await expect(run).toHaveCSS('min-width', '96px');
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await expect(run).toHaveCSS('padding', '8px 10px');
 });

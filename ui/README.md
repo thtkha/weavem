@@ -154,6 +154,35 @@ untouched. Preserve the failed file/error for diagnosis; do not clear browser
 storage as the first troubleshooting step. Stop and keep an exported copy if
 saving or reopening does not reproduce your graph.
 
+## Frontend contribution conventions
+
+The editor uses React, TypeScript, Vite, React Flow, and Tailwind CSS. It still
+builds static assets in `dist/`; Node is needed to build/develop, not to serve the
+built UI. The local Python bridge remains responsible for task execution. This
+migration does not introduce a hosted execution server.
+
+- Use semantic tokens from `src/theme.css` for shared colors, typography, spacing,
+  and radii. Keep the current olive palette and approved workbench layout.
+- Reuse `Button` for standard actions and `Field` for labelled input groups.
+  Both preserve native props, refs and accessibility attributes; callers retain
+  control over state and callbacks. Specialized icon/link buttons can remain native.
+- Use explicit Tailwind classes for new local layout; use shared `@apply` recipes
+  where a control repeats. Never build class names such as `bg-${color}` dynamically.
+  Named variants must map to complete classes or existing explicit CSS recipes.
+- Keep the documented cascade layers. Do not re-import React Flow CSS outside its
+  layer or add Tailwind Preflight casually: either can change approved form/canvas
+  behavior. The existing base rules deliberately replace Preflight in this stage.
+- Keep canvas/resizer/fullscreen/scrollbar integration CSS where it expresses the
+  behavior more clearly. Remove replaced rules instead of keeping competing copies.
+- Keep presentation components focused. Do not move graph state, network calls or
+  parameter validation into shared controls. Prefer one clear implementation over
+  configurable wrappers with speculative options.
+
+When changing shared controls, verify native disabled/focus/keyboard behavior,
+compact and expanded panel widths, and unsaved parameter edits. Compare screenshots
+against the previous branch before accepting styling changes. The checks below
+cover compilation, pure model/control tests, and real browser interaction.
+
 ## Verify changes
 
 From `ui/`:

@@ -27,6 +27,12 @@ for local tests; separate GitHub jobs verify cross-runner native handoff.
 The [cross-project fixture](../../examples/local-cross-project/README.md) is
 maintainer test material, not the official first-project tutorial.
 
+## Work on the prototype editor
+
+See the [frontend README](../../ui/README.md#frontend-contribution-conventions) for
+its styling/component conventions, local setup, and verification. The [design
+contract](../../DESIGN.md) records the approved UI and migration boundaries.
+
 ## Maintenance procedures
 
 - [Private alpha release runbook](releasing.md).
