@@ -16,7 +16,7 @@
   @supports selector(::-webkit-scrollbar) {
     /* Non-auto standard values override the thumb/track pseudo-elements. */
     * { scrollbar-width: auto; scrollbar-color: auto; }
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track, ::-webkit-scrollbar-corner { background: transparent; }
     ::-webkit-scrollbar-thumb {
       background: #5e704a;

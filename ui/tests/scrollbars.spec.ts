@@ -9,7 +9,7 @@ async function expectCustomScrollbar(element: Locator) {
     const bar = getComputedStyle(el, '::-webkit-scrollbar');
     const thumb = getComputedStyle(el, '::-webkit-scrollbar-thumb');
     return { width: bar.width, height: bar.height, color: thumb.backgroundColor, radius: thumb.borderRadius };
-  })).toEqual({ width: '8px', height: '8px', color: 'rgb(94, 112, 74)', radius: '999px' });
+  })).toEqual({ width: '6px', height: '6px', color: 'rgb(94, 112, 74)', radius: '999px' });
 }
 
 test('panels and JSON fields retain native scrolling with matching slim scrollbars', async ({ page }, info) => {
@@ -35,8 +35,8 @@ test('panels and JSON fields retain native scrolling with matching slim scrollba
   await inspector.evaluate((el) => { el.scrollTop = 0; });
   const box = (await inspector.boundingBox())!;
   const thumbHeight = await inspector.evaluate((el) => el.clientHeight * el.clientHeight / el.scrollHeight);
-  await page.mouse.move(box.x + box.width - 4, box.y + Math.min(thumbHeight / 2, 30));
-  await page.mouse.down(); await page.mouse.move(box.x + box.width - 4, box.y + 180, { steps: 10 }); await page.mouse.up();
+  await page.mouse.move(box.x + box.width - 3, box.y + Math.min(thumbHeight / 2, 30));
+  await page.mouse.down(); await page.mouse.move(box.x + box.width - 3, box.y + 180, { steps: 10 }); await page.mouse.up();
   await expect.poll(() => inspector.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
   await page.screenshot({ path: info.outputPath('custom-scrollbars.png'), fullPage: true });
   await page.getByRole('separator', { name: 'Resize inspector', exact: true }).focus();

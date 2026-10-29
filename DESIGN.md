@@ -66,7 +66,7 @@ Motion is limited to interaction feedback. No remote fonts or image assets.
 
 Native scrolling uses a slim, rounded olive thumb (`#5e704a`) on a transparent
 track, brightening to sage (`#90a96e`) on thumb hover/drag where supported.
-Chromium/Edge/WebKit use 8px scrollbars without arrow buttons; Firefox uses
+Chromium/Edge/WebKit use 6px scrollbars without arrow buttons; Firefox uses
 standard thin scrollbars with browser-defined geometry. Apply consistently to
 panels, logs, text fields, and horizontal overflow; do not replace browser
 scrolling with JavaScript. Forced-colors mode retains system scrollbar styling.
