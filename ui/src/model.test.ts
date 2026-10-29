@@ -6,6 +6,7 @@ import {
   STORAGE_KEY,
   addTask,
   connectNodes,
+  canConnectNodes,
   clearEdgeArgument,
   eligibleTargetArguments,
   reconnectNodes,
@@ -157,6 +158,28 @@ describe('draft model', () => {
     const draft = createDemoDraft();
     expect(draft.edges.filter((edge) => edge.target === 'demo-normalize')).toMatchObject([{ source: 'demo-read' }]);
     expect(draft.edges.filter((edge) => edge.source === 'demo-normalize')).toMatchObject([{ target: 'demo-count' }]);
+  });
+
+  it('shares add eligibility with pointer connections and rejects duplicate unmapped wires', () => {
+    const draft = createDemoDraft();
+    expect(canConnectNodes(draft, 'demo-read', 'demo-read')).toBe(false);
+    expect(canConnectNodes(draft, 'missing', 'demo-count')).toBe(false);
+    expect(canConnectNodes(draft, 'demo-read', 'demo-normalize')).toBe(false);
+    expect(() => connectNodes(draft, 'demo-read', 'demo-normalize')).toThrow(/already exists/);
+    const disconnected = { ...draft, edges: draft.edges.filter((edge) => edge.source !== 'demo-read') };
+    expect(canConnectNodes(disconnected, 'demo-read', 'demo-normalize')).toBe(true);
+    const linked = connectNodes(disconnected, 'demo-read', 'demo-normalize');
+    expect(canConnectNodes(linked, 'demo-read', 'demo-normalize')).toBe(false);
+  });
+
+  it('still permits another wire to a distinct available input on an already connected task', () => {
+    const draft = createDemoDraft();
+    draft.catalog.tasks.find((task) => task.taskId === 'text.normalize')!.inputs = ['documents', 'extra'];
+    draft.edges[0].argument = 'documents';
+    expect(canConnectNodes(draft, 'demo-read', 'demo-normalize')).toBe(true);
+    const linked = connectNodes(draft, 'demo-read', 'demo-normalize');
+    expect(linked.edges.at(-1)?.argument).toBe('extra');
+    expect(canConnectNodes(linked, 'demo-read', 'demo-normalize')).toBe(false);
   });
 
   it('suggests exactly one unused named input and resets a changed reconnect target', () => {

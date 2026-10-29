@@ -275,7 +275,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .search {
   padding: 0 18px;
 }
-.search input,.field input,.field textarea,.connection-editor select {
+.search input,.field input,.field textarea,.connection-add-form select {
   width: 100%;
   color: #edf1e7;
   background: #080a06;
@@ -457,6 +457,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .react-flow__edge-path {
   stroke: #90a96e;
   stroke-width: 1.6;
+  stroke-linecap: round;
 }
 .task-node {
   width: 210px;
@@ -503,17 +504,11 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   color: #c6d2b4;
   font-size: 10px;
 }
-.node-port-labels {
-  display: flex;
-  justify-content: space-between;
-  margin: 11px -7px -4px;
-  color: #c6d2b4;
-  font-size: 9px;
-}
 .node-handle {
-  width: 9px;
-  height: 9px;
-  border: 2px solid #10140c;
+  width: 13px;
+  height: 13px;
+  /* The wire meets this outer edge: a dark border would visually break the join. */
+  border: 0;
   background: #90a96e;
 }
 .node-handle-input {
@@ -630,10 +625,29 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   font-size: 12px;
   margin: 0 0 8px;
 }
-.connection-editor select {
+.connection-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
   margin-bottom: 8px;
-  font-size: 11px;
 }
+.connection-heading h3 { margin: 0; }
+.connection-add-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: transparent;
+  border: 0;
+  padding: 3px 0;
+  color: #c6d2b4;
+  font-size: 10px;
+}
+.connection-add-toggle:hover { color: #edf1e7; }
+.connection-add-toggle svg { width: 12px; height: 12px; }
+.connection-add-form { margin-top: 10px; }
+.connection-add-form select { margin-bottom: 8px; font-size: 11px; }
 .outgoing p {
   color: #c6d2b4;
   font-size: 11px;
@@ -808,8 +822,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .node-run-status.failed { border-color: #d77b74; color: #f0a19a; }
 .node-run-status.skipped { border-color: #879196; color: #bdc5c7; }
 .node-run-status.pending { border-color: #b99763; color: #d9bc88; }
-.react-flow__edge-text { fill: #c6d2b4; font-size: 11px; font-weight: 700; }
-.react-flow__edge-textbg { fill: #212818; fill-opacity: .92; }
 .run-log > code { display: block; color: #c6d2b4; font-size: 11px; }
 
 /* Connection inspection keeps draft.edges as the shared canvas/inspector state. */
@@ -818,7 +830,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .connection-row > button:first-child small { display: block; color: #c6d2b4; margin-top: 2px; }
 .connection-row input { width: 100%; min-width: 0; color: #edf1e7; background: #080a06; border: 1px solid #374227; border-radius: 4px; padding: 5px; font-size: 10px; }
 .connection-delete { color: #d99393; background: transparent; border: 0; padding: 3px; font-size: 10px; }
-.react-flow__handle { width: 13px; height: 13px; }
 
 .canvas-area:fullscreen {
   width: 100vw;

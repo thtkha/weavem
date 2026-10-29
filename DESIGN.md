@@ -79,6 +79,14 @@ Panel boundaries use only the resizer line. Cancel uses a muted red fill with
 bright off-white text and icons; idle Run retains the sage accent.
 Keyboard connection controls, replacement confirmation, and visible
 import/storage errors remain available. Native CSS owns tokens and component states.
+Outgoing connections contain a collapsible Add connection control. Its choices
+reflect the same graph and eligibility rules as pointer wiring: existing targets
+are marked connected and duplicate wires cannot be added. Wire parameter labels
+are hidden on the canvas; mappings remain editable in the inspector and are
+preserved for execution and export.
+Port dots meet the wires continuously with no dark border. Direction is available
+through accessible labels and hover tooltips, not repeated input/output text on
+every card.
 Execution controls and status labels reuse these components without changing
 the sage/olive palette.
 

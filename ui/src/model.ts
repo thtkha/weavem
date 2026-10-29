@@ -396,11 +396,23 @@ function assertConnection(draft: EditorDraft, source: string, target: string): v
   if (!ids.has(source) || !ids.has(target)) fail('Connections must use nodes in this draft');
 }
 
+function newConnectionArgument(draft: EditorDraft, source: string, target: string): string | undefined {
+  assertConnection(draft, source, target);
+  const argument = suggestedArgument(draft, target);
+  // An existing unmapped wire must be mapped, not duplicated by the other UI path.
+  if (draft.edges.some((edge) => edge.source === source && edge.target === target && (edge.argument === undefined || edge.argument === argument || argument === undefined))) fail('That connection already exists');
+  return argument;
+}
+
+/** The add control and pointer wiring use the same connection eligibility rules. */
+export function canConnectNodes(draft: EditorDraft, source: string, target: string): boolean {
+  try { newConnectionArgument(validateDraft(draft), source, target); return true; }
+  catch { return false; }
+}
+
 export function connectNodes(draft: EditorDraft, source: string, target: string): EditorDraft {
   const current = validateDraft(draft);
-  assertConnection(current, source, target);
-  const argument = suggestedArgument(current, target);
-  if (current.edges.some((edge) => edge.source === source && edge.target === target && (edge.argument === argument || argument === undefined))) fail('That connection already exists');
+  const argument = newConnectionArgument(current, source, target);
   return { ...current, edges: [...current.edges, { id: freshId('edge'), source, target, ...(argument === undefined ? {} : { argument }) }] };
 }
 

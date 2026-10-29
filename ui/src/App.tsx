@@ -20,6 +20,7 @@ import {
 import {
   addTask,
   connectNodes,
+  canConnectNodes,
   createDemoDraft,
   createEmptyDraft,
   projectFlowDraft,
@@ -113,6 +114,7 @@ function TaskNode({ data, selected }: NodeProps<Node<NodeData, 'task'>>) {
         type="target"
         position={Position.Left}
         aria-label="Draft input"
+        title="Input: connect an upstream task"
       />
       <div className="node-kicker">{task.provenance} task</div>
       <strong className="node-title">{data.label}</strong>
@@ -122,15 +124,12 @@ function TaskNode({ data, selected }: NodeProps<Node<NodeData, 'task'>>) {
         <span>{task.backend}</span>
       </div>
       {data.runStatus && <span className={`node-run-status ${data.runStatus}`}>{data.runStatus}</span>}
-      <div className="node-port-labels">
-        <span>input</span>
-        <span>output</span>
-      </div>
       <Handle
         className="node-handle node-handle-output"
         type="source"
         position={Position.Right}
         aria-label="Draft output"
+        title="Output: connect a downstream task"
       />
     </article>
   );
@@ -193,6 +192,7 @@ export default function App() {
   const [flow, setFlow] = useState<ReactFlowInstance<Node<NodeData, 'task'>, Edge> | null>(null);
   const [parameterText, setParameterText] = useState('{}');
   const [connectTarget, setConnectTarget] = useState('');
+  const [connectionAdderOpen, setConnectionAdderOpen] = useState(false);
   const [edgeArgument, setEdgeArgumentText] = useState('');
   const [session, setSession] = useState<EditorSession | null>(null);
   const [sessionMessage, setSessionMessage] = useState('Disconnected: run this editor with weavem editor --project PATH');
@@ -235,7 +235,6 @@ export default function App() {
       ...edge,
       type: 'smoothstep',
       markerEnd: { type: MarkerType.ArrowClosed, color: '#90a96e' },
-      label: edge.argument,
       selected: selectedEdgeIds.has(edge.id),
       ariaLabel: `Draft connection from ${edge.source} to ${edge.target}`,
     })),
@@ -244,6 +243,12 @@ export default function App() {
   const selectedNode = draft.nodes.find((node) => node.id === selectedId);
   const selectedTask = taskFor(draft, selectedNode);
   const selectedEdge = draft.edges.find((edge) => selectedEdgeIds.has(edge.id));
+  const connectionTargets = selectedNode ? draft.nodes.filter((node) => node.id !== selectedNode.id).map((node) => ({
+    node,
+    connected: draft.edges.some((edge) => edge.source === selectedNode.id && edge.target === node.id),
+    available: canConnectNodes(draft, selectedNode.id, node.id),
+  })) : [];
+  const targetAvailable = connectionTargets.some(({ node, available }) => node.id === connectTarget && available);
   const running = run?.status === 'running';
   const executionActive = Boolean(running || submitting);
   const sessionMatchesDraft = Boolean(session && draft.catalog.kind === 'project' && draft.catalog.name === session.project);
@@ -254,8 +259,16 @@ export default function App() {
 
   useEffect(() => {
     setParameterText(selectedNode ? JSON.stringify(selectedNode.parameters, null, 2) : '{}');
-    setConnectTarget('');
   }, [selectedId, selectedNode?.parameters]);
+
+  useEffect(() => {
+    setConnectTarget('');
+    setConnectionAdderOpen(false);
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (connectTarget && !targetAvailable) setConnectTarget('');
+  }, [connectTarget, targetAvailable]);
 
   useEffect(() => {
     setEdgeArgumentText(selectedEdge?.argument ?? '');
@@ -938,18 +951,14 @@ export default function App() {
             </label>
             <p id="parameter-help" className="field-help">JSON object saved only in this editor draft.</p>
             <button className="button secondary wide" disabled={executionActive} onClick={applyParameters}>Apply parameters</button>
-            <section className="connection-editor">
-              <h3>Add connection</h3>
-              <select aria-label="Add connection target" disabled={executionActive} value={connectTarget} onChange={(event) => setConnectTarget(event.target.value)}>
-                <option value="" disabled>Select a draft node</option>
-                {draft.nodes.filter((node) => node.id !== selectedNode.id).map((node) => <option key={node.id} value={node.id}>{node.label}</option>)}
-              </select>
-              <button className="button secondary wide" onClick={() => { if (connectTarget) { addConnection({ source: selectedNode.id, target: connectTarget }); setConnectTarget(''); } }} disabled={!connectTarget || executionActive}>Add connection</button>
-            </section>
             {(['incoming', 'outgoing'] as const).map((direction) => {
               const connected = draft.edges.filter((edge) => direction === 'incoming' ? edge.target === selectedNode.id : edge.source === selectedNode.id);
-              return <section className="outgoing" key={direction}>
-                <h3>{direction === 'incoming' ? 'Incoming connections' : 'Outgoing connections'}</h3>
+              const title = direction === 'incoming' ? 'Incoming connections' : 'Outgoing connections';
+              return <section className="outgoing" key={direction} aria-label={title}>
+                <div className="connection-heading">
+                  <h3>{title}</h3>
+                  {direction === 'outgoing' && <button type="button" className="connection-add-toggle" aria-expanded={connectionAdderOpen} aria-controls="add-outgoing-connection" disabled={executionActive} onClick={() => setConnectionAdderOpen((open) => !open)}>{icon('plus')} Add connection</button>}
+                </div>
                 {connected.length ? connected.map((edge) => {
                   const otherId = direction === 'incoming' ? edge.source : edge.target;
                   const otherLabel = draft.nodes.find((node) => node.id === otherId)?.label ?? otherId;
@@ -968,6 +977,16 @@ export default function App() {
                     <button type="button" disabled={executionActive} className="connection-delete" aria-label={`Delete connection to ${otherLabel}`} onClick={() => deleteEdge(edge.id)}>Delete</button>
                   </div>;
                 }) : <p>No {direction} draft connections.</p>}
+                {direction === 'outgoing' && <div id="add-outgoing-connection" className="connection-add-form" hidden={!connectionAdderOpen}>
+                  <label className="field">
+                    <span>Connect to</span>
+                    <select aria-label="Add connection target" disabled={executionActive} value={targetAvailable ? connectTarget : ''} onChange={(event) => setConnectTarget(event.target.value)}>
+                      <option value="" disabled>Select a draft node</option>
+                      {connectionTargets.map(({ node, connected, available }) => <option key={node.id} value={node.id} disabled={!available}>{node.label}{connected ? available ? ' (connected · another input available)' : ' (connected)' : ''}</option>)}
+                    </select>
+                  </label>
+                  <button className="button secondary wide" onClick={() => { if (targetAvailable) { addConnection({ source: selectedNode.id, target: connectTarget }); setConnectTarget(''); setConnectionAdderOpen(false); } }} disabled={!targetAvailable || executionActive}>Connect</button>
+                </div>}
               </section>;
             })}
             {run?.nodes[selectedNode.id] && <section className="run-result"><h3>Run result</h3><p><strong>{run.nodes[selectedNode.id].status}</strong></p>{run.nodes[selectedNode.id].preview && <pre>{run.nodes[selectedNode.id].preview}</pre>}{run.nodes[selectedNode.id].error && <p role="alert">{run.nodes[selectedNode.id].error}</p>}</section>}
