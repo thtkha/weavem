@@ -36,6 +36,8 @@ real tasks requires the project's supported Python environment.
 
 One workbench: top application/draft toolbar; left searchable task library;
 central graph canvas; right node inspector; bottom lightweight state/graph summary.
+Library and inspector widths are independently resizable and remembered locally as a
+versioned layout preference; the canvas always retains a minimum usable width.
 New/import/open/export and project-connection actions are explicit. Run/cancel,
 per-node statuses, result previews, and logs expose actual execution. Owner-facing prototype records stay
 separate from the released application-user manual.
@@ -45,7 +47,7 @@ separate from the released application-user manual.
 One task vocabulary, another authoring surface. React Flow owns presentation,
 never Weavem execution. Node instances reference task records; duplicate instances
 are allowed. Each executable wire names its destination argument and passes the
-whole upstream result; task descriptions are not machine-validated type schemas.
+whole upstream result; task descriptions are not machine-validated type schemas. The canvas and inspector read the same draft edge list: both incoming and outgoing wires remain inspectable, mappable, selectable, and deletable. Reconnecting a wire on an empty canvas disconnects it; invalid, cancelled, and outside-canvas releases preserve it.
 Published provenance is metadata, not a claim of verified bytes or trusted code.
 Preserve current work when input is invalid; confirm before replacing a draft.
 
@@ -64,8 +66,27 @@ Motion is limited to interaction feedback. No remote fonts or image assets.
 
 Task library/search/provenance filters, metadata-driven task node with generic
 handles, graph controls/minimap, draft toolbar/status, node inspector, JSON
-parameter editor, keyboard connection controls, replacement confirmation, and
-visible import/storage errors. Native CSS owns tokens and component states.
+parameter editor, incoming/outgoing connection lists with mapping controls,
+reconnectable wire endpoints, and draggable/keyboard panel separators. Run/cancel sits at the
+right of the shared draft-action toolbar with play/stop icons and no divider line.
+The toolbar aligns with the canvas at the default panel widths and stays anchored
+when either panel is resized; resizing the window still adapts its width.
+Task-library cards use a pointer (hand) cursor to signal interaction; their existing
+drag and Add task behaviors are unchanged.
+The canvas header controls only
+canvas fullscreen; React Flow retains its bottom-left zoom and fit controls.
+Panel boundaries use only the resizer line. Cancel uses a muted red fill with
+bright off-white text and icons; idle Run retains the sage accent.
+Keyboard connection controls, replacement confirmation, and visible
+import/storage errors remain available. Native CSS owns tokens and component states.
+Outgoing connections contain a collapsible Add connection control. Its choices
+reflect the same graph and eligibility rules as pointer wiring: existing targets
+are marked connected and duplicate wires cannot be added. Wire parameter labels
+are hidden on the canvas; mappings remain editable in the inspector and are
+preserved for execution and export.
+Port dots meet the wires continuously with no dark border. Direction is available
+through accessible labels and hover tooltips, not repeated input/output text on
+every card.
 Execution controls and status labels reuse these components without changing
 the sage/olive palette.
 
@@ -79,7 +100,9 @@ Respect reduced-motion preferences; never communicate provenance by color alone.
 
 ## Responsive behavior
 
-Full three-panel editing at desktop widths of 1100px and above. Below that,
+Full three-panel editing at desktop widths of 1100px and above. Panel widths clamp
+to 220–480px (library) and 260–560px (inspector), preserving a 430px canvas.
+Below that,
 show a clear desktop-workbench notice instead of compressed, unusable controls;
 leave an export/recovery action available. No touch-first editor promise.
 
@@ -92,6 +115,16 @@ this browser; failures remain visible and export remains available. Corrupt
 stored content is not silently overwritten by a demo fallback. Connection failures
 do not discard the draft. Running locks graph changes; results belong to the
 submitted snapshot. Failed tasks stop execution, and remaining nodes are skipped.
+
+## Draft parameters
+
+Use guided fields when the connected project supplies static source-signature or
+metadata hints. Show defaults without silently applying them; keep JSON editing
+available and preserve unknown keys. Mapped inputs name their upstream node
+instead of offering an editable value. Canvas connections and inspector fields
+share the same draft edges. Invalid or unapplied edits must not silently run.
+Hints are suggestions, not runtime type enforcement; inspecting source never
+imports or executes task code.
 
 ## Content voice
 
