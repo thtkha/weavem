@@ -62,6 +62,21 @@ Use an 8px spacing rhythm, 6–10px corner radii, thin borders, and quiet shadow
 Task cards have clear hierarchy and one meaningful accent; SVG icons are inline.
 Motion is limited to interaction feedback. No remote fonts or image assets.
 
+### Scrollbars
+
+Native scrolling uses a slim, rounded olive thumb (`#5e704a`) on a transparent
+track, brightening to sage (`#90a96e`) on thumb hover/drag where supported.
+Chromium/Edge/WebKit use 8px scrollbars without arrow buttons; Firefox uses
+standard thin scrollbars with browser-defined geometry. Apply consistently to
+panels, logs, text fields, and horizontal overflow; do not replace browser
+scrolling with JavaScript. Forced-colors mode retains system scrollbar styling.
+
+Implementation is limited to CSS plus regression checks for appearance, native
+wheel/keyboard/thumb scrolling, narrow panels, and forced-colors fallback.
+[Browser styling precedence](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Selectors/::-webkit-scrollbar)
+requires resetting standard scrollbar properties to `auto` when using the
+pseudo-element styling path. Platform overlay/autohide preferences still apply.
+
 ## Components
 
 Task library/search/provenance filters, metadata-driven task node with generic
