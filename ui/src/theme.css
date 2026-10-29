@@ -1,0 +1,39 @@
+/* One palette for utilities and the remaining canvas/layout CSS. */
+@theme static {
+  --color-canvas: #0c0f09;
+  --color-panel: #080a06;
+  --color-surface: #212818;
+  --color-control: #262e1b;
+  --color-control-hover: #323d24;
+  --color-line: #374227;
+  --color-line-hover: #485733;
+  --color-ink: #edf1e7;
+  --color-muted: #c6d2b4;
+  --color-accent: #90a96e;
+  --color-accent-hover: #aabd90;
+  --color-on-accent: #10140c;
+  --color-soft: #c2cfaf;
+  --color-secondary-line: #596b3f;
+  --color-local-line: #728a52;
+  --color-released: #b4c1ff;
+  --color-released-line: #566494;
+  --color-danger: #754645;
+  --color-danger-hover: #875252;
+  --color-danger-ink: #efb1ae;
+  --color-warning: #d8c28a;
+  --color-error: #e0ab6f;
+  --color-scrollbar: #5e704a;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --text-caption: 10px;
+  --text-helper: 11px;
+  --text-label: 12px;
+  --text-section: 13px;
+  --text-title: 15px;
+  --font-weight-field: 620;
+  --font-weight-control: 650;
+  --spacing: 4px;
+  --radius-control: 7px;
+  --radius-field: 6px;
+  --radius-card: 8px;
+}
