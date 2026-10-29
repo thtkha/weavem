@@ -53,6 +53,7 @@ function ParameterField({
   onJsonUnset,
 }: ParameterFieldProps) {
   let control: ReactNode;
+  const choices = field.choices;
 
   if (wiredFrom) {
     control = <p className="parameter-wired">Connected from <strong>{wiredFrom}</strong></p>;
@@ -89,7 +90,18 @@ function ParameterField({
         </>;
         break;
       case 'string':
-        control = <>
+        control = choices?.every((choice) => typeof choice === 'string') ? <>
+          <select id={`parameter-${field.name}`} disabled={disabled}
+            value={!hasValue ? '__default__' : typeof current === 'string' && choices.includes(current) ? current : '__custom__'}
+            onChange={(event) => {
+              if (event.target.value === '__default__') onRemove(field.name);
+              else if (event.target.value !== '__custom__') onUpdate(field.name, event.target.value);
+            }}>
+            <option value="__default__">{unsetLabel(field)}</option>
+            {choices.map((choice) => <option key={choice} value={choice}>{choice}</option>)}
+            {hasValue && (typeof current !== 'string' || !choices.includes(current)) && <option value="__custom__">Use JSON editor</option>}
+          </select>
+        </> : <>
           <input
             id={`parameter-${field.name}`}
             type="text"
@@ -178,6 +190,7 @@ export function ParameterEditor({ value, onChange, onApply, disabled, hints, wir
     {guided && unresolvedJson && <p className="parameter-error" role="alert">Finish or clear the JSON field before switching views or running.</p>}
     {guided && canGuide && parsed.value ? <div className="parameter-fields">
       <p className="field-help">Suggestions from {hints?.origin === 'source' ? 'the local source signature' : 'descriptive metadata'}; runtime remains authoritative.</p>
+      {hints?.description && <p className="field-help">{hints.description}</p>}
       {fields.map((field) => {
         const current = parsed.value[field.name];
         const hasValue = Object.prototype.hasOwnProperty.call(parsed.value, field.name);

@@ -163,6 +163,24 @@ def _literal(node: ast.AST) -> Any:
     return value
 
 
+def _source_reference(node: ast.expr, variables: dict[str, str]) -> tuple[str, list[str | int]] | None:
+    """Return an earlier node and strict literal subscript path, if present."""
+    path: list[str | int] = []
+    current: ast.expr = node
+    while isinstance(current, ast.Subscript):
+        try:
+            part = ast.literal_eval(current.slice)
+        except (ValueError, TypeError, MemoryError, RecursionError):
+            return None
+        if not isinstance(part, str) and (type(part) is not int or part < 0):
+            return None
+        path.append(part)
+        current = current.value
+    if isinstance(current, ast.Name) and current.id in variables:
+        return variables[current.id], list(reversed(path))
+    return None
+
+
 def _parse_source(raw: bytes, spec: FlowSpec, catalog: dict[str, Any]) -> dict[str, Any]:
     if len(raw) > _MAX_SOURCE:
         raise FlowPersistenceError("flow source is too large")
@@ -214,7 +232,7 @@ def _parse_source(raw: bytes, spec: FlowSpec, catalog: dict[str, Any]) -> dict[s
         raise FlowPersistenceError("parameterized flows are not visually editable yet")
     comments, edge_comments = _comments(raw)
     nodes: list[dict[str, Any]] = []
-    edges: list[dict[str, str]] = []
+    edges: list[dict[str, Any]] = []
     variable_ids: dict[str, str] = {}
     returns: ast.Return | None = None
     for position, statement in enumerate(function.body):
@@ -237,9 +255,14 @@ def _parse_source(raw: bytes, spec: FlowSpec, catalog: dict[str, Any]) -> dict[s
             if item.arg is None or item.arg in arguments_seen:
                 raise FlowPersistenceError("expanded or duplicate keyword arguments are not visually editable")
             arguments_seen.add(item.arg)
-            if isinstance(item.value, ast.Name) and item.value.id in variable_ids:
-                edges.append({"id": edge_comments.get(statement.lineno, {}).get(item.arg, f"edge-{len(edges) + 1}"),
-                              "source": variable_ids[item.value.id], "target": node_id, "argument": item.arg})
+            parsed_source = _source_reference(item.value, variable_ids)
+            if parsed_source is not None:
+                source, source_path = parsed_source
+                edge = {"id": edge_comments.get(statement.lineno, {}).get(item.arg, f"edge-{len(edges) + 1}"),
+                        "source": source, "target": node_id, "argument": item.arg}
+                if source_path:
+                    edge["sourcePath"] = source_path
+                edges.append(edge)
             else:
                 parameters[item.arg] = _literal(item.value)
         variable_ids[variable] = node_id
@@ -257,7 +280,7 @@ def _parse_source(raw: bytes, spec: FlowSpec, catalog: dict[str, Any]) -> dict[s
     terminals = [node_id for node_id, count in outgoing.items() if count == 0]
     if returned != set(terminals) or [key.value for key in returns.value.keys] != terminals:
         raise FlowPersistenceError("return must contain terminal node results in authored task order")
-    graph = {"kind": "weavem.graph", "schema": 1, "name": spec.source[:-3], "nodes": nodes, "edges": edges}
+    graph = {"kind": "weavem.graph", "schema": 2 if any(edge.get("sourcePath") for edge in edges) else 1, "name": spec.source[:-3], "nodes": nodes, "edges": edges}
     try:
         validate_graph(graph, resolve_project_root(catalog))
     except EditorGraphError as exc:
@@ -287,10 +310,14 @@ def _generated_source(name: str, graph: dict[str, Any], aliases: dict[str, str],
     for node_id in order:
         node = nodes_by_id[node_id]
         arguments = dict(node.get("parameters", {}))
-        for edge in incoming[node_id]: arguments[edge["argument"]] = ("__result__", edge["source"])
+        for edge in incoming[node_id]: arguments[edge["argument"]] = ("__result__", edge["source"], edge.get("sourcePath", []))
         rendered = []
         for argument, value in arguments.items():
-            rendered.append(f"{argument}={variables[value[1]]}" if isinstance(value, tuple) else f"{argument}={value!r}")
+            if isinstance(value, tuple):
+                expression = variables[value[1]] + "".join(f"[{part!r}]" for part in value[2])
+                rendered.append(f"{argument}={expression}")
+            else:
+                rendered.append(f"{argument}={value!r}")
         source_edges = {edge["argument"]: edge["id"] for edge in incoming[node_id]}
         if source_edges:
             lines.append(f"    # weavem-edges: {json.dumps(source_edges, sort_keys=True, ensure_ascii=False)}")
@@ -504,7 +531,8 @@ def _open_flow_locked(name: str, project, *, _catalog=None) -> dict[str, Any]:
               "sourceSha256": hashlib.sha256(source).hexdigest(),
               "metadataSha256": hashlib.sha256(metadata).hexdigest(),
               "layout": layout, "layoutError": layout_error,
-              "source": source.decode("utf-8", errors="replace")}
+              "source": source.decode("utf-8", errors="replace"),
+              "metadata": metadata.decode("utf-8", errors="replace")}
     try:
         if spec.source != f"{name}.py" or spec.export != name:
             raise FlowPersistenceError("source/export differs from the flow filename; visual rewriting is unavailable")

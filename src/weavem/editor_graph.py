@@ -42,6 +42,7 @@ class GraphEdge:
     source: str
     target: str
     argument: str
+    source_path: tuple[str | int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -156,8 +157,9 @@ def _mapping(value: Any, field: str) -> dict[str, Any]:
 def validate_graph(spec: Any, project: Project | str | Path) -> GraphPlan:
     """Validate graph structure and current task pins without importing payloads."""
     root = _mapping(spec, "graph")
-    if root.get("kind") != "weavem.graph" or type(root.get("schema")) is not int or root["schema"] != 1:
-        raise _error("requires kind 'weavem.graph' and schema 1")
+    if root.get("kind") != "weavem.graph" or type(root.get("schema")) is not int or root["schema"] not in {1, 2}:
+        raise _error("requires kind 'weavem.graph' and schema 1 or 2")
+    schema = root["schema"]
     name = root.get("name")
     if not isinstance(name, str) or not name.strip() or len(name) > 200:
         raise _error("name must be a non-empty string no longer than 200 characters")
@@ -208,6 +210,13 @@ def validate_graph(spec: Any, project: Project | str | Path) -> GraphPlan:
         if source == target:
             raise _error(f"edges[{index}] cannot connect a node to itself")
         argument = _argument(item.get("argument"), f"edges[{index}].argument")
+        raw_path = item.get("sourcePath", [])
+        if not isinstance(raw_path, list) or any(
+                not isinstance(part, str) and (type(part) is not int or part < 0) for part in raw_path):
+            raise _error(f"edges[{index}].sourcePath must be an array of string keys or non-negative indexes")
+        if raw_path and schema < 2:
+            raise _error(f"edges[{index}].sourcePath requires schema 2")
+        source_path = tuple(raw_path)
         if argument in incoming[target]:
             raise _error(f"multiple edges assign {argument!r} on node {target}")
         target_node = next(node for node in nodes if node.id == target)
@@ -217,7 +226,7 @@ def validate_graph(spec: Any, project: Project | str | Path) -> GraphPlan:
         incoming[target].add(argument)
         outgoing[source].append(target)
         indegree[target] += 1
-        edges.append(GraphEdge(edge_id, source, target, argument))
+        edges.append(GraphEdge(edge_id, source, target, argument, source_path))
 
     # Stable Kahn sort keeps execution deterministic when multiple nodes are ready.
     ready = deque(node.id for node in nodes if indegree[node.id] == 0)
@@ -295,7 +304,10 @@ def execute_graph(spec: Any, project: Project | str | Path,
                 node = by_id[node_id]
                 arguments = dict(node.parameters)
                 for edge in inputs[node_id]:
-                    arguments[edge.argument] = results[edge.source]
+                    value = results[edge.source]
+                    for part in edge.source_path:
+                        value = value[part]
+                    arguments[edge.argument] = value
                 running = node_id
                 emit({"type": "node", "nodeId": node_id, "status": "running"})
                 try:
