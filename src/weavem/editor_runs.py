@@ -11,10 +11,15 @@ import json
 import os
 from pathlib import Path
 import tempfile
+from datetime import UTC, datetime
 from typing import Any
 
-_MAX_FILE = 256 * 1024
-_MAX_TEXT = 64 * 1024
+# A definition may include a 1 MiB source module and a request can be up to 5 MiB.
+# Preserve it exactly or reject it; inspection must never misrepresent a run.
+_MAX_FILE = 8 * 1024 * 1024
+_MAX_STATE = 256 * 1024
+_MAX_LOG = 64 * 1024
+_MAX_DEPTH = 64
 _SNAPSHOT = "inspection.json"
 _STATE = "inspection-state.json"
 
@@ -23,8 +28,10 @@ class RunInspectionError(ValueError):
     """A persisted editor-run inspection record is unsafe or malformed."""
 
 
-def _json(value: Any) -> Any:
-    """Return JSON data with recursively bounded strings, or reject it."""
+def _json(value: Any, *, depth: int = 0) -> Any:
+    """Validate JSON without truncating or coercing captured execution evidence."""
+    if depth > _MAX_DEPTH:
+        raise RunInspectionError("run inspection value is nested too deeply")
     if value is None or isinstance(value, (bool, int)):
         return value
     if isinstance(value, float):
@@ -32,11 +39,13 @@ def _json(value: Any) -> Any:
             raise RunInspectionError("run inspection does not support non-finite numbers")
         return value
     if isinstance(value, str):
-        return value[:_MAX_TEXT]
+        return value
     if isinstance(value, list):
-        return [_json(item) for item in value[:200]]
+        return [_json(item, depth=depth + 1) for item in value]
     if isinstance(value, dict):
-        return {str(key)[:256]: _json(item) for key, item in list(value.items())[:200]}
+        if not all(isinstance(key, str) for key in value):
+            raise RunInspectionError("run inspection object keys must be strings")
+        return {key: _json(item, depth=depth + 1) for key, item in value.items()}
     raise RunInspectionError("run inspection only stores JSON values")
 
 
@@ -66,7 +75,10 @@ def capture_snapshot(opened: dict[str, Any], catalog: dict[str, Any], params: di
         "schema": 1,
         "flowName": name,
         "revision": revision,
-        "source": source[:_MAX_TEXT] if isinstance(source, str) else None,
+        "source": source,
+        # ``open_flow`` may later expose raw metadata. Preserve it as evidence
+        # when supplied; do not reconstruct or truncate it here.
+        "metadata": opened.get("metadata") if isinstance(opened.get("metadata"), str) else opened.get("metadataText") if isinstance(opened.get("metadataText"), str) else None,
         "sourceSha256": opened.get("sourceSha256") if isinstance(opened.get("sourceSha256"), str) else _sha(source),
         "metadataSha256": opened.get("metadataSha256") if isinstance(opened.get("metadataSha256"), str) else None,
         "graph": _json(graph) if graph is not None else None,
@@ -88,10 +100,10 @@ def _record_path(directory: str | Path, name: str) -> Path:
     return path
 
 
-def _write(directory: str | Path, name: str, value: dict[str, Any]) -> None:
+def _write(directory: str | Path, name: str, value: dict[str, Any], *, maximum: int = _MAX_FILE) -> None:
     path = _record_path(directory, name)
     payload = json.dumps(_json(value), sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-    if len(payload) > _MAX_FILE:
+    if len(payload) > maximum:
         raise RunInspectionError("editor inspection record is too large")
     descriptor, temporary_name = tempfile.mkstemp(prefix=f".{name}.", dir=path.parent)
     temporary = Path(temporary_name)
@@ -111,17 +123,30 @@ def write_snapshot(directory: str | Path, snapshot: dict[str, Any]) -> None:
 
 
 def write_run_state(directory: str | Path, state: dict[str, Any]) -> None:
-    """Atomically persist a bounded terminal or active run state."""
+    """Atomically persist a bounded terminal or active run state.
+
+    Logs alone may be truncated, explicitly and locally, because they are not
+    the immutable definition/result evidence shown by last-run inspection.
+    """
     if not isinstance(state.get("status"), str):
         raise RunInspectionError("run inspection state requires status")
-    _write(directory, _STATE, state)
+    stored = dict(state)
+    logs = stored.get("logs")
+    if isinstance(logs, str) and len(logs.encode("utf-8")) > _MAX_LOG:
+        suffix = "\n… log truncated in last-run record"
+        stored["logs"] = logs.encode("utf-8")[:_MAX_LOG - len(suffix.encode("utf-8"))].decode("utf-8", "ignore") + suffix
+        stored["logsTruncated"] = True
+    if stored["status"] in {"completed", "failed", "cancelled"} and not isinstance(stored.get("finishedAt"), str):
+        stored["finishedAt"] = datetime.now(UTC).isoformat()
+    _write(directory, _STATE, stored, maximum=_MAX_STATE)
 
 
 def _read(directory: str | Path, name: str) -> dict[str, Any] | None:
     path = _record_path(directory, name)
     if not path.exists():
         return None
-    if not path.is_file() or path.stat().st_size > _MAX_FILE:
+    maximum = _MAX_STATE if name == _STATE else _MAX_FILE
+    if not path.is_file() or path.stat().st_size > maximum:
         raise RunInspectionError("editor inspection record is invalid")
     try:
         value = json.loads(path.read_bytes())

@@ -26,11 +26,20 @@ class EditorRunTests(unittest.TestCase):
             self.assertIsNone(latest_run(root,"demo"))
             outside=root/"outside"; outside.mkdir(); os.symlink(outside, root/"editor-runs"/"link")
             self.assertIsNone(latest_run(root,"demo"))
-    def test_rejects_non_json_and_oversized_text(self):
+    def test_preserves_large_definition_and_more_than_200_nodes(self):
+        with workspace() as raw:
+            directory=Path(raw)/"run"; directory.mkdir()
+            snap=self.snapshot(); snap["source"]="x"*(65*1024)
+            snap["graph"]={"nodes":[{"id":str(index)} for index in range(201)]}
+            write_snapshot(directory, snap)
+            loaded=read_snapshot(directory)
+            self.assertEqual(snap["source"], loaded["source"])
+            self.assertEqual(201, len(loaded["graph"]["nodes"]))
+    def test_rejects_non_json_or_oversize_before_write(self):
         with workspace() as raw:
             directory=Path(raw)/"run"; directory.mkdir()
             with self.assertRaises(RunInspectionError): write_run_state(directory,{"status":"ok","bad":object()})
-            snap=self.snapshot(); snap["source"]="x"*(65*1024)
-            write_snapshot(directory, snap)
-            self.assertEqual(64 * 1024, len(read_snapshot(directory)["source"]))
+            snap=self.snapshot(); snap["source"]="x"*(9*1024*1024)
+            with self.assertRaises(RunInspectionError): write_snapshot(directory,snap)
+            self.assertFalse((directory/"inspection.json").exists())
 if __name__ == '__main__': unittest.main()
