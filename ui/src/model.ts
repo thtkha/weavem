@@ -17,7 +17,7 @@ import { demoCatalog, demoEdges, demoNodes } from './demo';
 export const STORAGE_KEY = 'weavem.node-editor.draft.v1';
 
 const DRAFT_KIND = 'weavem.editor-draft';
-const DRAFT_SCHEMA = 2;
+const DRAFT_SCHEMA = 3;
 let idCounter = 0;
 
 type UnknownRecord = Record<string, unknown>;
@@ -238,7 +238,7 @@ function validateCatalog(value: unknown, name: string): Catalog {
 function validateDraft(value: unknown): EditorDraft {
   const draft = record(value, 'Draft');
   if (draft.kind !== DRAFT_KIND) fail(`Draft.kind must be ${DRAFT_KIND}`);
-  if (draft.schema !== 1 && draft.schema !== DRAFT_SCHEMA) fail('Draft.schema must be 1 or 2');
+  if (draft.schema !== 1 && draft.schema !== 2 && draft.schema !== DRAFT_SCHEMA) fail('Draft.schema must be 1, 2 or 3');
   const catalog = validateCatalog(draft.catalog, 'Draft.catalog');
   if (!Array.isArray(draft.nodes)) fail('Draft.nodes must be an array');
   if (!Array.isArray(draft.edges)) fail('Draft.edges must be an array');
@@ -272,10 +272,12 @@ function validateDraft(value: unknown): EditorDraft {
     if (source === target) fail(`Draft.edges[${index}] cannot link a node to itself`);
     if (!nodeIds.has(source) || !nodeIds.has(target)) fail(`Draft.edges[${index}] references an unknown node`);
     const argument = edge.argument === undefined ? undefined : string(edge.argument, `Draft.edges[${index}].argument`);
+    const sourcePath = edge.sourcePath;
+    if (sourcePath !== undefined && (!Array.isArray(sourcePath) || sourcePath.length > 32 || sourcePath.some((part) => typeof part !== 'string' && !(typeof part === 'number' && Number.isSafeInteger(part) && part >= 0)))) fail('Connection sourcePath must contain string keys or non-negative integer indexes');
     const link = JSON.stringify([source, target, argument ?? '']);
     if (links.has(link)) fail(`Draft.edges contains duplicate connection: ${source} to ${target}`);
     links.add(link);
-    return { id, source, target, ...(argument === undefined ? {} : { argument }) };
+    return { id, source, target, ...(argument === undefined ? {} : { argument }), ...(sourcePath === undefined ? {} : { sourcePath: sourcePath as Array<string | number> }) };
   });
   return {
     kind: DRAFT_KIND,
@@ -494,9 +496,9 @@ export function executionGraph(draft: EditorDraft, bindings: Record<string, stri
   };
   for (const id of ids) visit(id);
   return {
-    kind: 'weavem.graph', schema: 1, name: current.name || 'Untitled flow',
+    kind: 'weavem.graph', schema: current.edges.some((edge) => edge.sourcePath?.length) ? 2 : 1, name: current.name || 'Untitled flow',
     nodes: current.nodes.map(({ id, taskKey, parameters }) => ({ id, taskKey, parameters: clone(parameters) })),
-    edges: current.edges.map(({ id, source, target, argument }) => ({ id, source, target, argument: argument! })),
+    edges: current.edges.map(({ id, source, target, argument, sourcePath }) => ({ id, source, target, argument: argument!, ...(sourcePath?.length ? { sourcePath } : {}) })),
   };
 }
 
@@ -533,4 +535,9 @@ export function saveStoredDraft(storage: Pick<Storage, 'setItem'>, draft: Editor
   } catch (error) {
     return { error: `Could not save draft: ${error instanceof Error ? error.message : 'unknown storage error'}` };
   }
+}
+
+/** Field selection remains a normal Python key/index path, not eval. */
+export function setEdgeSourcePath(draft: EditorDraft, id: string, sourcePath: Array<string | number>): EditorDraft {
+  return validateDraft({ ...draft, edges: draft.edges.map((edge) => edge.id === id ? { ...edge, sourcePath } : edge) });
 }

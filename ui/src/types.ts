@@ -38,11 +38,12 @@ export interface DraftEdge {
   target: string;
   /** The target callable argument receiving the source result. Undefined is a legacy draft wire. */
   argument?: string;
+  sourcePath?: Array<string | number>;
 }
 
 export interface EditorDraft {
   kind: 'weavem.editor-draft';
-  schema: 2;
+  schema: 2 | 3;
   name: string;
   catalog: Catalog;
   nodes: DraftNode[];
@@ -72,10 +73,10 @@ export interface ProjectFlow extends FlowSummary {
 
 export interface ExecutionGraph {
   kind: 'weavem.graph';
-  schema: 1;
+  schema: 1 | 2;
   name: string;
   nodes: Array<{ id: string; taskKey: string; parameters: JsonObject }>;
-  edges: Array<{ id: string; source: string; target: string; argument: string }>;
+  edges: Array<{ id: string; source: string; target: string; argument: string; sourcePath?: Array<string | number> }>;
 }
 
 export type ParameterKind = 'string' | 'number' | 'boolean' | 'json';
@@ -88,23 +89,33 @@ export interface ParameterHint {
   defaultValue?: JsonValue;
   defaultDisplay?: string;
   description?: string;
+  choices?: JsonValue[];
+  nullable?: boolean;
+  fields?: ParameterHint[];
 }
 export interface TaskParameterHints {
   origin: 'source' | 'metadata';
   parameters: ParameterHint[];
+  description?: string;
+  output?: { annotation?: string; fields?: ParameterHint[]; kind: ParameterKind };
 }
 
 export type RunNodeStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
-export interface RunNode { status: RunNodeStatus; preview?: string; error?: string }
+export interface RunNode { status: RunNodeStatus; preview?: string; error?: string; value?: ValuePreview; errorDetails?: ErrorDetails }
 export interface RunState {
   runId: string;
   status: 'running' | 'completed' | 'failed' | 'cancelled';
   flowName?: string;
   revision?: string;
   result?: string;
+  resultValue?: ValuePreview;
+  errorDetails?: ErrorDetails;
   phase?: 'preparing' | 'running';
   message?: string;
   nodes: Record<string, RunNode>;
   logs: string;
   error?: string;
 }
+
+export interface ValuePreview { kind: 'json' | 'text'; value?: JsonValue; preview: string; truncated: boolean }
+export interface ErrorDetails { code?: string; message: string; type?: string; input?: string; remediation?: string; retryable?: boolean | null }
