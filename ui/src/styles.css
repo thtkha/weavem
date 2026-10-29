@@ -880,3 +880,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .canvas-area:fullscreen .canvas-header { top: 16px; left: 18px; right: 18px; }
 
 }
+
+.flow-picker select,
+.run-parameters input {
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  border-radius: 6px;
+  min-height: 32px;
+  padding: 0 9px;
+}
+.run-parameters { display: grid; gap: 2px; min-width: 104px; }
+.run-parameters > span { color: var(--color-muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; }
+.run-parameters input { width: 96px; font-family: var(--font-mono); }
+.source-only-notice { position: absolute; z-index: 5; top: 58px; left: 18px; max-width: min(520px, calc(100% - 36px)); padding: 10px 12px; border: 1px solid var(--color-warning); border-radius: 7px; background: var(--color-surface); color: var(--color-muted); font-size: .8rem; }

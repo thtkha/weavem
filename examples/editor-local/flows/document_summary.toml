@@ -1,0 +1,7 @@
+[flow]
+schema = 1
+flow_id = "document_summary"
+version = "0.1.0"
+source = "document_summary.py"
+export = "document_summary"
+tasks = ["normalize", "count", "summarize"]

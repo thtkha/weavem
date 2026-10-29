@@ -3,14 +3,60 @@
 **Status: prototype, not a released framework feature.** Branch:
 `prototype/node-editor`. Audience: project owner and prototype contributors.
 
+## Current direction — Python-backed local authoring
+
+The current implementation supersedes the graph-only execution and browser-only
+authoring limitations described in the historical records below. The GUI now
+saves ordinary `flows/<name>.py` and TOML metadata, with optional layout JSON.
+The same saved flow runs through the existing local loader from the GUI, CLI,
+or Python. Python is authoritative; the graph is an editing representation.
+
+Supported source is inspected without imports and round-trips through a strict
+AST subset. Other handwritten Python remains intact and runnable with flow
+parameters, but cannot be rewritten visually. Saves use revision checks,
+directory locking, atomic replacements, and a recovery journal; unknown external
+changes are preserved rather than overwritten. Native preparation no longer has
+a confirmation popup. Active runs can be reattached while the backend survives.
+
+This remains a source-checkout prototype, not part of the released alpha wheel.
+There is no publishing UI, arbitrary-Python graph conversion, or backend restart
+recovery. Persistent cross-process native caching remains deferred. See the
+[current editor guide](../../ui/README.md) and [example walkthrough](../../examples/editor-local/README.md).
+
+### Verification — 2026-10-29
+
+On this Linux x86_64 checkout, CPython 3.15 passed the complete **215-test Python
+suite**, including real Prefect/native saved-flow parity. The frontend passed
+TypeScript, ESLint, **34 unit tests**, its static build, and **52 Chromium browser
+tests**. Tests cover save-before-run, Save As, delayed-save locking, read-only
+source flows, and cancellation of active-run attachment before draft replacement.
+The existing draft, inspector, wiring, scrollbar, and layout regressions also pass.
+
+The real-browser smoke saved the example as `visual_summary` into a disposable
+project's normal `flows/` directory, ran its native/Python chain without a
+confirmation popup, reopened it, and stopped the browser and bridge. Both CLI
+and Python then returned the same result:
+`{"summarize": "Document: 2 words, 12 characters"}`. Successful GUI run:
+`0dbf1c7c-93a1-4e86-a1e7-4c0869bb68e7`. The independent backend review found no
+remaining blocking issue. The example walkthrough passed strict runbook lint.
+
+Evidence is retained in `.artifacts/node-editor/python-authoring/`, including
+`full-suite-final.log`, `browser-final.log`, and the live screenshot, run record,
+and headless result under `live/`. Browser failure/cancel scenarios use mocks;
+the separate native smoke uses the real bridge and runtime. This is local
+Chromium evidence, not a fresh-install or cross-browser guarantee. No release,
+publication, main-branch merge, commit, or push was performed for this slice.
+
+The dated sections below preserve previous implementation evidence; they are not
+claims about the current Git working tree or current verification results.
+
 ## Decisions
 
 The first experiment was an interactive, dark desktop draft workbench using
-React Flow. The next approved slice adds local canvas execution using existing
+React Flow. The current slice authors and runs ordinary Python flows using existing
 Weavem/Prefect tasks, not a JavaScript execution engine. A searchable task library,
 graph canvas, and inspector support composition, metadata discovery, save/reopen,
-explicit argument mappings, and real run feedback. The palette is unchanged;
-the owner will provide colors later.
+explicit argument mappings, and real run feedback. The approved palette is unchanged.
 Real projects enter through the existing
 [Project.metadata() API](../users/reference.md#local-project-metadata-python-api).
 The initial sample catalog is explicitly demo data.
@@ -32,9 +78,11 @@ A versioned editor document contains the catalog snapshot, task references,
 node instances, JSON parameters, notes, argument mappings, positions, and viewport.
 The model is independent of React Flow serialization. Schema 2 reads old schema-1
 drafts without inventing argument mappings. A separate `weavem.graph` schema 1
-contains executable node/task selections, parameters, and argument edges, not
-layout or arbitrary Python. It is not a published flow artifact. No Python flow
-is inferred from project metadata, which contains definitions rather than order.
+contains editable node/task selections, parameters, and argument edges, not
+layout or arbitrary Python. Save translates this representation into ordinary
+Python and TOML; Run accepts a saved flow name and revision, not a graph payload.
+The editor graph is not a published flow artifact. Supported source is parsed
+for composition; project metadata alone contains definitions rather than order.
 
 The browser contains no task code, credentials, telemetry, or shared database.
 The explicit `weavem editor --project PATH` bridge serves the built frontend from
@@ -48,18 +96,18 @@ a project source file or a safe secret store. Exported drafts are not publishabl
 flow artifacts. The browser-only Vite development server remains a non-executing
 preview; real execution uses the Python bridge's same-origin loopback URL.
 
-Execution is sequential in dependency order, allowing branches and joins but no
+Visual composition is sequential in dependency order, allowing branches and joins but no
 cycles. Every wire supplies a whole upstream result to an explicitly named target
 argument. Canvas and inspector share the draft edge list, so each selected task shows both incoming and outgoing wires with their target argument. A wire can be reconnected, or released over the empty canvas to disconnect it; invalid targets, Escape, and releases outside the canvas preserve it. When descriptive metadata gives exactly one unused simple input name, a new wire is mapped to it; otherwise the inspector requires an explicit mapping. Literal/edge conflicts are rejected before task invocation. An argument
 name is not proof of type compatibility or a callable signature match. A fresh
-process runs each graph; arbitrary Python objects stay in that process while the
-browser receives bounded previews. Full result persistence and automatic retries
-are disabled for these runs. Task code can still write data itself.
+process runs each saved flow; arbitrary Python objects stay in that process while the
+browser receives bounded previews. The normal loader preserves authored Prefect
+settings and retries; the editor does not override them. Task code can still write data itself.
 
 One run is active at a time. The UI locks graph edits, displays node states,
 diagnostic logs, and errors, and supports best-effort process-group cancellation.
-Failure skips remaining nodes. Cancellation is not rollback and execution is not
-a sandbox. Local native tasks may compile on first use; the UI warns before Run.
+Failure skips remaining nodes in the supported sequential subset. Cancellation is not rollback and execution is not
+a sandbox. Local native tasks prepare automatically; there is no compilation popup.
 Run diagnostics use the configured work directory's `editor-runs/` subtree.
 
 The inspector may offer parameter fields from a local task's static Python
@@ -78,8 +126,8 @@ not installed with the released Python wheel.
 
 ## Deliberately deferred
 
-Typed task interfaces, field-level result mapping, parallelism, loops, executable
-code generation, nested flows, scheduling, hosted authentication, collaboration,
+Typed task interfaces, field-level result mapping, visual parallelism, loops,
+arbitrary-Python visual rewriting, nested-flow authoring, scheduling, hosted authentication, collaboration,
 flow publication, remote storage, and public deployment require separate decisions.
 No Weavem version bump, tag, or release is part of this experiment.
 

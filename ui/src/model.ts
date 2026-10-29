@@ -5,6 +5,7 @@ import type {
   DraftNode,
   EditorDraft,
   ExecutionGraph,
+  FlowLayout,
   JsonObject,
   JsonValue,
   Point,
@@ -321,16 +322,33 @@ export function createEmptyDraft(catalog: Catalog): EditorDraft {
 }
 
 /** Convert a server-resolved project flow to a laid-out, editable draft. */
-export function projectFlowDraft(catalog: Catalog, graph: ExecutionGraph): EditorDraft {
+export function projectFlowDraft(catalog: Catalog, graph: ExecutionGraph, layout?: FlowLayout | null): EditorDraft {
+  const layoutById = new Map((layout?.nodes ?? []).map((node) => [node.id, node]));
   const draft = validateDraft({
     ...createEmptyDraft(catalog), name: graph.name,
-    nodes: graph.nodes.map((node, index) => ({
-      ...node, label: catalog.tasks.find((task) => task.key === node.taskKey)?.taskId ?? node.id,
-      notes: '', position: { x: 60 + (index % 3) * 300, y: 180 + Math.floor(index / 3) * 240 },
-    })),
+    nodes: graph.nodes.map((node, index) => {
+      const saved = layoutById.get(node.id);
+      return {
+        ...node,
+        label: saved?.label ?? catalog.tasks.find((task) => task.key === node.taskKey)?.taskId ?? node.id,
+        notes: saved?.notes ?? '',
+        position: saved?.position ?? { x: 60 + (index % 3) * 300, y: 180 + Math.floor(index / 3) * 240 },
+      };
+    }),
     edges: graph.edges,
+    viewport: layout?.viewport ?? { x: 0, y: 0, zoom: 1 },
   });
   return draft;
+}
+
+/** Presentation information is deliberately excluded from executable flow graphs. */
+export function flowLayout(draft: EditorDraft): FlowLayout {
+  const current = validateDraft(draft);
+  return {
+    schema: 1,
+    viewport: current.viewport,
+    nodes: current.nodes.map(({ id, position, label, notes }) => ({ id, position, label, notes })),
+  };
 }
 
 export function createDemoDraft(): EditorDraft {

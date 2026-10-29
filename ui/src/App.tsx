@@ -32,12 +32,13 @@ import {
   saveStoredDraft,
   serializeDraft,
   executionGraph,
+  flowLayout,
   setEdgeArgument,
   reconnectNodes,
   clearEdgeArgument,
   eligibleTargetArguments,
 } from './model';
-import type { CatalogTask, DraftNode, EditorDraft, ExecutionGraph, Point, RunNodeStatus, RunState, Viewport } from './types';
+import type { CatalogTask, DraftNode, EditorDraft, ExecutionGraph, FlowLayout, FlowSummary, ProjectFlow, Point, RunNodeStatus, RunState, Viewport } from './types';
 import type { TaskParameterHints } from './types';
 import { ParameterEditor } from './ParameterEditor';
 import { Button } from './components/Button';
@@ -53,12 +54,36 @@ type NodeData = {
 type PendingAction =
   | { kind: 'new' }
   | { kind: 'metadata'; catalogText: string }
-  | { kind: 'draft'; draftText: string };
+  | { kind: 'draft'; draftText: string }
+  | { kind: 'flow'; name: string }
+  | { kind: 'attach'; session: EditorSession; runId: string };
 
-type EditorSession = { token: string; project: string; metadata: unknown; bindings: Record<string, string>; parameterHints?: Record<string, TaskParameterHints>; flow?: ExecutionGraph | null };
+type EditorSession = { token: string; project: string; metadata: unknown; bindings: Record<string, string>; parameterHints?: Record<string, TaskParameterHints>; flows?: FlowSummary[]; activeRunId?: string | null; flow?: ExecutionGraph | null };
+type LoadedFlow = { name: string; revision: string | null; editable: boolean; reason?: string; source?: string };
+type SavedFlowResponse = Partial<ProjectFlow> & { name: string; revision: string; editable?: boolean; reason?: string };
 
 const nodeTypes = { task: TaskNode };
 const defaultViewport: Viewport = { x: 0, y: 0, zoom: 1 };
+
+function normalizedFlowLayout(value: unknown): FlowLayout | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const layout = value as { schema?: unknown; viewport?: unknown; nodes?: unknown };
+  if (layout.schema !== 1 || !layout.viewport || typeof layout.viewport !== 'object') return null;
+  const nodes = Array.isArray(layout.nodes)
+    ? layout.nodes
+    : layout.nodes && typeof layout.nodes === 'object'
+      ? Object.entries(layout.nodes as Record<string, unknown>).map(([id, node]) => ({ id, ...(node as object) }))
+      : [];
+  const validNodes = nodes.filter((node): node is { id: string; position: Point; label?: string; notes?: string } => {
+    if (!node || typeof node !== 'object') return false;
+    const candidate = node as { id?: unknown; position?: { x?: unknown; y?: unknown }; label?: unknown; notes?: unknown };
+    return typeof candidate.id === 'string' && typeof candidate.position?.x === 'number' && typeof candidate.position?.y === 'number'
+      && (candidate.label === undefined || typeof candidate.label === 'string') && (candidate.notes === undefined || typeof candidate.notes === 'string');
+  });
+  const viewport = layout.viewport as { x?: unknown; y?: unknown; zoom?: unknown };
+  if (typeof viewport.x !== 'number' || typeof viewport.y !== 'number' || typeof viewport.zoom !== 'number' || viewport.zoom <= 0) return null;
+  return { schema: 1, viewport: { x: viewport.x, y: viewport.y, zoom: viewport.zoom }, nodes: validNodes };
+}
 
 type ResizeSide = 'library' | 'inspector';
 type InspectorSectionName = 'parameters' | 'connections' | 'result' | 'details';
@@ -229,7 +254,14 @@ export default function App() {
   const [session, setSession] = useState<EditorSession | null>(null);
   const [sessionMessage, setSessionMessage] = useState('Disconnected: run this editor with weavem editor --project PATH');
   const [run, setRun] = useState<RunState | null>(null);
+  const [loadedFlow, setLoadedFlow] = useState<LoadedFlow | null>(null);
+  const [flowSummaries, setFlowSummaries] = useState<FlowSummary[]>([]);
+  const [dirty, setDirty] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
+  const [runParametersText, setRunParametersText] = useState('{}');
+  const [activeRunToAttach, setActiveRunToAttach] = useState<string | null>(null);
+  const [saveAsOpen, setSaveAsOpen] = useState(false);
+  const [saveAsName, setSaveAsName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [logOpen, setLogOpen] = useState(true);
   const [layout, setLayout] = useState<EditorLayout>(initialLayout);
@@ -250,6 +282,7 @@ export default function App() {
   const reconnecting = useRef(new Map<string, { updated: boolean; escaped: boolean }>());
   const draftRef = useRef(draft);
   const resultAutoOpenedFor = useRef<string | null>(null);
+  const revisionMismatchedRun = useRef<string | null>(null);
 
   useEffect(() => { draftRef.current = draft; }, [draft]);
 
@@ -301,6 +334,10 @@ export default function App() {
   const running = run?.status === 'running';
   const executionActive = Boolean(running || submitting);
   const sessionMatchesDraft = Boolean(session && draft.catalog.kind === 'project' && draft.catalog.name === session.project);
+  const visualEditingAllowed = Boolean(sessionMatchesDraft && (loadedFlow === null || loadedFlow.editable));
+  // Demos and imported browser drafts remain useful visual-only authoring.
+  // Only a loaded Python flow explicitly marked source-only is read-only.
+  const canvasEditingAllowed = !executionActive && loadedFlow?.editable !== false;
   const visibleTasks = useMemo(() => draft.catalog.tasks.filter((task) => {
     const haystack = `${task.taskId} ${task.version} ${task.backend} ${task.provenance} ${task.description}`.toLowerCase();
     return (provenance === 'all' || task.provenance === provenance) && haystack.includes(search.trim().toLowerCase());
@@ -405,44 +442,130 @@ export default function App() {
     return payload as T;
   }, [session]);
 
+  const applyOpenedFlow = useCallback((catalog: ReturnType<typeof importMetadata>, opened: ProjectFlow) => {
+    if (!opened.graph) throw new Error(opened.reason ?? 'This flow cannot be displayed as a complete editable graph.');
+    const next = projectFlowDraft(catalog, opened.graph, normalizedFlowLayout(opened.layout));
+    setDraft(next);
+    setLoadedFlow({ name: opened.name, revision: opened.revision, editable: opened.editable, reason: opened.reason, source: opened.source });
+    setDirty(false);
+    setSelectedId(null);
+    setSelectedEdgeIds(new Set());
+    window.requestAnimationFrame(() => flow?.setViewport(next.viewport));
+  }, [flow]);
+
+  const loadFlow = useCallback(async (name: string, { replace = true }: { replace?: boolean } = {}) => {
+    if (!session) throw new Error('Connect a project before opening a flow');
+    const encoded = encodeURIComponent(name);
+    const opened = await requestApi<ProjectFlow>(`/api/flows/${encoded}`);
+    const catalog = importMetadata(JSON.stringify(session.metadata));
+    if (!opened.graph) {
+      setDraft({ ...createEmptyDraft(catalog), name: opened.name });
+      setLoadedFlow({ name: opened.name, revision: opened.revision, editable: false, reason: opened.reason, source: opened.source });
+      setDirty(false); setSelectedId(null); setSelectedEdgeIds(new Set());
+      setStatus(`Opened ${opened.name}: visual editing is unavailable`);
+      return { name: opened.name, revision: opened.revision, editable: false, reason: opened.reason, source: opened.source } satisfies LoadedFlow;
+    }
+    if (replace) applyOpenedFlow(catalog, opened);
+    setStatus(opened.layoutError ? `Opened flow ${opened.name}; layout was reset: ${opened.layoutError}` : `Opened flow ${opened.name}`);
+    return { name: opened.name, revision: opened.revision, editable: opened.editable, reason: opened.reason, source: opened.source } satisfies LoadedFlow;
+  }, [applyOpenedFlow, requestApi, session]);
+
   const connectProject = useCallback(async () => {
     try {
       const next = await requestApi<EditorSession>('/api/session');
       if (!next.token || !next.project || !next.bindings || !next.metadata) throw new Error('The editor bridge returned an invalid session');
+      const catalog = importMetadata(JSON.stringify(next.metadata));
+      // An active run must not silently replace a visible draft. Defer every
+      // session/state mutation until the user accepts the replacement dialog.
+      if (next.activeRunId) {
+        requestAction({ kind: 'attach', session: next, runId: next.activeRunId });
+        return;
+      }
       setSession(next);
+      setFlowSummaries(next.flows ?? []);
       setSessionMessage(`Connected to ${next.project}`);
       setRunError(null);
-      // Saved project flows open only after replacement confirmation. Projects
-      // without one retain the existing same-project reconnect behavior.
-      if (next.flow || draft.catalog.kind !== 'project' || draft.catalog.name !== next.project) {
-        const catalog = importMetadata(JSON.stringify(next.metadata));
-        const opened = next.flow ? projectFlowDraft(catalog, next.flow) : createEmptyDraft(catalog);
-        requestAction({ kind: 'draft', draftText: serializeDraft(opened) });
+      const changingProject = draft.catalog.kind !== 'project' || draft.catalog.name !== next.project;
+      // Never replace browser work just because the bridge connected. The
+      // confirmation also keeps legacy drafts available for export/recovery.
+      if (changingProject) {
+        requestAction({ kind: 'metadata', catalogText: JSON.stringify(next.metadata) });
+      } else {
+        try {
+          // Refresh descriptive task data without inventing a second source of
+          // truth for the current graph. If identities changed, retain the
+          // current draft and ask the user to reopen/reconcile deliberately.
+          const refreshed = parseDraft(serializeDraft({ ...draft, catalog }));
+          setDraft(refreshed);
+        } catch {
+          setStatus('Project metadata changed; current unsaved flow was retained. Reopen a flow after reconciling its task bindings.');
+        }
       }
     } catch (cause) {
       setSession(null);
       setSessionMessage(cause instanceof Error ? cause.message : 'Could not connect to the local project');
     }
-  }, [draft.catalog.kind, draft.catalog.name, requestApi]);
+  }, [draft, requestApi]);
+
+  const saveFlow = useCallback(async (saveAs = false, nameOverride?: string, acquireLock = true): Promise<LoadedFlow> => {
+    if (acquireLock) {
+      if (submittingRef.current || executionActive) throw new Error('A save or run is already in progress.');
+      submittingRef.current = true;
+      setSubmitting(true);
+    }
+    try {
+    if (!sessionMatchesDraft || !session) throw new Error('Connect this project before saving a flow.');
+    if (!visualEditingAllowed) throw new Error(loadedFlow?.reason ?? 'This source flow cannot be rewritten visually.');
+    const name = (nameOverride ?? draft.name).trim();
+    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name)) throw new Error('Flow name must start with a letter and use only letters, numbers, and underscores.');
+    if (parameterPending || (selectedNode && JSON.stringify(parseParameters(parameterText)) !== JSON.stringify(selectedNode.parameters))) {
+      throw new Error('Apply the edited parameters before saving this flow');
+    }
+    const submittedSnapshot = serializeDraft(draft);
+    const candidate = { ...draft, name };
+    const graph = executionGraph(candidate, session.bindings);
+    const expectedRevision = saveAs || !loadedFlow || loadedFlow.name !== name ? null : loadedFlow.revision;
+    const saved = await requestApi<SavedFlowResponse>(`/api/flows/${encodeURIComponent(name)}`, {
+      method: 'POST', body: JSON.stringify({ graph, layout: flowLayout(candidate), expectedRevision }),
+    });
+    const next: LoadedFlow = { name: saved.name, revision: saved.revision, editable: saved.editable ?? true, reason: saved.reason, source: saved.source };
+    setLoadedFlow(next);
+    // A save result only clears dirty state for the exact graph/layout that
+    // was submitted. This also keeps a future non-UI caller safe.
+    if (serializeDraft(draftRef.current) === submittedSnapshot) {
+      setDraft((current) => ({ ...current, name }));
+      draftRef.current = candidate;
+      setDirty(false);
+    }
+    setFlowSummaries((current) => [...current.filter((flow) => flow.name !== next.name), { name: next.name, revision: saved.revision, editable: next.editable, reason: next.reason }].sort((left, right) => left.name.localeCompare(right.name)));
+    setStatus(`Saved flow ${name}`);
+    return next;
+    } finally {
+      if (acquireLock) { submittingRef.current = false; setSubmitting(false); }
+    }
+  }, [draft, executionActive, loadedFlow, parameterPending, parameterText, requestApi, selectedNode, session, sessionMatchesDraft, visualEditingAllowed]);
 
   const startRun = useCallback(async () => {
     if (submittingRef.current || executionActive) return;
     if (!sessionMatchesDraft || !session) { setRunError('Connect this project and load its catalog before running.'); return; }
+    // Lock before the first save await so a double-click cannot submit a stale
+    // graph or let the user mutate the flow between save and execution.
+    submittingRef.current = true;
+    setSubmitting(true);
     try {
-      if (parameterPending || (selectedNode && JSON.stringify(parseParameters(parameterText)) !== JSON.stringify(selectedNode.parameters))) {
-        throw new Error('Apply the edited parameters before running this draft');
-      }
-      const graph = executionGraph(draft, session.bindings);
-      const hasNative = draft.nodes.some((node) => taskFor(draft, node)?.provenance === 'local' && taskFor(draft, node)?.backend === 'cython');
-      if (hasNative && !window.confirm('This run contains a local Cython task. Weavem may compile it before execution. Continue?')) return;
-      submittingRef.current = true;
-      setSubmitting(true);
-      const started = await requestApi<{ runId: string; status: RunState['status'] }>('/api/runs', { method: 'POST', body: JSON.stringify(graph) });
+      let target = loadedFlow;
+      // The UI never executes a browser graph. Saving is the handoff to the
+      // same ordinary Python flow used by CLI and Python callers.
+      if (dirty || !target || target.name !== draft.name.trim()) target = await saveFlow(!target || target.name !== draft.name.trim(), undefined, false);
+      const started = await requestApi<{ runId: string; status: RunState['status']; flowName?: string; revision?: string }>('/api/runs', {
+        method: 'POST', body: JSON.stringify({ flowName: target.name, revision: target.revision, params: parseParameters(runParametersText) }),
+      });
+      revisionMismatchedRun.current = null;
       setRun({ runId: started.runId, status: started.status, nodes: {}, logs: '' });
       setRunError(null); setStatus('Run started');
     } catch (cause) { setRunError(cause instanceof Error ? cause.message : String(cause)); }
     finally { submittingRef.current = false; setSubmitting(false); }
-  }, [draft, executionActive, parameterPending, parameterText, requestApi, selectedNode, session, sessionMatchesDraft]);
+  }, [dirty, draft.name, executionActive, loadedFlow, requestApi, runParametersText, saveFlow, session, sessionMatchesDraft]);
 
   const cancelRun = useCallback(async () => {
     if (!run || run.status !== 'running') return;
@@ -451,11 +574,45 @@ export default function App() {
   }, [requestApi, run]);
 
   useEffect(() => {
+    if (!activeRunToAttach || !session || pending) return;
+    let cancelled = false;
+    const attach = async () => {
+      try {
+        let state = await requestApi<RunState>(`/api/runs/${encodeURIComponent(activeRunToAttach)}`);
+        if (cancelled) return;
+        if (state.flowName) {
+          // The active run must display the exact saved flow. Keep any browser
+          // draft recoverable before replacing the visible canvas.
+          saveStoredDraft(storage, draftRef.current);
+          const attached = await loadFlow(state.flowName);
+          if (state.revision && attached?.revision && state.revision !== attached.revision) {
+            revisionMismatchedRun.current = state.runId;
+            state = { ...state, nodes: {}, logs: `${state.logs}${state.logs ? '\n' : ''}The project flow has changed since this run started; node results are not shown on the current canvas.` };
+          }
+        }
+        if (!cancelled) {
+          setRun(state);
+          setActiveRunToAttach(null);
+          setStatus('Reattached to active run');
+        }
+      } catch (cause) {
+        if (!cancelled) {
+          setRunError(cause instanceof Error ? cause.message : String(cause));
+          setActiveRunToAttach(null);
+        }
+      }
+    };
+    void attach();
+    return () => { cancelled = true; };
+  }, [activeRunToAttach, loadFlow, pending, requestApi, session, storage]);
+
+  useEffect(() => {
     if (!run || run.status !== 'running') return undefined;
     let cancelled = false;
     const poll = async () => {
       try {
-        const next = await requestApi<RunState>(`/api/runs/${encodeURIComponent(run.runId)}`);
+        let next = await requestApi<RunState>(`/api/runs/${encodeURIComponent(run.runId)}`);
+        if (revisionMismatchedRun.current === run.runId) next = { ...next, nodes: {} };
         if (!cancelled) setRun(next);
       } catch (cause) { if (!cancelled) setRunError(cause instanceof Error ? cause.message : String(cause)); }
     };
@@ -488,7 +645,9 @@ export default function App() {
         setError('The draft is locked while a run is active. Cancel or wait for it to finish.');
         return;
       }
+      draftRef.current = next;
       setDraft(next);
+      if (next.catalog.kind === 'project') setDirty(true);
       if (resumeAutosave) {
         setAutosavePaused(false);
         setError(null);
@@ -513,6 +672,7 @@ export default function App() {
   }, [draft.nodes, flow]);
 
   const addCatalogTask = useCallback((key: string, position?: Point) => {
+    if (!canvasEditingAllowed) return;
     try {
       const next = addTask(draft, key, position ?? centerPosition());
       const added = next.nodes.at(-1);
@@ -521,7 +681,7 @@ export default function App() {
     } catch (cause) {
       setError(String(cause));
     }
-  }, [centerPosition, draft, updateDraft]);
+  }, [canvasEditingAllowed, centerPosition, draft, updateDraft]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     let next = draft;
@@ -692,28 +852,46 @@ export default function App() {
     return () => document.removeEventListener('keydown', onKey);
   }, [pending]);
 
-  const executePending = useCallback((action: PendingAction) => {
+  const executePending = useCallback(async (action: PendingAction) => {
     try {
+      if (action.kind === 'attach') {
+        setSession(action.session);
+        setFlowSummaries(action.session.flows ?? []);
+        setSessionMessage(`Connected to ${action.session.project}`);
+        setRunError(null);
+        setActiveRunToAttach(action.runId);
+        setPending(null);
+        return;
+      }
+      if (action.kind === 'flow') {
+        await loadFlow(action.name);
+        setPending(null);
+        return;
+      }
       let next: EditorDraft;
       if (action.kind === 'new') {
-        next = createEmptyDraft(draft.catalog);
-        updateDraft(next, 'New empty draft', true);
+        next = { ...createEmptyDraft(draft.catalog), name: draft.catalog.kind === 'project' ? 'new_flow' : 'Untitled draft' };
+        updateDraft(next, 'New empty flow', true);
+        setLoadedFlow(null); setDirty(false);
       } else if (action.kind === 'metadata') {
-        next = createEmptyDraft(importMetadata(action.catalogText));
-        updateDraft(next, 'Metadata catalog imported; new draft started', true);
+        const catalog = importMetadata(action.catalogText);
+        next = { ...createEmptyDraft(catalog), name: catalog.kind === 'project' ? 'new_flow' : catalog.name };
+        updateDraft(next, 'Project catalog connected; new flow started', true);
+        setLoadedFlow(null); setDirty(false);
       } else {
         next = parseDraft(action.draftText);
         updateDraft(next, 'Draft opened from file', true);
+        setLoadedFlow(null); setDirty(next.catalog.kind === 'project');
       }
       setSelectedId(null);
       setSelectedEdgeIds(new Set());
       window.requestAnimationFrame(() => flow?.setViewport(next.viewport));
       setPending(null);
     } catch (cause) {
-      setError(String(cause));
+      setError(cause instanceof Error ? cause.message : String(cause));
       setPending(null);
     }
-  }, [draft.catalog, flow, updateDraft]);
+  }, [draft.catalog, flow, loadFlow, updateDraft]);
 
   const requestAction = (action: PendingAction) => {
     // Empty graphs can still contain a title, imported catalog and viewport.
@@ -772,26 +950,43 @@ export default function App() {
               <span className="prototype-badge">prototype</span>
             </div>
             <label className="draft-name">
-              <span>Draft name</span>
-              <input aria-label="Draft name" disabled={executionActive} value={draft.name} onChange={(event) => setName(event.target.value)} />
+              <span>Flow name</span>
+              <input aria-label="Flow name" disabled={executionActive || loadedFlow?.editable === false} value={draft.name} onChange={(event) => setName(event.target.value)} />
             </label>
           </div>
-          <div className="toolbar-actions" role="group" aria-label="Draft actions">
-            <Button disabled={executionActive} onClick={() => requestAction({ kind: 'new' })}>
-              {icon('plus')} New draft
+          <div className="toolbar-actions" role="group" aria-label="Flow actions">
+            <Button disabled={executionActive || (!sessionMatchesDraft && draft.catalog.kind !== 'demo')} onClick={() => requestAction({ kind: 'new' })}>
+              {icon('plus')} {sessionMatchesDraft ? 'New flow' : 'New draft'}
             </Button>
             <Button disabled={executionActive} onClick={() => metadataInput.current?.click()}>
               {icon('file')} Import metadata
             </Button>
+            <label className="flow-picker">
+              <span className="visually-hidden">Open project flow</span>
+              <select aria-label="Open project flow" disabled={executionActive || !sessionMatchesDraft || flowSummaries.length === 0} value="" onChange={(event) => { if (event.target.value) requestAction({ kind: 'flow', name: event.target.value }); }}>
+                <option value="">Open flow…</option>
+                {flowSummaries.map((item) => <option key={item.name} value={item.name}>{item.name}{item.editable ? '' : ' (source only)'}</option>)}
+              </select>
+            </label>
+            <Button variant="primary" disabled={executionActive || !sessionMatchesDraft || !visualEditingAllowed} onClick={() => void saveFlow(false).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))}>
+              {icon('file')} Save
+            </Button>
+            <Button disabled={executionActive || !sessionMatchesDraft || !visualEditingAllowed} onClick={() => { setSaveAsName(`${draft.name.trim() || 'new_flow'}_copy`); setSaveAsOpen(true); }}>
+              Save as
+            </Button>
             <Button disabled={executionActive} onClick={() => draftInput.current?.click()}>
               {icon('folder')} Open draft
             </Button>
-            <Button variant="primary" onClick={exportDraft}>
+            <Button onClick={exportDraft}>
               {icon('download')} Export draft
             </Button>
             <Button disabled={executionActive} onClick={() => void connectProject()}>
-              {session ? 'Reconnect project' : 'Connect project'}
+              {session ? 'Refresh project' : 'Connect project'}
             </Button>
+            <label className="run-parameters">
+              <span>Run parameters</span>
+              <input aria-label="Run parameters JSON" disabled={executionActive || !sessionMatchesDraft} value={runParametersText} onChange={(event) => setRunParametersText(event.target.value)} placeholder="{}" />
+            </label>
             {run && <Button aria-pressed={logOpen} onClick={() => setLogOpen((open) => !open)}>{logOpen ? 'Hide run log' : 'Show run log'}</Button>}
             <div className="run-actions">{runControl()}</div>
           </div>
@@ -855,7 +1050,7 @@ export default function App() {
               <article
                 className="library-task"
                 key={task.key}
-                draggable
+                draggable={canvasEditingAllowed}
                 onDragStart={(event) => {
                   event.dataTransfer.setData('application/weavem-task', task.key);
                   event.dataTransfer.effectAllowed = 'copy';
@@ -871,7 +1066,7 @@ export default function App() {
                   <span>{task.version}</span>
                   <span>{task.backend}</span>
                 </div>
-                <button className="add-task" disabled={executionActive} aria-label={`Add task ${task.taskId}`} onClick={() => addCatalogTask(task.key)}>
+                <button className="add-task" disabled={!canvasEditingAllowed} aria-label={`Add task ${task.taskId}`} onClick={() => addCatalogTask(task.key)}>
                   {icon('plus')} Add task
                 </button>
               </article>
@@ -928,8 +1123,8 @@ export default function App() {
             onReconnect={reconnectEdge}
             onReconnectEnd={onReconnectEnd}
             onPointerCancelCapture={() => reconnecting.current.forEach((attempt) => { attempt.escaped = true; })}
-            nodesDraggable={!executionActive}
-            nodesConnectable={!executionActive}
+            nodesDraggable={canvasEditingAllowed}
+            nodesConnectable={canvasEditingAllowed}
             elementsSelectable={!executionActive}
             onNodeClick={(_, node) => {
               setSelectedId(node.id);
@@ -942,7 +1137,7 @@ export default function App() {
               setSelectedId(null);
               setSelectedEdgeIds(new Set());
             }}
-            onMoveEnd={(_, viewport) => setDraft((current) => ({ ...current, viewport }))}
+            onMoveEnd={(_, viewport) => { if (!executionActive && visualEditingAllowed) { setDraft((current) => ({ ...current, viewport })); if (draft.catalog.kind === 'project') setDirty(true); } }}
             defaultViewport={draft.viewport ?? defaultViewport}
             deleteKeyCode={null}
             multiSelectionKeyCode={['Meta', 'Control']}
@@ -955,6 +1150,9 @@ export default function App() {
               maskColor="rgba(16, 20, 12, .7)"
             />
           </ReactFlow>
+          {loadedFlow && !loadedFlow.editable && (
+            <div className="source-only-notice" role="note">Source flow: {loadedFlow.reason ?? 'The canvas cannot safely rewrite this Python source.'} You can still run it with JSON parameters.</div>
+          )}
           {draft.nodes.length === 0 && (
             <div className="canvas-empty">
               <span className="empty-mark">+</span>
@@ -962,8 +1160,8 @@ export default function App() {
               <p>Add a task from the library, or drag one onto this canvas.</p>
             </div>
           )}
-          <div className="canvas-footer">{executionActive ? `Run ${run?.runId ?? 'submission'} is active; editing is locked` : sessionMatchesDraft ? 'Ready to run · connections require target argument mapping' : 'Draft wiring · connect a local project to run'}</div>
-          {run && logOpen && <section className="run-log panel" aria-label="Run log"><div className="panel-heading"><div><p className="eyebrow">Local run</p><h2>{run.status}</h2></div><button className="icon-button" aria-label="Hide run log" onClick={() => setLogOpen(false)}>{icon('x')}</button></div><code>{run.runId}</code><pre>{run.logs || 'Waiting for task output…'}</pre>{run.error && <p role="alert">{run.error}</p>}</section>}
+          <div className="canvas-footer">{executionActive ? (run?.phase === 'preparing' ? (run.message ?? 'Preparing flow…') : `Run ${run?.runId ?? 'submission'} is active; editing is locked`) : sessionMatchesDraft ? 'Ready to run · connections require target argument mapping' : 'Draft wiring · connect a local project to run'}</div>
+          {run && logOpen && <section className="run-log panel" aria-label="Run log"><div className="panel-heading"><div><p className="eyebrow">Local run</p><h2>{run.status === 'running' && run.phase === 'preparing' ? (run.message ?? 'Preparing flow…') : run.status}</h2></div><button className="icon-button" aria-label="Hide run log" onClick={() => setLogOpen(false)}>{icon('x')}</button></div><code>{run.runId}{run.flowName ? ` · ${run.flowName}${run.revision ? ` @ ${run.revision}` : ''}` : ''}</code><pre>{run.logs || 'Waiting for task output…'}</pre>{run.result && <pre>{run.result}</pre>}{run.error && <p role="alert">{run.error}</p>}</section>}
         </section>
         <ResizeHandle side="inspector" width={layout.inspectorWidth} onResize={(width) => updatePanelWidth('inspector', width)} />
 
@@ -991,7 +1189,7 @@ export default function App() {
                 value={parameterText}
                 onChange={setParameterText}
                 onApply={applyParameters}
-                disabled={executionActive}
+                disabled={!canvasEditingAllowed}
                 hints={session?.parameterHints?.[selectedNode.taskKey]}
                 wired={wiredParameters}
                 onPendingChange={setParameterPending}
@@ -1004,14 +1202,14 @@ export default function App() {
                 return <section className="connection-group" key={direction} aria-label={title}>
                   <div className="connection-heading">
                     <h3>{title}</h3>
-                    {direction === 'outgoing' && <button type="button" className="connection-add-toggle" aria-expanded={connectionAdderOpen} aria-controls="add-outgoing-connection" disabled={executionActive} onClick={() => setConnectionAdderOpen((open) => !open)}>{icon('plus')} Add connection</button>}
+                    {direction === 'outgoing' && <button type="button" className="connection-add-toggle" aria-expanded={connectionAdderOpen} aria-controls="add-outgoing-connection" disabled={!canvasEditingAllowed} onClick={() => setConnectionAdderOpen((open) => !open)}>{icon('plus')} Add connection</button>}
                   </div>
                   {connected.length ? connected.map((edge) => {
                     const otherId = direction === 'incoming' ? edge.source : edge.target;
                     const otherLabel = draft.nodes.find((node) => node.id === otherId)?.label ?? otherId;
                     return <div className="connection-row" key={`${edge.id}:${edge.argument ?? ''}`}>
-                      <button type="button" disabled={executionActive} onClick={() => selectEdge(edge.id)} aria-label={`Select connection ${direction === 'incoming' ? 'from' : 'to'} ${otherLabel}`}><span>{direction === 'incoming' ? '←' : '→'} {otherLabel}</span></button>
-                      <input aria-label={`Connection target argument to ${otherLabel}`} list={`connection-arguments-${edge.id}`} disabled={executionActive} defaultValue={edge.argument ?? ''} placeholder="Mapping required" onBlur={(event) => {
+                      <button type="button" disabled={!canvasEditingAllowed} onClick={() => selectEdge(edge.id)} aria-label={`Select connection ${direction === 'incoming' ? 'from' : 'to'} ${otherLabel}`}><span>{direction === 'incoming' ? '←' : '→'} {otherLabel}</span></button>
+                      <input aria-label={`Connection target argument to ${otherLabel}`} list={`connection-arguments-${edge.id}`} disabled={!canvasEditingAllowed} defaultValue={edge.argument ?? ''} placeholder="Mapping required" onBlur={(event) => {
                         const value = event.currentTarget.value.trim();
                         if (value === (edge.argument ?? '')) return;
                         try {
@@ -1021,17 +1219,17 @@ export default function App() {
                       <datalist id={`connection-arguments-${edge.id}`}>
                         {eligibleTargetArguments(draft, edge.target, edge.id).map((argument) => <option key={argument} value={argument} />)}
                       </datalist>
-                      <button type="button" disabled={executionActive} className="connection-delete" aria-label={`Delete connection to ${otherLabel}`} onClick={() => deleteEdge(edge.id)}>Delete</button>
+                      <button type="button" disabled={!canvasEditingAllowed} className="connection-delete" aria-label={`Delete connection to ${otherLabel}`} onClick={() => deleteEdge(edge.id)}>Delete</button>
                     </div>;
                   }) : <p className="connection-empty">No {direction} draft connections.</p>}
                   {direction === 'outgoing' && <div id="add-outgoing-connection" className="connection-add-form" hidden={!connectionAdderOpen}>
                     <Field label="Connect to">
-                      <select aria-label="Add connection target" disabled={executionActive} value={targetAvailable ? connectTarget : ''} onChange={(event) => setConnectTarget(event.target.value)}>
+                      <select aria-label="Add connection target" disabled={!canvasEditingAllowed} value={targetAvailable ? connectTarget : ''} onChange={(event) => setConnectTarget(event.target.value)}>
                         <option value="" disabled>Select a draft node</option>
                         {connectionTargets.map(({ node, connected, available }) => <option key={node.id} value={node.id} disabled={!available}>{node.label}{connected ? available ? ' (connected · another input available)' : ' (connected)' : ''}</option>)}
                       </select>
                     </Field>
-                    <Button variant="secondary" className="wide" onClick={() => { if (targetAvailable) { addConnection({ source: selectedNode.id, target: connectTarget }); setConnectTarget(''); setConnectionAdderOpen(false); } }} disabled={!targetAvailable || executionActive}>Connect</Button>
+                    <Button variant="secondary" className="wide" onClick={() => { if (targetAvailable) { addConnection({ source: selectedNode.id, target: connectTarget }); setConnectTarget(''); setConnectionAdderOpen(false); } }} disabled={!targetAvailable || !canvasEditingAllowed}>Connect</Button>
                   </div>}
                 </section>;
               })}
@@ -1041,10 +1239,10 @@ export default function App() {
             </InspectorSection>}
             <InspectorSection name="details" title="Details" open={inspectorSections.details} onToggle={toggleInspectorSection}>
               <Field label="Node label">
-                <input disabled={executionActive} value={selectedNode.label} onChange={(event) => updateSelected({ label: event.target.value })} />
+                <input disabled={!canvasEditingAllowed} value={selectedNode.label} onChange={(event) => updateSelected({ label: event.target.value })} />
               </Field>
               <Field label="Notes">
-                <textarea disabled={executionActive} value={selectedNode.notes} onChange={(event) => updateSelected({ notes: event.target.value })} placeholder="Private drafting note" />
+                <textarea disabled={!canvasEditingAllowed} value={selectedNode.notes} onChange={(event) => updateSelected({ notes: event.target.value })} placeholder="Private drafting note" />
               </Field>
               <dl className="metadata-list">
                 <div><dt>Inputs</dt><dd>{selectedTask.inputs.length ? selectedTask.inputs.join(', ') : 'None declared'}</dd></div>
@@ -1053,14 +1251,14 @@ export default function App() {
                 {selectedTask.manifestSha256 && <div><dt>Manifest hash</dt><dd className="mono-break">{selectedTask.manifestSha256}</dd></div>}
               </dl>
             </InspectorSection>
-            <button className="delete-button" disabled={executionActive} onClick={deleteSelected}>Delete node</button>
+            <button className="delete-button" disabled={!canvasEditingAllowed} onClick={deleteSelected}>Delete node</button>
           </div> : selectedEdge ? <div className="inspector-content connection-inspector-content">
             <section className="connection-editor" aria-label="Connection mapping">
               <p className="field-help">Pass this connection’s whole result to a named argument on the target task.</p>
-              <Field label="Target argument"><input aria-label="Connection target argument" disabled={executionActive} value={edgeArgument} placeholder="for example: text" onChange={(event) => setEdgeArgumentText(event.target.value)} /></Field>
-              <Button variant="secondary" className="wide" disabled={executionActive || !edgeArgument.trim()} onClick={() => { try { updateDraft(setEdgeArgument(draft, selectedEdge.id, edgeArgument), 'Connection argument mapped'); } catch (cause) { setError(String(cause)); } }}>Apply mapping</Button>
+              <Field label="Target argument"><input aria-label="Connection target argument" disabled={!canvasEditingAllowed} value={edgeArgument} placeholder="for example: text" onChange={(event) => setEdgeArgumentText(event.target.value)} /></Field>
+              <Button variant="secondary" className="wide" disabled={!canvasEditingAllowed || !edgeArgument.trim()} onClick={() => { try { updateDraft(setEdgeArgument(draft, selectedEdge.id, edgeArgument), 'Connection argument mapped'); } catch (cause) { setError(String(cause)); } }}>Apply mapping</Button>
             </section>
-            <button className="delete-button" disabled={executionActive} onClick={() => deleteEdge(selectedEdge.id)}>Delete connection</button>
+            <button className="delete-button" disabled={!canvasEditingAllowed} onClick={() => deleteEdge(selectedEdge.id)}>Delete connection</button>
           </div> : <div className="inspector-empty"><span className="empty-mark">↖</span><p>Select a task node to view descriptive metadata and edit this draft instance.</p><small>Connections need explicit argument mappings before a run.</small></div>}
         </aside>
         <footer className="bottom-status">
@@ -1069,7 +1267,8 @@ export default function App() {
         </footer>
       </div>
 
-      {pending && <div className="modal-backdrop" role="presentation"><section ref={dialog} className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="replace-title"><p className="eyebrow">Replace current draft?</p><h2 id="replace-title">Your current graph will be replaced.</h2><p>Export it first if you need a portable copy. Invalid files never change the current draft.</p><div className="dialog-actions"><Button onClick={() => setPending(null)}>Cancel</Button><Button variant="primary" onClick={() => executePending(pending)}>Replace draft</Button></div></section></div>}
+      {saveAsOpen && <div className="modal-backdrop" role="presentation"><section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="save-as-title"><p className="eyebrow">Save flow as</p><h2 id="save-as-title">Create an ordinary project flow</h2><Field label="New flow name"><input autoFocus aria-label="New flow name" value={saveAsName} onChange={(event) => setSaveAsName(event.target.value)} /></Field><p>Use a Python identifier. This writes the standard flow files under <code>flows/</code>.</p><div className="dialog-actions"><Button onClick={() => setSaveAsOpen(false)}>Cancel</Button><Button variant="primary" onClick={() => void saveFlow(true, saveAsName).then(() => setSaveAsOpen(false)).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))}>Save as</Button></div></section></div>}
+      {pending && <div className="modal-backdrop" role="presentation"><section ref={dialog} className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="replace-title"><p className="eyebrow">Replace current draft?</p><h2 id="replace-title">Your current graph will be replaced.</h2><p>Export it first if you need a portable copy. Invalid files never change the current draft.</p><div className="dialog-actions"><Button onClick={() => setPending(null)}>Cancel</Button><Button variant="primary" onClick={() => void executePending(pending)}>Replace draft</Button></div></section></div>}
     </main>
   );
 }

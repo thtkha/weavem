@@ -50,6 +50,10 @@ test('run logs use the same scrollbar and forced colors restore system styling',
     token: 'test-token', project: '/projects/document-demo', metadata,
     bindings: Object.fromEntries(metadata.tasks.map((task: { path: string }) => [`local:${task.path}`, 'normalize'])),
   } }));
+  await page.route('**/api/flows/**', async (route) => {
+    const name = decodeURIComponent(new URL(route.request().url()).pathname.split('/').at(-1) ?? 'flow');
+    await route.fulfill({ json: { name, revision: 'scroll-r1', editable: true } });
+  });
   await page.route('**/api/runs', (route) => route.fulfill({ json: { runId: 'scroll-test', status: 'running' } }));
   await page.route('**/api/runs/scroll-test', (route) => route.fulfill({ json: {
     runId: 'scroll-test', status: 'completed', nodes: {}, logs: 'A line of output\n'.repeat(100),

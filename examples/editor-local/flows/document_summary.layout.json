@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "viewport": {"x": 0, "y": 0, "zoom": 1},
+  "nodes": [
+    {"id": "normalize", "position": {"x": 60, "y": 140}, "label": "Normalize text", "notes": ""},
+    {"id": "count", "position": {"x": 420, "y": 140}, "label": "Count words", "notes": ""},
+    {"id": "summarize", "position": {"x": 780, "y": 140}, "label": "Summarize", "notes": ""}
+  ]
+}

@@ -37,6 +37,11 @@ class EditorServerTests(unittest.TestCase):
         (root / "weavem.toml").write_text(
             "[weavem]\nwork_dir = '.artifacts'\n[tasks.echo]\npath = 'tasks/echo'\n", encoding="utf-8")
         self.task_key = "local:" + str((task / "task.toml").resolve())
+        from weavem.editor_flows import save_flow
+        self.graph = {"kind": "weavem.graph", "schema": 1, "name": "demo",
+                      "nodes": [{"id": "echo", "taskKey": self.task_key, "parameters": {"value": "ok"}}],
+                      "edges": []}
+        self.flow = save_flow("demo", self.graph, None, None, root)
         ui = root / "ui"
         ui.mkdir()
         (ui / "index.html").write_text("<div>editor test fixture</div>", encoding="utf-8")
@@ -69,6 +74,9 @@ class EditorServerTests(unittest.TestCase):
         status, raw = self.request("GET", "/api/session")
         self.assertEqual(200, status)
         return json.loads(raw)
+
+    def run_request(self):
+        return {"flowName": "demo", "revision": self.flow["revision"], "params": {}}
 
     def test_session_uses_token_and_api_rejects_missing_token(self):
         session = self.session()
@@ -114,29 +122,17 @@ class EditorServerTests(unittest.TestCase):
         fallback = self.session()["parameterHints"][self.task_key]
         self.assertEqual("metadata", fallback["origin"])
 
-    def test_connect_opens_a_project_flow_and_resolves_aliases_without_running_it(self):
-        flows = self.server.project.root / "flows"
-        flows.mkdir()
-        definition = {"kind": "weavem.project-flow", "schema": 1, "name": "Ready to run",
-                      "nodes": [{"id": "echo", "taskAlias": "echo", "parameters": {"value": "hello"}}],
-                      "edges": []}
-        (flows / "editor.json").write_text(json.dumps(definition), encoding="utf-8")
-        graph = self.session()["flow"]
-        self.assertEqual("weavem.graph", graph["kind"])
-        self.assertEqual(self.task_key, graph["nodes"][0]["taskKey"])
-        self.assertEqual({"value": "hello"}, graph["nodes"][0]["parameters"])
+    def test_session_lists_saved_project_flows_without_running_them(self):
+        session = self.session()
+        self.assertEqual(["demo"], [item["name"] for item in session["flows"]])
         self.assertFalse(self.server.runs._runs)
 
-    def test_project_flow_rejects_unknown_alias_and_symlinks(self):
-        flows = self.server.project.root / "flows"
-        flows.mkdir()
-        flow = flows / "editor.json"
-        flow.write_text(json.dumps({"kind": "weavem.project-flow", "schema": 1, "name": "Bad",
-                                   "nodes": [{"id": "bad", "taskAlias": "missing"}], "edges": []}), encoding="utf-8")
-        self.assertEqual(400, self.request("GET", "/api/session")[0])
-        flow.unlink()
-        flow.symlink_to(self.server.ui_dir / "index.html")
-        self.assertEqual(400, self.request("GET", "/api/session")[0])
+    def test_open_saved_flow_requires_token(self):
+        self.assertEqual(401, self.request("GET", "/api/flows/demo")[0])
+        token = self.session()["token"]
+        status, raw = self.request("GET", "/api/flows/demo", headers={"X-Weavem-Token": token})
+        self.assertEqual(200, status)
+        self.assertTrue(json.loads(raw)["editable"])
 
     def test_rejects_bad_host_cross_origin_and_path_escape(self):
         status, _ = self.request("GET", "/api/session", headers={"Host": "example.test"})
@@ -173,10 +169,10 @@ class EditorServerTests(unittest.TestCase):
         headers = {"X-Weavem-Token": token}
         with patch("weavem.editor_server.subprocess.Popen", return_value=_Process()) as spawn, \
                 patch("weavem.editor_server.os.killpg") as kill:
-            status, raw = self.request("POST", "/api/runs", graph, headers=headers)
+            status, raw = self.request("POST", "/api/runs", self.run_request(), headers=headers)
             self.assertEqual(202, status)
             run_id = json.loads(raw)["runId"]
-            self.assertEqual(409, self.request("POST", "/api/runs", graph, headers=headers)[0])
+            self.assertEqual(409, self.request("POST", "/api/runs", self.run_request(), headers=headers)[0])
             status, raw = self.request("POST", f"/api/runs/{run_id}/cancel", {}, headers=headers)
             self.assertEqual(200, status)
             state = json.loads(raw)
@@ -184,9 +180,6 @@ class EditorServerTests(unittest.TestCase):
             self.assertEqual("skipped", state["nodes"]["echo"]["status"])
             self.assertGreaterEqual(kill.call_count, 1)
             environment = spawn.call_args.kwargs["env"]
-            self.assertEqual("", environment["PREFECT_API_URL"])
-            self.assertEqual("", environment["PREFECT_API_KEY"])
-            self.assertEqual("false", environment["PREFECT_SERVER_ANALYTICS_ENABLED"])
             self.assertTrue(Path(environment["PYTHONPATH"].split(":", 1)[0]).is_absolute())
 
     def test_exited_active_worker_is_refreshed_before_a_new_post(self):
@@ -196,10 +189,10 @@ class EditorServerTests(unittest.TestCase):
                  "edges": []}
         first, second = _Process(), _Process()
         with patch("weavem.editor_server.subprocess.Popen", side_effect=[first, second]):
-            self.assertEqual(202, self.request("POST", "/api/runs", graph, headers={"X-Weavem-Token": token})[0])
+            self.assertEqual(202, self.request("POST", "/api/runs", self.run_request(), headers={"X-Weavem-Token": token})[0])
             first.poll = lambda: 0
             # No status polling occurs between these POSTs; start() refreshes it.
-            self.assertEqual(202, self.request("POST", "/api/runs", graph, headers={"X-Weavem-Token": token})[0])
+            self.assertEqual(202, self.request("POST", "/api/runs", self.run_request(), headers={"X-Weavem-Token": token})[0])
 
     def test_cancel_preserves_terminal_worker_event_that_already_exited(self):
         token = self.session()["token"]
@@ -209,7 +202,7 @@ class EditorServerTests(unittest.TestCase):
         process = _Process()
         with patch("weavem.editor_server.subprocess.Popen", return_value=process), \
                 patch("weavem.editor_server.os.killpg") as kill:
-            _, raw = self.request("POST", "/api/runs", graph, headers={"X-Weavem-Token": token})
+            _, raw = self.request("POST", "/api/runs", self.run_request(), headers={"X-Weavem-Token": token})
             run_id = json.loads(raw)["runId"]
             run = self.server.runs._runs[run_id]
             run.events_path.write_text('{"type":"run","status":"completed"}\n', encoding="utf-8")
@@ -228,7 +221,7 @@ class EditorServerTests(unittest.TestCase):
         process = _Process()  # poll() remains None, simulating Prefect cleanup.
         with patch("weavem.editor_server.subprocess.Popen", return_value=process), \
                 patch("weavem.editor_server.os.killpg") as kill:
-            _, raw = self.request("POST", "/api/runs", graph, headers={"X-Weavem-Token": token})
+            _, raw = self.request("POST", "/api/runs", self.run_request(), headers={"X-Weavem-Token": token})
             run_id = json.loads(raw)["runId"]
             run = self.server.runs._runs[run_id]
             run.nodes["echo"] = {"status": "completed", "preview": "ok"}
@@ -243,9 +236,7 @@ class EditorServerTests(unittest.TestCase):
 
     def test_invalid_graph_schema_does_not_start_a_worker(self):
         token = self.session()["token"]
-        invalid = {"kind": "weavem.graph", "schema": True, "name": "No",
-                   "nodes": [{"id": "echo", "taskKey": self.task_key, "parameters": {"value": "ok"}}],
-                   "edges": []}
+        invalid = {"flowName": "demo", "revision": self.flow["revision"], "params": []}
         with patch("weavem.editor_server.subprocess.Popen") as spawn:
             self.assertEqual(400, self.request("POST", "/api/runs", invalid,
                                                headers={"X-Weavem-Token": token})[0])
@@ -258,7 +249,7 @@ class EditorServerTests(unittest.TestCase):
                  "edges": []}
         process = _Process()
         with patch("weavem.editor_server.subprocess.Popen", return_value=process):
-            _, raw = self.request("POST", "/api/runs", graph, headers={"X-Weavem-Token": token})
+            _, raw = self.request("POST", "/api/runs", self.run_request(), headers={"X-Weavem-Token": token})
             run_id = json.loads(raw)["runId"]
             process.poll = lambda: 0
             state = self.server.runs.state(run_id)

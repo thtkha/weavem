@@ -14,6 +14,7 @@ import {
   createEmptyDraft,
   projectFlowDraft,
   executionGraph,
+  flowLayout,
   importMetadata,
   loadStoredDraft,
   parseDraft,
@@ -300,5 +301,25 @@ describe('parameters and browser storage', () => {
     const storage = { setItem: (nextKey: string) => { key = nextKey; } };
     saveStoredDraft(storage, createEmptyDraft(demoCatalog));
     expect(key).toBe(STORAGE_KEY);
+  });
+});
+
+describe('project flow presentation', () => {
+  it('keeps layout presentation separate from the executable graph', () => {
+    const catalog = importMetadata(JSON.stringify(projectSnapshot()));
+    const graph: ExecutionGraph = {
+      kind: 'weavem.graph', schema: 1, name: 'visual_flow',
+      nodes: [{ id: 'first', taskKey: catalog.tasks[0].key, parameters: { value: 'hello' } }], edges: [],
+    };
+    const draft = projectFlowDraft(catalog, graph, {
+      schema: 1, viewport: { x: 8, y: 9, zoom: 1.25 },
+      nodes: [{ id: 'first', position: { x: 70, y: 80 }, label: 'Custom title', notes: 'Canvas only' }],
+    });
+    expect(draft.nodes[0]).toMatchObject({ position: { x: 70, y: 80 }, label: 'Custom title', notes: 'Canvas only' });
+    expect(flowLayout(draft)).toEqual({
+      schema: 1, viewport: { x: 8, y: 9, zoom: 1.25 },
+      nodes: [{ id: 'first', position: { x: 70, y: 80 }, label: 'Custom title', notes: 'Canvas only' }],
+    });
+    expect(executionGraph(draft, { [catalog.tasks[0].key]: 'local' })).toEqual(graph);
   });
 });

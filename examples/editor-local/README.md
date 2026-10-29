@@ -5,7 +5,7 @@
 | Status | Source-verified |
 | Owner | Weavem maintainers, [repository](https://github.com/thtkha/weavem) |
 | Escalation | [Repository issues](https://github.com/thtkha/weavem/issues) |
-| Last verified | 2026-10-27 — source inspection; see the project note for execution evidence |
+| Last verified | 2026-10-29 — source inspection; see the project note for execution evidence |
 | Last executed | See [prototype verification record](../../docs/project/node-editor-prototype.md) |
 | Applies to | Source checkout of `prototype/node-editor`; Linux x86_64; local machine only |
 | Risk | Medium — real tasks execute with your user permissions |
@@ -59,8 +59,8 @@ credentials, private metadata, or complete customer-data logs.
 Run terminal commands from the **Weavem repository root**, identified by
 `pyproject.toml`, `ui/package.json`, and this `examples/` directory.
 `weavem.toml` selects local task folders. Each folder has metadata, implementation,
-and behavioral tests. The browser submits a graph; a loopback bridge starts an
-isolated Python process; Weavem and Prefect execute tasks. Run diagnostics and
+and behavioral tests. The browser selects a saved Python flow; a loopback bridge starts a
+fresh Python process and uses the same local-flow loader as the CLI. Run diagnostics and
 native candidates go into the sample's gitignored `.artifacts/` by default.
 The standard Weavem work-directory setting/environment override still applies.
 
@@ -121,11 +121,13 @@ on all interfaces to resolve a connection issue.
 
 **Goal:** Connect to tasks authorized by the selected project.
 **Run from:** Browser, printed loopback URL.
-**Action:** Choose **Connect project**, then **Replace draft** in the confirmation
-dialog. Export the previous draft first if you need it.
-**Expected result:** **Native document summary**, with three connected nodes,
+**Action:** Choose **Connect project**, then **Replace draft** if prompted.
+Select `document_summary` in **Open flow** and confirm **Replace draft**.
+Export the previous draft first if you need it.
+**Expected result:** **document_summary**, with three connected nodes,
 their input parameters, and both argument mappings already filled in. The flow
-comes from `flows/editor.json`; its task aliases resolve against `weavem.toml`.
+comes from `flows/document_summary.py` and its normal TOML metadata; task aliases
+resolve against `weavem.toml`.
 **If this fails:** Stop; preserve your draft and verify the startup project path.
 **Evidence to retain:** Project name shown by the connection status.
 **Repeatability:** Reconnection replaces the draft only after confirmation.
@@ -138,7 +140,7 @@ comes from `flows/editor.json`; its task aliases resolve against `weavem.toml`.
 Select normalize to inspect `{"text":"  Hello Weavem  "}`. Its result feeds
 count's `text` argument; count's result feeds summarize's `stats` argument.
 You can skip inspection and press **Run flow** immediately after Step 3.
-**Expected result:** Three nodes, two wires labelled with explicit argument names.
+**Expected result:** Three nodes and two wires, with argument mappings visible in the inspector.
 **If this fails:** Do not run an unmapped graph. Select the wire again and correct
 the argument. Metadata descriptions do not automatically supply mappings.
 **Evidence to retain:** **Export draft** saves layout, parameters, and mappings.
@@ -146,25 +148,43 @@ the argument. Metadata descriptions do not automatically supply mappings.
 
 ### Step 5 — Run and inspect
 
-**Goal:** Execute the authored canvas graph through the real runtime.
+**Goal:** Execute the saved ordinary Python flow through the real runtime.
 **Run from:** Browser workbench, connected project.
-**Action:** Choose **Run flow** and accept the native-compilation warning. Observe
+**Action:** Choose **Run flow**. Native preparation is automatic, without a confirmation. Observe
 node statuses and **Run log**. Select `text.summarize` to read **Run result**.
 **Expected result:** The run completes; the last preview contains
 `Document: 2 words, 12 characters`. The first native run can take longer. Graph
 editing is locked while execution is active.
 **If this fails:** Do not repeatedly retry an unknown task. This sample is safe
 to retry once after fixing its reported error; retain the run ID and diagnostics.
-Use **Cancel run** if the run remains active without progress for five minutes.
+Use **Cancel run** if the sample remains active without progress for five minutes.
 **Evidence to retain:** Run ID, final preview, and run diagnostics under `.artifacts/`.
 **Repeatability:** Sample task behavior is safe to repeat; other projects may not be.
+
+### Step 6 — Run the same source without the editor
+
+**Goal:** Prove the flow is ordinary Weavem code, not browser-only state.
+**Run from:** Repository root, the same activated Python environment.
+**Action:** Close the browser and stop the bridge with Ctrl+C. Then run:
+
+```bash
+python -m weavem --project examples/editor-local flow run document_summary
+```
+
+**Expected result:** The final JSON result is
+`{"summarize": "Document: 2 words, 12 characters"}`. No browser or editor server
+is required. A fresh process may prepare local native code again.
+**If this fails:** Confirm the selected project and Python environment match
+Step 2; preserve the concrete error rather than reinstalling tools blindly.
+**Evidence to retain:** CLI result alongside the GUI run ID.
+**Repeatability:** This sample is safe to run again.
 
 ## Verification
 
 - All three nodes show completed; no failed or skipped node remains.
 - The final preview equals the expected sentence, possibly surrounded by Python
   string representation quotes.
-- Export, reload, and reopen preserve mappings. Reconnecting is needed after
+- Save, reload, and reopen preserve mappings. Reconnecting is needed after
   restarting the server because the session token changes.
 - The project's artifact directory contains an `editor-runs/` diagnostic folder.
   Local execution compiles and loads a temporary `.so`, then removes its temporary
@@ -175,8 +195,9 @@ Use **Cancel run** if the run remains active without progress for five minutes.
 
 Use **Cancel run** to stop a current run, then Ctrl+C in its server terminal to
 stop the bridge. For forward recovery, use **Open draft → select exported JSON**
-to restore edits. Reloading a browser does not cancel its Python run. Reopen your
-exported draft to recover edits. Never clear corrupt browser storage as the first
+to restore edits. Reloading a browser does not cancel its Python run; reconnect to recover active
+run controls while the same backend remains alive. Saved Python flows reopen from
+the project; exported drafts recover unsaved edits. Never clear corrupt browser storage as the first
 recovery step: preserve the original file/error. A process restart ends the
 in-memory run index; retained diagnostics remain on disk. Task side effects in
 other projects require task-specific recovery; cancellation is not rollback.
@@ -190,7 +211,7 @@ other projects require task-specific recovery; cancellation is not rollback.
 | Task not bound | In your own project, bind it with `weavem task use ALIAS --path tasks/NAME`; reload the catalog. The sample already has bindings. |
 | Missing argument or unexpected keyword | Correct explicit mappings and applied JSON parameters; task signatures are checked during execution. |
 | Native compilation failed | Retain diagnostics and rerun `python -m weavem doctor`; do not install OS packages silently. |
-| Another run is active | Cancel or finish it before starting another. If a reload lost the Cancel control, stop that bridge's terminal with Ctrl+C, restart Step 2, and reconnect. Check side effects before retrying other projects. |
+| Another run is active | Reconnect to the same backend to recover controls, then cancel or finish it. If the backend is unresponsive, stop its terminal with Ctrl+C and restart Step 2. Check side effects before retrying other projects. |
 | Stale release pin | Reconnect and inspect the project's explicitly selected release; do not bypass integrity checks. |
 | Server restart or 403 | Reconnect to obtain the new session; do not copy tokens into URLs. |
 
@@ -206,7 +227,7 @@ until reviewed; this walkthrough does not delete them automatically.
 ## Evidence and audit record
 
 Record the revision, Python/Node/browser versions, run ID, and redacted final
-preview. Diagnostics include graph parameters, bounded previews, and task output;
+preview. Diagnostics include flow parameters, bounded previews, and task output;
 they are not safe credential stores. Do not commit `.artifacts/` or private data.
 Execution evidence for this implementation is recorded in the project note.
 

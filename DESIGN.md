@@ -17,13 +17,16 @@ glass panels, decorative charts, fake execution status, and invented task types.
 
 ## Product goals
 
-Prove that people can find tasks, compose a graph, inspect its metadata, and
-save/reopen their work without writing Python. Start with a labelled demo, then
-allow an actual Project.metadata() JSON snapshot. The next slice runs canvas
-graphs through the existing Python/Prefect runtime in an explicitly selected
-local project. Success is a round-trippable draft, explicit argument wiring,
-observable execution, and no silent data replacement. Publication, accounts,
-remote execution, and code generation remain outside this prototype.
+Prove that people can find tasks, compose a flow, inspect its metadata, and
+save ordinary Python in the project's existing `flows/` directory. Python is
+the executable source of truth: the UI is another authoring surface, not another
+execution engine. CLI, Python, and GUI use the same saved flow and project
+bindings. Optional layout data must not affect execution. Visual round-tripping
+supports a conservative Python subset; other code stays intact and runnable,
+with visual rewriting disabled. Native preparation is automatic, not a
+confirmation dialog. Success is save/run/reopen parity without the UI, explicit
+argument wiring, observable execution, and no silent data replacement. Publication, accounts,
+and remote execution remain outside this prototype.
 
 ## Personas and jobs
 
@@ -171,7 +174,9 @@ metadata is not graph reconstruction from Python flows. Autosave is local to
 this browser; failures remain visible and export remains available. Corrupt
 stored content is not silently overwritten by a demo fallback. Connection failures
 do not discard the draft. Running locks graph changes; results belong to the
-submitted snapshot. Failed tasks stop execution, and remaining nodes are skipped.
+saved source revision. Native preparation is automatic. Reload can reconnect to
+the same backend's active run. Observed task states follow actual Python/Prefect
+execution; the UI must not change retry, failure, or orchestration semantics.
 
 ## Draft parameters
 

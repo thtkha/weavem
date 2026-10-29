@@ -40,7 +40,7 @@ def _regular_tree(path: Path) -> None:
         raise IntegrityError(f"symlinked flow path is not allowed: {path}")
 
 
-def _spec(project, name: str) -> tuple[FlowSpec, Path]:
+def _spec(project, name: str, *, expected_metadata_sha256: str | None = None) -> tuple[FlowSpec, Path]:
     if (not name.isidentifier() or keyword.iskeyword(name)
             or (name.startswith("__") and name.endswith("__"))):
         raise FlowError("local flow name must be a non-reserved Python identifier")
@@ -48,7 +48,10 @@ def _spec(project, name: str) -> tuple[FlowSpec, Path]:
     sidecar = root / f"{name}.toml"
     _regular_tree(sidecar)
     try:
-        data = tomllib.loads(sidecar.read_text(encoding="utf-8"))
+        raw = sidecar.read_bytes()
+        if expected_metadata_sha256 is not None and hashlib.sha256(raw).hexdigest() != expected_metadata_sha256:
+            raise FlowError("flow metadata changed on disk; reload before running")
+        data = tomllib.loads(raw.decode("utf-8"))
         spec = FlowSpec.from_mapping(data.get("flow", data))
     except (OSError, ValueError) as exc:
         raise FlowError(f"cannot read flow metadata: {exc}") from exc
@@ -373,11 +376,18 @@ def load_flow(flow_id, version, *, store=None, project=None):
     return wrapped
 
 
-def load_local_flow(name, *, project=None):
-    """Load editable flow code; alias bindings stay anchored to the selected project."""
+def load_local_flow(name, *, project=None, expected_source_sha256=None, expected_metadata_sha256=None):
+    """Load editable flow code with aliases anchored to the selected project.
+
+    Optional expected hashes reject a changed definition before importing the
+    exact bytes read here. They are used by revision-aware editor callers; normal
+    CLI and Python callers continue to load the current on-disk definition.
+    """
     config = resolve_project(project)
-    spec, source = _spec(config, name)
+    spec, source = _spec(config, name, expected_metadata_sha256=expected_metadata_sha256)
     raw = source.read_bytes()
+    if expected_source_sha256 is not None and hashlib.sha256(raw).hexdigest() != expected_source_sha256:
+        raise FlowError("flow source changed on disk; reload before running")
     # Every local load is an independent source snapshot, not an immutable release.
     leaf = "_weavem_local_flow_" + hashlib.sha256(str(source).encode() + raw).hexdigest() + f"_{time.time_ns()}"
     loader = importlib.util.spec_from_file_location(leaf, source)

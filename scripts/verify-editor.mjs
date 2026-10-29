@@ -2,7 +2,7 @@
 // Real-browser/native-runtime smoke. No wheel build, publication, or mock API.
 import { spawn } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,7 +18,14 @@ let server;
 let browser;
 let page;
 let serverOutput = '';
-let url = process.env.WEAVEM_EDITOR_URL;
+let url;
+const project = await mkdtemp(path.join(output, 'project-'));
+await cp(path.join(root, 'examples/editor-local'), project, { recursive: true,
+  filter: (source) => !source.split(path.sep).includes('.artifacts') });
+const python = process.env.WEAVEM_EDITOR_PYTHON || 'python';
+const environment = { ...process.env, PYTHONPATH: path.join(root, 'src'),
+  WEAVEM_ARTIFACTS_DIR: path.join(output, 'runtime') };
+const dialogs = [];
 const pageErrors = [];
 
 async function stop() {
@@ -33,15 +40,11 @@ async function stop() {
 
 try {
   if (!url) {
-    server = spawn(process.env.WEAVEM_EDITOR_PYTHON || 'python', [
-      '-m', 'weavem', 'editor', '--project', 'examples/editor-local', '--port', '0',
+    server = spawn(python, [
+      '-m', 'weavem', 'editor', '--project', project, '--port', '0',
     ], {
       cwd: root,
-      env: {
-        ...process.env,
-        PYTHONPATH: path.join(root, 'src'),
-        WEAVEM_ARTIFACTS_DIR: path.join(output, 'runtime'),
-      },
+      env: environment,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     server.on('error', (error) => { serverOutput += String(error); });
@@ -59,14 +62,23 @@ try {
   browser = await chromium.launch({ headless: true });
   page = await browser.newPage({ viewport: { width: 1800, height: 1100 } });
   page.on('pageerror', (error) => pageErrors.push(error.message));
-  page.on('dialog', (dialog) => dialog.accept());
+  page.on('dialog', (dialog) => { dialogs.push(dialog.message()); void dialog.dismiss(); });
   await page.goto(url);
   await page.getByRole('button', { name: 'Connect project', exact: true }).click();
-  await page.getByRole('button', { name: 'Replace draft', exact: true }).click();
-  // Match the user's quick-start: connect, accept the saved flow, then Run.
-  // No node creation, parameter edits, or wire mapping is needed.
+  const replace = page.getByRole('button', { name: 'Replace draft', exact: true });
+  await replace.click();
+  await page.getByLabel('Open project flow', { exact: true }).selectOption('document_summary');
+  await replace.click();
   await expect(page.getByTestId('task-node')).toHaveCount(3);
-  await expect(page.getByLabel('Draft name', { exact: true })).toHaveValue('Native document summary');
+  await expect(page.getByLabel('Flow name', { exact: true })).toHaveValue('document_summary');
+  // Save a visually authored copy into normal flows/, not the checked-in example.
+  await page.getByRole('button', { name: 'Save as', exact: true }).click();
+  await page.getByLabel('New flow name', { exact: true }).fill('visual_summary');
+  await page.getByRole('dialog').getByRole('button', { name: 'Save as', exact: true }).click();
+  await expect(page.getByLabel('Flow name', { exact: true })).toHaveValue('visual_summary');
+  const savedSource = await readFile(path.join(project, 'flows/visual_summary.py'), 'utf8');
+  expect(savedSource).toContain('from weavem import flow, task');
+  expect(savedSource).not.toContain('editor_worker');
   await page.locator('.react-flow__controls-button').nth(2).click();
   const node = (task) => page.getByTestId('task-node').filter({ hasText: task });
   await page.getByRole('button', { name: 'Run flow', exact: true }).click();
@@ -85,15 +97,42 @@ try {
     return visible === element || element.contains(visible);
   })).toBe(true);
   const session = await (await page.request.get(`${url}/api/session`)).json();
-  const runId = await log.locator('code').innerText();
+  const runId = (await log.locator('code').innerText()).split(' · ')[0];
   const response = await page.request.get(`${url}/api/runs/${runId}`, { headers: { 'X-Weavem-Token': session.token } });
+  expect(response.ok()).toBe(true);
   const state = await response.json();
   expect(Object.values(state.nodes).map((entry) => entry.status)).toEqual(['completed', 'completed', 'completed']);
   expect(state.logs).not.toMatch(/Error emitting event|Service 'EventsWorker' failed|Traceback \(most recent call last\)/);
   expect(pageErrors).toEqual([]);
+  expect(dialogs).toEqual([]);
   await page.screenshot({ path: path.join(output, 'completed.png'), fullPage: true });
   await writeFile(path.join(output, 'result.json'), `${JSON.stringify({ url, runId, state, pageErrors }, null, 2)}\n`);
-  console.log(`PASS: real native canvas flow completed (${runId}). Evidence: ${output}`);
+  await page.reload();
+  await page.getByRole('button', { name: 'Connect project', exact: true }).click();
+  if (await replace.isVisible()) await replace.click();
+  await page.getByLabel('Open project flow', { exact: true }).selectOption('visual_summary');
+  await replace.click();
+  await expect(page.getByTestId('task-node')).toHaveCount(3);
+  await expect(page.getByLabel('Flow name', { exact: true })).toHaveValue('visual_summary');
+  // Prove a saved source flow is independent of both browser and bridge.
+  await browser.close(); browser = undefined; page = undefined;
+  await stop();
+  const runPython = (args) => new Promise((resolve, reject) => {
+    const child = spawn(python, args, { cwd: root, env: environment, stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = ''; let stderr = '';
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('error', reject);
+    const timeout = setTimeout(() => { child.kill('SIGKILL'); reject(new Error('Headless flow timed out')); }, 180_000);
+    child.on('close', (code) => { clearTimeout(timeout); code === 0 ? resolve(stdout) : reject(new Error(stderr || stdout)); });
+  });
+  const cli = await runPython(['-m', 'weavem', '--project', project, 'flow', 'run', 'visual_summary']);
+  const expected = { summarize: 'Document: 2 words, 12 characters' };
+  expect(JSON.parse(cli.trim().split('\n').at(-1))).toEqual(expected);
+  const pythonResult = await runPython(['-c', 'import json,sys; from weavem.flows import load_local_flow; print(json.dumps(load_local_flow("visual_summary", project=sys.argv[1])()))', project]);
+  expect(JSON.parse(pythonResult.trim().split('\n').at(-1))).toEqual(expected);
+  await writeFile(path.join(output, 'headless.json'), JSON.stringify({ project, result: expected }, null, 2));
+  console.log(`PASS: saved native flow ${runId}; GUI, CLI, and Python agree. Evidence: ${output}`);
 } catch (error) {
   if (page) await page.screenshot({ path: path.join(output, 'failed.png'), fullPage: true }).catch(() => {});
   throw error;

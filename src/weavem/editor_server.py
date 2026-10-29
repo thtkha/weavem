@@ -48,34 +48,6 @@ def _json_bytes(value: object) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":")).encode("utf-8")
 
 
-def _project_flow(project: ProjectConfig, catalog: dict) -> dict | None:
-    """Open the optional project-local canvas entrypoint, resolving trusted aliases."""
-    path = project.root / "flows" / "editor.json"
-    if path.is_symlink() or path.parent.is_symlink():
-        raise EditorServerError("flows/editor.json must not use symlinks")
-    if not path.exists():
-        return None
-    if path.stat().st_size > _MAX_BODY:
-        raise EditorServerError("flows/editor.json exceeds 5 MiB")
-    definition = json.loads(path.read_text(encoding="utf-8"))
-    if (not isinstance(definition, dict) or definition.get("kind") != "weavem.project-flow"
-            or type(definition.get("schema")) is not int or definition["schema"] != 1
-            or not isinstance(definition.get("nodes"), list)):
-        raise EditorServerError("flows/editor.json requires project-flow schema 1 and nodes")
-    keys = {alias: key for key, alias in catalog["bindings"].items()}
-    nodes = []
-    for node in definition["nodes"]:
-        if not isinstance(node, dict) or not isinstance(node.get("taskAlias"), str) or node["taskAlias"] not in keys:
-            raise EditorServerError("flows/editor.json contains an unknown project task alias")
-        nodes.append({"id": node.get("id"), "taskKey": keys[node["taskAlias"]],
-                      "parameters": node.get("parameters", {})})
-    graph = {"kind": "weavem.graph", "schema": 1, "name": definition.get("name"),
-             "nodes": nodes, "edges": definition.get("edges")}
-    from .editor_graph import validate_graph
-    validate_graph(graph, project.root)
-    return graph
-
-
 def _bounded_preview(value: object) -> object:
     """Keep browser response/event handling bounded even for a bad worker event."""
     try:
@@ -94,12 +66,17 @@ class Run:
     process: subprocess.Popen[bytes]
     nodes: dict[str, dict[str, object]]
     request_path: Path
+    flow_name: str
+    revision: str
     events_path: Path
     stdout_path: Path
     stderr_path: Path
     status: str = "running"
     terminal_status: str | None = None
     error: str | None = None
+    result: object | None = None
+    phase: str | None = None
+    message: str | None = None
     cancelled: bool = False
     event_offset: int = 0
     lock: threading.RLock = field(default_factory=threading.RLock)
@@ -112,19 +89,32 @@ class RunManager:
         self._active: str | None = None
         self._lock = threading.RLock()
 
-    def start(self, graph: dict[str, object]) -> Run:
-        # Validate before any artifact/process creation. Reserve the sole active
-        # slot before spawning so concurrent POSTs cannot run two graphs.
-        from .editor_graph import validate_graph
-        validate_graph(graph, self.project.root)
+    def start(self, flow_name: str, revision: str, params: dict[str, object]) -> Run:
+        """Start an immutable revision of a saved project flow.
+
+        The browser supplies only a flow name, revision fingerprint, and JSON
+        keyword arguments.  The source and metadata are re-opened here and in
+        the worker, so a file changed between either stage cannot be run under
+        a stale canvas revision.
+        """
+        from .editor_flows import open_flow
+        opened = open_flow(flow_name, project=self.project.root)
+        if opened.get("revision") != revision:
+            raise EditorServerError("flow changed on disk; reload it before running")
+        graph = opened.get("graph")
+        # Unsupported handwritten source remains runnable.  It simply has no
+        # graph-derived node observation in the editor.
+        nodes = graph.get("nodes", []) if isinstance(graph, dict) else []
+        if not isinstance(nodes, list):
+            nodes = []
+        if not isinstance(params, dict):
+            raise EditorServerError("run params must be an object")
         with self._lock:
             self._refresh_active()
             if self._active is not None:
                 raise EditorServerError("a run is already active")
             self._active = "__starting__"
         try:
-            nodes = graph.get("nodes")
-            assert isinstance(nodes, list)  # validate_graph establishes this contract.
             run_id = str(uuid4())
             directory = self.project.work_dir / "editor-runs" / run_id
             directory.mkdir(parents=True, exist_ok=False)
@@ -132,23 +122,17 @@ class RunManager:
             events_path = directory / "events.jsonl"
             stdout_path = directory / "worker.stdout.log"
             stderr_path = directory / "worker.stderr.log"
-            request_path.write_bytes(_json_bytes({"project": str(self.project.root), "graph": graph}))
+            request_path.write_bytes(_json_bytes({
+                "project": str(self.project.root), "flowName": flow_name,
+                "revision": revision, "params": params,
+            }))
             events_path.touch()
             stdout = stdout_path.open("wb")
             stderr = stderr_path.open("wb")
-            # A desktop editor must not accidentally inherit a remote Prefect
-            # profile from its shell. The worker gets an isolated local home.
+            # Preserve the caller's normal Prefect environment/profile. A GUI
+            # run is the same local flow invocation as CLI/Python, not a
+            # hidden replacement orchestration policy.
             environment = dict(os.environ)
-            for key in ("PREFECT_API_URL", "PREFECT_API_KEY", "PREFECT_CLOUD_API_URL",
-                        "PREFECT_PROFILES_PATH", "PREFECT_PROFILE", "PREFECT_SERVER_API_HOST",
-                        "PREFECT_SERVER_API_PORT", "PREFECT_SERVER_ANALYTICS_ENABLED"):
-                environment.pop(key, None)
-            # Project dotenv/profile files must not turn a local visual run into
-            # a remote Prefect connection after inherited shell settings are removed.
-            environment["PREFECT_API_URL"] = ""
-            environment["PREFECT_API_KEY"] = ""
-            environment["PREFECT_SERVER_ANALYTICS_ENABLED"] = "false"
-            environment["PREFECT_HOME"] = str(directory / "prefect")
             package_root = str(Path(__file__).resolve().parents[1])
             environment["PYTHONPATH"] = package_root + (os.pathsep + environment["PYTHONPATH"]
                                                         if environment.get("PYTHONPATH") else "")
@@ -166,7 +150,8 @@ class RunManager:
                 stdout.close()
                 stderr.close()
             initial = {str(node["id"]): {"status": "pending"} for node in nodes if isinstance(node, dict)}
-            run = Run(run_id, directory, process, initial, request_path, events_path, stdout_path, stderr_path)
+            run = Run(run_id, directory, process, initial, request_path, flow_name, revision,
+                      events_path, stdout_path, stderr_path)
             with self._lock:
                 self._runs[run_id] = run
                 self._active = run_id
@@ -254,6 +239,10 @@ class RunManager:
     @staticmethod
     def _apply_event(run: Run, event: dict[str, object]) -> None:
         status = event.get("status")
+        if event.get("type") == "run" and isinstance(status, str) and status in {"preparing", "running"}:
+            run.phase = status
+            message = event.get("message")
+            run.message = message[:4096] if isinstance(message, str) else None
         node_id = event.get("nodeId", event.get("node_id"))
         if isinstance(node_id, str) and node_id in run.nodes:
             node = run.nodes[node_id]
@@ -267,6 +256,8 @@ class RunManager:
             run.terminal_status = status
             if isinstance(event.get("error"), str):
                 run.error = event["error"][:4096]
+            if "result" in event:
+                run.result = _bounded_preview(event["result"])
 
     @staticmethod
     def _tail(path: Path) -> str:
@@ -288,9 +279,16 @@ class RunManager:
             with run.lock:
                 self._finish_if_exited(run)
                 payload: dict[str, object] = {"runId": run.run_id, "status": run.status,
+                                              "flowName": run.flow_name, "revision": run.revision,
                                               "nodes": run.nodes, "logs": self._tail(run.stdout_path) + self._tail(run.stderr_path)}
                 if run.error:
                     payload["error"] = run.error
+                if run.phase is not None:
+                    payload["phase"] = run.phase
+                if run.message is not None:
+                    payload["message"] = run.message
+                if run.result is not None:
+                    payload["result"] = _bounded_preview(run.result)
                 return payload
 
     def cancel(self, run_id: str) -> dict[str, object] | None:
@@ -436,17 +434,35 @@ class EditorHandler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         if path == "/api/session":
             from .editor_graph import editor_catalog
+            from .editor_flows import list_flows
             try:
                 catalog = editor_catalog(self.server.project.root)
-                project_flow = _project_flow(self.server.project, catalog)
+                flows = list_flows(project=self.server.project.root)
+                active = self.server.runs._active
+                active_run_id = active if active not in (None, "__starting__") else None
             except (ContractError, OSError, ValueError) as exc:
                 self._error(HTTPStatus.BAD_REQUEST, str(exc))
                 return
             self._json(HTTPStatus.OK, {"token": self.server.token, "project": str(self.server.project.root),
-                                       "flow": project_flow, **catalog})
+                                       "flows": flows, "activeRunId": active_run_id, **catalog})
             return
         if path.startswith("/api/"):
             if not self._authorized():
+                return
+            if path == "/api/flows":
+                from .editor_flows import list_flows
+                try:
+                    self._json(HTTPStatus.OK, {"flows": list_flows(project=self.server.project.root)})
+                except (ContractError, OSError, ValueError) as exc:
+                    self._error(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            flow_prefix = "/api/flows/"
+            if path.startswith(flow_prefix) and "/" not in path[len(flow_prefix):]:
+                from .editor_flows import open_flow
+                try:
+                    self._json(HTTPStatus.OK, open_flow(unquote(path[len(flow_prefix):]), project=self.server.project.root))
+                except (ContractError, OSError, ValueError) as exc:
+                    self._error(HTTPStatus.BAD_REQUEST, str(exc))
                 return
             prefix = "/api/runs/"
             if path.startswith(prefix) and "/" not in path[len(prefix):]:
@@ -498,12 +514,33 @@ class EditorHandler(BaseHTTPRequestHandler):
         body = self._body()
         if body is None:
             return
-        if path == "/api/runs":
-            # The endpoint accepts the versioned graph itself; the browser
-            # cannot supply a project, interpreter, or filesystem path.
-            graph = body
+        flow_prefix = "/api/flows/"
+        if path.startswith(flow_prefix) and "/" not in path[len(flow_prefix):]:
+            from .editor_flows import FlowConflictError, save_flow
+            name = unquote(path[len(flow_prefix):])
+            expected = body.get("expectedRevision")
+            graph, layout = body.get("graph"), body.get("layout")
+            if ("expectedRevision" not in body or expected is not None and not isinstance(expected, str)
+                    or not isinstance(graph, dict)):
+                self._error(HTTPStatus.BAD_REQUEST, "flow save requires graph and expectedRevision")
+                return
             try:
-                run = self.server.runs.start(graph)
+                saved = save_flow(name, graph, layout, expected, project=self.server.project.root)
+            except FlowConflictError as exc:
+                self._error(HTTPStatus.CONFLICT, str(exc))
+                return
+            except (ContractError, OSError, ValueError) as exc:
+                self._error(HTTPStatus.BAD_REQUEST, str(exc))
+                return
+            self._json(HTTPStatus.OK, saved)
+            return
+        if path == "/api/runs":
+            flow_name, revision, params = body.get("flowName"), body.get("revision"), body.get("params", {})
+            if not isinstance(flow_name, str) or not isinstance(revision, str) or not isinstance(params, dict):
+                self._error(HTTPStatus.BAD_REQUEST, "run requires flowName, revision, and object params")
+                return
+            try:
+                run = self.server.runs.start(flow_name, revision, params)
             except EditorServerError as exc:
                 self._error(HTTPStatus.CONFLICT, str(exc))
                 return

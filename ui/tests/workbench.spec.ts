@@ -21,6 +21,14 @@ async function replace(page: Page) {
   await expect(dialog).not.toBeVisible();
 }
 
+async function mockFlowSave(page: Page) {
+  await page.route('**/api/flows/**', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    const name = decodeURIComponent(new URL(route.request().url()).pathname.split('/').at(-1) ?? 'flow');
+    await route.fulfill({ json: { name, revision: 'test-r1', editable: true } });
+  });
+}
+
 async function clear(page: Page) {
   await page.getByRole('button', { name: 'New draft', exact: true }).click();
   await replace(page);
@@ -63,6 +71,7 @@ test('connects an explicit project and displays completed run results', async ({
     runId: 'run-1', status: 'completed', nodes: { [nodeId]: { status: 'completed', preview: 'done' } }, logs: 'task completed',
   } }));
   await page.route('**/api/runs', async (route) => route.fulfill({ json: { runId: 'run-1', status: 'running' } }));
+  await mockFlowSave(page);
   await page.goto('/');
   await page.getByRole('button', { name: 'Connect project', exact: true }).click();
   await replace(page);
@@ -93,7 +102,7 @@ test('reconnecting to the same project renews session without replacing the draf
   await replace(page);
   await page.getByRole('button', { name: 'Add task text.normalize', exact: true }).first().click();
   await expect(page.getByTestId('task-node')).toHaveCount(1);
-  await page.getByRole('button', { name: 'Reconnect project', exact: true }).click();
+  await page.getByRole('button', { name: 'Refresh project', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByTestId('task-node')).toHaveCount(1);
 });
@@ -137,19 +146,25 @@ test('guided fields track canvas wiring and become editable after disconnection'
   const snapshot = JSON.parse(await readFile(metadataFile, 'utf-8'));
   snapshot.tasks[0].metadata.inputs = ['text: str'];
   const taskKey = `local:${snapshot.tasks[0].path}`;
+  const graph = { kind: 'weavem.graph', schema: 1, name: 'wired_parameters', nodes: [
+    { id: 'source', taskKey, parameters: { text: 'Hello' } },
+    { id: 'target', taskKey, parameters: {} },
+  ], edges: [{ id: 'wire', source: 'source', target: 'target', argument: 'text' }] };
   await page.route('**/api/session', async (route) => route.fulfill({ json: {
     token: 'test-token', project: '/projects/document-demo', metadata: snapshot,
     bindings: { [taskKey]: 'normalize' },
     parameterHints: { [taskKey]: { origin: 'source', parameters: [
       { name: 'text', kind: 'string', required: true, hasDefault: false },
     ] } },
-    flow: { kind: 'weavem.graph', schema: 1, name: 'Wired parameters', nodes: [
-      { id: 'source', taskKey, parameters: { text: 'Hello' } },
-      { id: 'target', taskKey, parameters: {} },
-    ], edges: [{ id: 'wire', source: 'source', target: 'target', argument: 'text' }] },
+    flows: [{ name: 'wired_parameters', revision: 'r1', editable: true }],
+  } }));
+  await page.route('**/api/flows/wired_parameters', (route) => route.fulfill({ json: {
+    name: 'wired_parameters', revision: 'r1', editable: true, graph, layout: null,
   } }));
   await page.goto('/');
   await page.getByRole('button', { name: 'Connect project', exact: true }).click();
+  await replace(page);
+  await page.getByLabel('Open project flow', { exact: true }).selectOption('wired_parameters');
   await replace(page);
   await node(page, 'target').click();
   const parameters = page.getByRole('region', { name: 'Draft parameters', exact: true });
@@ -176,6 +191,7 @@ async function connectRunnableProject(page: Page) {
     token: 'test-token', project: '/projects/document-demo', metadata: snapshot,
     bindings: Object.fromEntries(snapshot.tasks.map((task: { path: string }) => [`local:${task.path}`, 'normalize'])),
   } }));
+  await mockFlowSave(page);
   await page.goto('/');
   await page.getByRole('button', { name: 'Connect project', exact: true }).click();
   await replace(page);
@@ -246,7 +262,7 @@ test('an active run locks mutation, supports cancellation, and clears results on
   await cancel.hover();
   await expect(cancel).toHaveCSS('background-color', 'rgb(135, 82, 82)');
   await expect(cancel).toHaveCSS('color', 'rgb(237, 241, 231)');
-  await expect(page.getByLabel('Draft name', { exact: true })).toBeDisabled();
+  await expect(page.getByLabel('Flow name', { exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: /^Add task / }).first()).toBeDisabled();
   await page.getByRole('button', { name: 'Cancel run', exact: true }).click();
   await expect.poll(() => cancelled).toBe(true);
@@ -265,12 +281,12 @@ test('submission locks the draft before a delayed run request returns', async ({
   });
   await connectRunnableProject(page);
   await page.getByRole('button', { name: 'Run flow', exact: true }).click();
-  await expect(page.getByLabel('Draft name', { exact: true })).toBeDisabled();
+  await expect(page.getByLabel('Flow name', { exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Run flow', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Run flow', exact: true }).click({ force: true });
   expect(starts).toBe(1);
   release?.();
-  await expect(page.getByLabel('Draft name', { exact: true })).toBeEnabled();
+  await expect(page.getByLabel('Flow name', { exact: true })).toBeEnabled();
 });
 
 test('a bridge error returned while polling is shown verbatim', async ({ page }) => {
@@ -296,11 +312,11 @@ test('search, filters, keyboard add, edits and reload preserve a draft', async (
   await page.getByRole('textbox', { name: 'Notes', exact: true }).fill('Keep this author note');
   await page.getByRole('textbox', { name: 'Draft parameters', exact: true }).fill('{"paths":["report.md"],"limit":5}');
   await page.getByRole('button', { name: 'Apply parameters', exact: true }).click();
-  await page.getByLabel('Draft name', { exact: true }).fill('Quarterly review');
+  await page.getByLabel('Flow name', { exact: true }).fill('Quarterly review');
   await expect.poll(async () => (await stored(page))?.nodes[0]?.parameters.limit).toBe(5);
   expect((await stored(page))?.nodes[0]).toMatchObject({ label: 'Review documents', notes: 'Keep this author note' });
   await page.reload();
-  await expect(page.getByLabel('Draft name', { exact: true })).toHaveValue('Quarterly review');
+  await expect(page.getByLabel('Flow name', { exact: true })).toHaveValue('Quarterly review');
   await page.getByTestId('task-node').click();
   await openInspectorDetails(page);
   await expect(page.getByRole('textbox', { name: 'Notes', exact: true })).toHaveValue('Keep this author note');
@@ -617,7 +633,7 @@ test('corrupt browser storage is not silently overwritten by demo edits', async 
   await page.addInitScript((key) => localStorage.setItem(key, '{broken'), STORAGE_KEY);
   await page.goto('/');
   await expect(page.getByRole('alert')).toContainText('Could not load saved draft');
-  await page.getByLabel('Draft name', { exact: true }).fill('Recovered visually');
+  await page.getByLabel('Flow name', { exact: true }).fill('Recovered visually');
   await page.locator('.react-flow__controls-fitview').click();
   await page.waitForTimeout(600);
   expect(await page.evaluate((key) => localStorage.getItem(key), STORAGE_KEY)).toBe('{broken');
@@ -660,7 +676,7 @@ test('keyboard deletes nodes/edges but not while editing text', async ({ page })
 
 test('empty titles are valid and the replacement dialog manages focus', async ({ page }) => {
   await page.goto('/');
-  await page.getByLabel('Draft name', { exact: true }).fill('');
+  await page.getByLabel('Flow name', { exact: true }).fill('');
   await expect.poll(async () => (await stored(page))?.name).toBe('');
   await expect(page.getByRole('alert')).toHaveCount(0);
   const start = page.getByRole('button', { name: 'New draft', exact: true });
@@ -694,11 +710,11 @@ test('JSON labels and parameters are never evaluated as code', async ({ page }) 
 test('even an empty renamed draft requires confirmation before catalog replacement', async ({ page }) => {
   await page.goto('/');
   await clear(page);
-  await page.getByLabel('Draft name', { exact: true }).fill('Keep this empty composition');
+  await page.getByLabel('Flow name', { exact: true }).fill('Keep this empty composition');
   await page.getByLabel('Import metadata JSON').setInputFiles(metadataFile);
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
-  await expect(page.getByLabel('Draft name', { exact: true })).toHaveValue('Keep this empty composition');
+  await expect(page.getByLabel('Flow name', { exact: true })).toHaveValue('Keep this empty composition');
   await expect(page.getByText('Sample catalog', { exact: true })).toBeVisible();
 });
 
@@ -727,6 +743,7 @@ test('JSON pending state spans fields and guided values follow raw JSON edits', 
       { name: 'settingsB', kind: 'json', required: false, hasDefault: false },
     ] } },
   } }));
+  await mockFlowSave(page);
   await page.route('**/api/runs', async (route) => {
     starts += 1;
     await route.fulfill({ status: 400, json: { error: 'Unexpected run request' } });

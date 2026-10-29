@@ -159,31 +159,21 @@ class EditorGraphTests(unittest.TestCase):
                 execute_graph(graph, root, lambda _: None)
             self.assertEqual("weavem-editor", flow_options[0]["name"])
 
-    def test_worker_uses_temporary_local_prefect_settings(self):
+    def test_worker_runs_saved_flow_request_without_prefect_setting_overrides(self):
         with workspace() as raw:
             from weavem.editor_worker import main
             root = Path(raw)
             request, events = root / "request.json", root / "events.jsonl"
-            request.write_text(json.dumps({"project": str(root), "graph": {}}))
+            payload = {"project": str(root), "flowName": "demo", "revision": "r1", "params": {"x": 1}}
+            request.write_text(json.dumps(payload))
             seen = {}
-            class Settings:
-                def __enter__(self):
-                    seen["entered"] = True
-                def __exit__(self, *args):
-                    seen["exited"] = True
-            settings = types.ModuleType("prefect.settings")
-            settings.PREFECT_API_URL = "api-url"
-            settings.PREFECT_API_KEY = "api-key"
-            settings.PREFECT_SERVER_ALLOW_EPHEMERAL_MODE = "ephemeral"
-            settings.temporary_settings = lambda *, updates: seen.setdefault("updates", updates) and Settings()
-            prefect = types.ModuleType("prefect")
-            prefect.settings = settings
-            with patch.dict(sys.modules, {"prefect": prefect, "prefect.settings": settings}), \
-                 patch("weavem.editor_worker.execute_graph", lambda graph, project, emit: emit({"type": "run", "status": "completed"})):
+            def run(actual, emit):
+                seen["request"] = actual
+                emit({"type": "run", "status": "completed", "result": {"ok": True}})
+            with patch("weavem.editor_worker._run_saved_flow", run):
                 self.assertEqual(0, main([str(request), str(events)]))
-            self.assertEqual({"api-url": None, "api-key": None, "ephemeral": True}, seen["updates"])
-            self.assertTrue(seen["entered"])
-            self.assertTrue(seen["exited"])
+            self.assertEqual(payload, seen["request"])
+            self.assertEqual("completed", json.loads(events.read_text().splitlines()[-1])["status"])
 
     def test_worker_writes_a_terminal_event_for_malformed_request(self):
         with workspace() as raw:
@@ -196,28 +186,17 @@ class EditorGraphTests(unittest.TestCase):
             self.assertEqual(1, len(recorded))
             self.assertEqual("failed", recorded[0]["status"])
 
-    def test_worker_reports_pre_execution_prefect_import_error(self):
+    def test_worker_reports_pre_execution_load_error_once(self):
         with workspace() as raw:
             from weavem.editor_worker import main
             root = Path(raw)
             request, events = root / "request.json", root / "events.jsonl"
-            request.write_text(json.dumps({"project": str(root), "graph": {}}))
-            with patch("weavem.editor_worker._execute_with_local_prefect", side_effect=ImportError("no prefect")):
+            request.write_text(json.dumps({"project": str(root), "flowName": "demo", "revision": "r1", "params": {}}))
+            with patch("weavem.editor_worker._run_saved_flow", side_effect=ImportError("no prefect")):
                 self.assertEqual(1, main([str(request), str(events)]))
             recorded = [json.loads(line) for line in events.read_text().splitlines()]
             self.assertEqual(1, len(recorded))
             self.assertIn("ImportError", recorded[0]["error"])
-
-    def test_worker_does_not_duplicate_graph_failure_events(self):
-        with workspace() as raw:
-            from weavem.editor_worker import main
-            root = Path(raw)
-            request, events = root / "request.json", root / "events.jsonl"
-            request.write_text(json.dumps({"project": str(root), "graph": {}}))
-            self.assertEqual(1, main([str(request), str(events)]))
-            recorded = [json.loads(line) for line in events.read_text().splitlines()]
-            self.assertEqual(1, len(recorded))
-            self.assertEqual("failed", recorded[0]["status"])
 
     def test_released_pin_is_validated_before_execution(self):
         with workspace() as raw:

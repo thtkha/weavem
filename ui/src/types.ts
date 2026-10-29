@@ -50,6 +50,26 @@ export interface EditorDraft {
   viewport: Viewport;
 }
 
+export interface FlowLayout {
+  schema: 1;
+  viewport: Viewport;
+  nodes: Array<{ id: string; position: Point; label?: string; notes?: string }> ;
+}
+
+export interface FlowSummary {
+  name: string;
+  revision: string;
+  editable: boolean;
+  reason?: string;
+}
+
+export interface ProjectFlow extends FlowSummary {
+  graph: ExecutionGraph | null;
+  layout?: FlowLayout | null;
+  source?: string;
+  layoutError?: string;
+}
+
 export interface ExecutionGraph {
   kind: 'weavem.graph';
   schema: 1;
@@ -79,6 +99,11 @@ export interface RunNode { status: RunNodeStatus; preview?: string; error?: stri
 export interface RunState {
   runId: string;
   status: 'running' | 'completed' | 'failed' | 'cancelled';
+  flowName?: string;
+  revision?: string;
+  result?: string;
+  phase?: 'preparing' | 'running';
+  message?: string;
   nodes: Record<string, RunNode>;
   logs: string;
   error?: string;

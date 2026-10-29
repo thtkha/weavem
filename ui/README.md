@@ -1,6 +1,6 @@
 # Weavem node-editor prototype
 
-A local **draft editor and canvas runner**, on the `prototype/node-editor`
+A local **Python flow editor and runner**, on the `prototype/node-editor`
 branch. This is not part of the released `0.1.0a2` user experience. The demo
 tasks are synthetic examples, not a built-in executable task catalog.
 
@@ -9,29 +9,59 @@ tasks are synthetic examples, not a built-in executable task catalog.
 Follow the [local execution walkthrough](../examples/editor-local/README.md).
 It builds this frontend and starts `weavem editor --project examples/editor-local`
 from the source checkout. Open the printed **127.0.0.1** URL, connect the project,
-accept the saved project flow, and press **Run flow**. Parameters and argument
+open `document_summary` from **Open flow**, and press **Run flow**. Parameters and argument
 mappings are already supplied for the real native/Python chain.
 The active Python environment executes the tasks. There is no account, hosted
 service, automatic dependency installation, or JavaScript task runtime.
 
-The optional `flows/editor.json` is this prototype's project-local canvas entrypoint.
-It uses explicit `taskAlias` references, resolved by the bridge against the current
-project bindings, so the checked-in example contains no machine-specific paths.
-Connecting opens it only after replacement confirmation. Without this file,
-connection still opens an empty catalog and same-project reconnection keeps edits.
-It is not a published flow manifest or a new release artifact format.
+## Ordinary project flows
+
+The connected editor discovers the project's normal `flows/<name>.py` modules
+and `flows/<name>.toml` metadata. **New flow**, **Open flow**, **Save**, and
+**Save as** work in that same directory. **Run flow** saves valid changes before
+invoking the normal local-flow loader; save conflicts prevent execution. No
+executable browser graph or editor service is required by the resulting Python.
+
+The visual subset is intentionally narrow: module-level Weavem task bindings,
+a bare `@flow`, sequential keyword task calls using JSON literals or earlier
+results, and a dictionary return of terminal-node results. Supported Python is
+inspected with AST parsing, never imported merely to draw it. Source node/edge
+comments preserve stable visual identities but have no runtime effect. Other
+Python remains intact and runnable with JSON flow arguments, but visual rewriting
+is disabled. The editor does not promise arbitrary-Python round-tripping.
+
+Optional `flows/<name>.layout.json` holds positions, labels, notes, and viewport;
+it is not executable. The source and existing project bindings determine behavior.
+External source/metadata edits invalidate a loaded revision: reload or save a new
+flow rather than overwriting somebody else's work. Existing draft JSON imports
+remain unsaved visual drafts until explicitly saved as a Python flow.
+
+The example is `flows/document_summary.py`. Run it without a browser:
+
+```bash
+python -m weavem --project examples/editor-local flow run document_summary
+```
+
+From Python, load the same selected project explicitly:
+
+```python
+from weavem.flows import load_local_flow
+
+result = load_local_flow("document_summary", project="examples/editor-local")()
+print(result)
+```
 
 The execution bridge is deliberately **loopback-only**, unlike the visual-only
 development server below. It serves the UI and execution routes from the same
 origin and checks host, origin, and a per-session request token. It does not
 accept a browser-selected project path, interpreter, or arbitrary Python code.
 This is not a sandbox: trusted tasks have your user permissions and may perform
-side effects. Local native tasks may compile on first execution; the UI warns
-before starting. Published tasks retain the normal integrity/compatibility checks.
+side effects. Supported native tasks prepare automatically without a compilation confirmation.
+Preparation failures report their actual cause; no privileged OS packages are installed. Published tasks retain the normal integrity/compatibility checks.
 Because each run starts a fresh process, a local native task can compile again on
 each run; published native tasks reuse their selected binary without compilation.
 
-Canvas execution supports sequential acyclic graphs, branches, and joins.
+Visual authoring supports sequential acyclic graphs, branches, and joins.
 Each wire passes the whole source result into one explicitly named argument;
 literal JSON parameters supply other arguments. Conflicting assignments,
 unmapped wires, cycles, stale release pins, and unbound tasks prevent execution.
@@ -42,16 +72,18 @@ supported by this prototype.
 Argument names `return_state` and `wait_for` are reserved by Prefect and rejected;
 use an export with different parameter names for this canvas runner.
 
-Each run uses a fresh child process. Graph edits are locked while it runs.
+Each run uses a fresh child process and the same saved-flow loader as the CLI.
+Authored retries and Prefect settings are preserved rather than replaced by
+editor defaults. Explicitly choose your Prefect profile before starting the bridge. Graph edits are locked while it runs.
 Failure stops the run and skips unexecuted nodes; cancellation is best-effort
 process termination, **not rollback**. Run diagnostics live under the project's
 configured artifact directory in `editor-runs/`; browser logs are a bounded tail
 and results are bounded previews. Logs, parameters, and previews may contain
 sensitive data. Full results are not intentionally persisted by this runner;
 task code can still write files itself.
-Reloading the page does not cancel execution or recover its controls. If you lose
-an active run's controls, stop that bridge with Ctrl+C and reconnect after starting
-it again. Check task side effects before retrying a non-demo project.
+Reloading the page can reconnect to the active run while the same bridge remains
+alive. Restarting the backend does not restore running processes. Cancellation
+cannot undo side effects; check them before retrying a non-demo project.
 
 ## Run the visual-only development server
 
@@ -100,7 +132,7 @@ no external fonts, accounts, telemetry, or application API.
 The inspector exposes descriptive metadata. A released badge means the imported
 snapshot identifies a release; the browser does not validate its binary, ABI,
 policy, publisher, or behavior. Run preflight and the Python runtime perform
-execution checks; nothing produced here is a published Weavem flow.
+execution checks; saving creates ordinary local flow source, not a published immutable release.
 Keyboard focus and button-based alternatives are available; this is not a claim
 of audited accessibility conformance. Editing is desktop-first (1100px+). Smaller
 windows show a notice while keeping export/recovery available.
@@ -141,9 +173,10 @@ Autosave uses this browser origin's localStorage, not the project directory.
 Changing the URL/port/browser creates a separate storage space. It is not a
 backup service: export a file to move or retain work. Metadata, source paths,
 parameters, and notes remain local in the browser or the files you download.
-During an explicit run, the execution graph is sent to the local bridge. Draft
+During a run, the selected saved flow name, revision, and parameters are sent to
+the local bridge. Saving sends the editable graph for Python generation. Draft
 schema 1 is upgraded on opening without inventing argument mappings; exports use
-schema 2. The execution graph has its own schema, independent of layout.
+schema 2. The browser graph is an editing/validation representation, not a separate runtime format.
 Neither localStorage nor draft files are secure credential stores; do not enter
 passwords, tokens, or customer data.
 
