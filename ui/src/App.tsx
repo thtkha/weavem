@@ -20,6 +20,7 @@ import {
 import {
   addTask,
   connectNodes,
+  canConnectNodes,
   createDemoDraft,
   createEmptyDraft,
   projectFlowDraft,
@@ -32,6 +33,9 @@ import {
   serializeDraft,
   executionGraph,
   setEdgeArgument,
+  reconnectNodes,
+  clearEdgeArgument,
+  eligibleTargetArguments,
 } from './model';
 import type { CatalogTask, DraftNode, EditorDraft, ExecutionGraph, Point, RunNodeStatus, RunState, Viewport } from './types';
 
@@ -110,6 +114,7 @@ function TaskNode({ data, selected }: NodeProps<Node<NodeData, 'task'>>) {
         type="target"
         position={Position.Left}
         aria-label="Draft input"
+        title="Input: connect an upstream task"
       />
       <div className="node-kicker">{task.provenance} task</div>
       <strong className="node-title">{data.label}</strong>
@@ -119,15 +124,12 @@ function TaskNode({ data, selected }: NodeProps<Node<NodeData, 'task'>>) {
         <span>{task.backend}</span>
       </div>
       {data.runStatus && <span className={`node-run-status ${data.runStatus}`}>{data.runStatus}</span>}
-      <div className="node-port-labels">
-        <span>input</span>
-        <span>output</span>
-      </div>
       <Handle
         className="node-handle node-handle-output"
         type="source"
         position={Position.Right}
         aria-label="Draft output"
+        title="Output: connect a downstream task"
       />
     </article>
   );
@@ -190,6 +192,7 @@ export default function App() {
   const [flow, setFlow] = useState<ReactFlowInstance<Node<NodeData, 'task'>, Edge> | null>(null);
   const [parameterText, setParameterText] = useState('{}');
   const [connectTarget, setConnectTarget] = useState('');
+  const [connectionAdderOpen, setConnectionAdderOpen] = useState(false);
   const [edgeArgument, setEdgeArgumentText] = useState('');
   const [session, setSession] = useState<EditorSession | null>(null);
   const [sessionMessage, setSessionMessage] = useState('Disconnected: run this editor with weavem editor --project PATH');
@@ -206,6 +209,10 @@ export default function App() {
   const dialog = useRef<HTMLElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const submittingRef = useRef(false);
+  const reconnecting = useRef(new Map<string, { updated: boolean; escaped: boolean }>());
+  const draftRef = useRef(draft);
+
+  useEffect(() => { draftRef.current = draft; }, [draft]);
 
   const nodes = useMemo<Node<NodeData, 'task'>[]>(
     () => draft.nodes.flatMap((node) => {
@@ -228,7 +235,6 @@ export default function App() {
       ...edge,
       type: 'smoothstep',
       markerEnd: { type: MarkerType.ArrowClosed, color: '#90a96e' },
-      label: edge.argument,
       selected: selectedEdgeIds.has(edge.id),
       ariaLabel: `Draft connection from ${edge.source} to ${edge.target}`,
     })),
@@ -237,6 +243,12 @@ export default function App() {
   const selectedNode = draft.nodes.find((node) => node.id === selectedId);
   const selectedTask = taskFor(draft, selectedNode);
   const selectedEdge = draft.edges.find((edge) => selectedEdgeIds.has(edge.id));
+  const connectionTargets = selectedNode ? draft.nodes.filter((node) => node.id !== selectedNode.id).map((node) => ({
+    node,
+    connected: draft.edges.some((edge) => edge.source === selectedNode.id && edge.target === node.id),
+    available: canConnectNodes(draft, selectedNode.id, node.id),
+  })) : [];
+  const targetAvailable = connectionTargets.some(({ node, available }) => node.id === connectTarget && available);
   const running = run?.status === 'running';
   const executionActive = Boolean(running || submitting);
   const sessionMatchesDraft = Boolean(session && draft.catalog.kind === 'project' && draft.catalog.name === session.project);
@@ -247,8 +259,16 @@ export default function App() {
 
   useEffect(() => {
     setParameterText(selectedNode ? JSON.stringify(selectedNode.parameters, null, 2) : '{}');
-    setConnectTarget('');
   }, [selectedId, selectedNode?.parameters]);
+
+  useEffect(() => {
+    setConnectTarget('');
+    setConnectionAdderOpen(false);
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (connectTarget && !targetAvailable) setConnectTarget('');
+  }, [connectTarget, targetAvailable]);
 
   useEffect(() => {
     setEdgeArgumentText(selectedEdge?.argument ?? '');
@@ -482,17 +502,59 @@ export default function App() {
     }
   }, [draft, selectedEdgeIds, updateDraft]);
 
+  const deleteEdge = useCallback((id: string) => {
+    if (executionActive) return;
+    setSelectedEdgeIds((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
+    const current = draftRef.current;
+    updateDraft({ ...current, edges: current.edges.filter((edge) => edge.id !== id) }, 'Connection deleted');
+  }, [executionActive, updateDraft]);
+
   const addConnection = useCallback(
     (connection: Connection | { source: string | null; target: string | null }) => {
-      if (!connection.source || !connection.target) return;
+      if (executionActive || !connection.source || !connection.target) return;
       try {
-        updateDraft(connectNodes(draft, connection.source, connection.target), 'Draft connection added');
-      } catch (cause) {
-        setError(String(cause));
-      }
-    },
-    [draft, updateDraft],
+        const next = connectNodes(draft, connection.source, connection.target);
+        const edge = next.edges.at(-1);
+        updateDraft(next, edge?.argument ? `Connection added and mapped to ${edge.argument}` : 'Connection added; mapping required');
+      } catch (cause) { setError(String(cause)); }
+    }, [draft, executionActive, updateDraft],
   );
+
+  const selectEdge = useCallback((id: string) => {
+    setSelectedEdgeIds(new Set([id]));
+    setSelectedId(null);
+  }, []);
+
+  const reconnectEdge = useCallback((oldEdge: Edge, connection: Connection) => {
+    if (executionActive || !connection.source || !connection.target) return;
+    try {
+      const next = reconnectNodes(draft, oldEdge.id, connection.source, connection.target);
+      reconnecting.current.set(oldEdge.id, { updated: true, escaped: false });
+      updateDraft(next, oldEdge.target === connection.target ? 'Connection reconnected' : 'Connection reconnected; check mapping');
+      selectEdge(oldEdge.id);
+    } catch (cause) { setError(String(cause)); }
+  }, [draft, executionActive, selectEdge, updateDraft]);
+
+  const onReconnectStart = useCallback((_event: React.MouseEvent, edge: Edge) => {
+    if (!executionActive) reconnecting.current.set(edge.id, { updated: false, escaped: false });
+  }, [executionActive]);
+
+  const onReconnectEnd = useCallback((event: MouseEvent | TouchEvent, edge: Edge, _handle: unknown, state: { isValid: boolean | null; toNode: unknown }) => {
+    const attempt = reconnecting.current.get(edge.id);
+    reconnecting.current.delete(edge.id);
+    if (executionActive || !attempt || attempt.updated || attempt.escaped || state.isValid || state.toNode) return;
+    // Only an actual release directly on the empty pane means disconnect.
+    // Invalid handles/nodes, outside releases, Escape and pointer cancellation
+    // leave the original edge untouched.
+    const pointerTarget = event instanceof MouseEvent
+      ? document.elementFromPoint(event.clientX, event.clientY)
+      : event.target;
+    if (pointerTarget instanceof Element && pointerTarget.classList.contains('react-flow__pane')) deleteEdge(edge.id);
+  }, [deleteEdge, executionActive]);
 
   const deleteSelected = useCallback(() => {
     if (selectedEdgeIds.size > 0) {
@@ -510,6 +572,7 @@ export default function App() {
   }, [draft, selectedEdgeIds, selectedId, updateDraft]);
 
   const onKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') reconnecting.current.forEach((attempt) => { attempt.escaped = true; });
     if (pending) return;
     if (event.key === 'Delete' || event.key === 'Backspace') {
       const target = event.target as HTMLElement;
@@ -619,14 +682,6 @@ export default function App() {
     } catch (cause) { setError(String(cause)); }
   };
 
-  const deleteEdge = (id: string) => {
-    setSelectedEdgeIds((current) => {
-      const next = new Set(current);
-      next.delete(id);
-      return next;
-    });
-    updateDraft({ ...draft, edges: draft.edges.filter((edge) => edge.id !== id) }, 'Connection deleted');
-  };
   const applyParameters = () => {
     try { updateSelected({ parameters: parseParameters(parameterText) }); if (!autosavePaused) setError(null); setStatus('Draft parameters applied'); }
     catch (cause) { setError(String(cause)); }
@@ -803,6 +858,11 @@ export default function App() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={addConnection}
+            edgesReconnectable={!executionActive}
+            onReconnectStart={onReconnectStart}
+            onReconnect={reconnectEdge}
+            onReconnectEnd={onReconnectEnd}
+            onPointerCancelCapture={() => reconnecting.current.forEach((attempt) => { attempt.escaped = true; })}
             nodesDraggable={!executionActive}
             nodesConnectable={!executionActive}
             elementsSelectable={!executionActive}
@@ -811,8 +871,7 @@ export default function App() {
               setSelectedEdgeIds(new Set());
             }}
             onEdgeClick={(_, edge) => {
-              setSelectedEdgeIds(new Set([edge.id]));
-              setSelectedId(null);
+              selectEdge(edge.id);
             }}
             onPaneClick={() => {
               setSelectedId(null);
@@ -892,28 +951,44 @@ export default function App() {
             </label>
             <p id="parameter-help" className="field-help">JSON object saved only in this editor draft.</p>
             <button className="button secondary wide" disabled={executionActive} onClick={applyParameters}>Apply parameters</button>
-            <section className="connection-editor">
-              <h3>Connect to node</h3>
-              <select aria-label="Connect to node" disabled={executionActive} value={connectTarget} onChange={(event) => setConnectTarget(event.target.value)}>
-                <option value="" disabled>Select a draft node</option>
-                {draft.nodes.filter((node) => node.id !== selectedNode.id).map((node) => (
-                  <option key={node.id} value={node.id}>{node.label}</option>
-                ))}
-              </select>
-              <button
-                className="button secondary wide"
-                onClick={() => {
-                  if (connectTarget) {
-                    addConnection({ source: selectedNode.id, target: connectTarget });
-                    setConnectTarget('');
-                  }
-                }}
-                disabled={!connectTarget || executionActive}
-              >
-                Connect nodes
-              </button>
-            </section>
-            <section className="outgoing"><h3>Outgoing connections</h3>{draft.edges.filter((edge) => edge.source === selectedNode.id).length ? draft.edges.filter((edge) => edge.source === selectedNode.id).map((edge) => { const target = draft.nodes.find((node) => node.id === edge.target); return <button disabled={executionActive} className="connection-row" key={edge.id} aria-label={`Delete connection to ${target?.label ?? edge.target}`} onClick={() => deleteEdge(edge.id)}><span>→ {target?.label ?? edge.target}</span><span>Delete</span></button>; }) : <p>No outgoing draft connections.</p>}</section>
+            {(['incoming', 'outgoing'] as const).map((direction) => {
+              const connected = draft.edges.filter((edge) => direction === 'incoming' ? edge.target === selectedNode.id : edge.source === selectedNode.id);
+              const title = direction === 'incoming' ? 'Incoming connections' : 'Outgoing connections';
+              return <section className="outgoing" key={direction} aria-label={title}>
+                <div className="connection-heading">
+                  <h3>{title}</h3>
+                  {direction === 'outgoing' && <button type="button" className="connection-add-toggle" aria-expanded={connectionAdderOpen} aria-controls="add-outgoing-connection" disabled={executionActive} onClick={() => setConnectionAdderOpen((open) => !open)}>{icon('plus')} Add connection</button>}
+                </div>
+                {connected.length ? connected.map((edge) => {
+                  const otherId = direction === 'incoming' ? edge.source : edge.target;
+                  const otherLabel = draft.nodes.find((node) => node.id === otherId)?.label ?? otherId;
+                  return <div className="connection-row" key={`${edge.id}:${edge.argument ?? ''}`}>
+                    <button type="button" disabled={executionActive} onClick={() => selectEdge(edge.id)} aria-label={`Select connection ${direction === 'incoming' ? 'from' : 'to'} ${otherLabel}`}><span>{direction === 'incoming' ? '←' : '→'} {otherLabel}</span><small>{edge.argument ?? 'Mapping required'}</small></button>
+                    <input aria-label={`Connection target argument to ${otherLabel}`} list={`connection-arguments-${edge.id}`} disabled={executionActive} defaultValue={edge.argument ?? ''} placeholder="Mapping required" onBlur={(event) => {
+                      const value = event.currentTarget.value.trim();
+                      if (value === (edge.argument ?? '')) return;
+                      try {
+                        updateDraft(value ? setEdgeArgument(draft, edge.id, value) : clearEdgeArgument(draft, edge.id), value ? 'Connection argument mapped' : 'Connection mapping cleared');
+                      } catch (cause) { setError(String(cause)); }
+                    }} />
+                    <datalist id={`connection-arguments-${edge.id}`}>
+                      {eligibleTargetArguments(draft, edge.target, edge.id).map((argument) => <option key={argument} value={argument} />)}
+                    </datalist>
+                    <button type="button" disabled={executionActive} className="connection-delete" aria-label={`Delete connection to ${otherLabel}`} onClick={() => deleteEdge(edge.id)}>Delete</button>
+                  </div>;
+                }) : <p>No {direction} draft connections.</p>}
+                {direction === 'outgoing' && <div id="add-outgoing-connection" className="connection-add-form" hidden={!connectionAdderOpen}>
+                  <label className="field">
+                    <span>Connect to</span>
+                    <select aria-label="Add connection target" disabled={executionActive} value={targetAvailable ? connectTarget : ''} onChange={(event) => setConnectTarget(event.target.value)}>
+                      <option value="" disabled>Select a draft node</option>
+                      {connectionTargets.map(({ node, connected, available }) => <option key={node.id} value={node.id} disabled={!available}>{node.label}{connected ? available ? ' (connected · another input available)' : ' (connected)' : ''}</option>)}
+                    </select>
+                  </label>
+                  <button className="button secondary wide" onClick={() => { if (targetAvailable) { addConnection({ source: selectedNode.id, target: connectTarget }); setConnectTarget(''); setConnectionAdderOpen(false); } }} disabled={!targetAvailable || executionActive}>Connect</button>
+                </div>}
+              </section>;
+            })}
             {run?.nodes[selectedNode.id] && <section className="run-result"><h3>Run result</h3><p><strong>{run.nodes[selectedNode.id].status}</strong></p>{run.nodes[selectedNode.id].preview && <pre>{run.nodes[selectedNode.id].preview}</pre>}{run.nodes[selectedNode.id].error && <p role="alert">{run.nodes[selectedNode.id].error}</p>}</section>}
             <button className="delete-button" disabled={executionActive} onClick={deleteSelected}>Delete node</button>
           </div> : selectedEdge ? <div className="inspector-content"><section className="connection-editor"><p className="eyebrow">Connection mapping</p><h3>Target argument</h3><p className="field-help">Pass this connection’s whole result to a named argument on the target task.</p><label className="field"><span>Argument</span><input aria-label="Connection target argument" disabled={executionActive} value={edgeArgument} placeholder="for example: text" onChange={(event) => setEdgeArgumentText(event.target.value)} /></label><button className="button secondary wide" disabled={executionActive || !edgeArgument.trim()} onClick={() => { try { updateDraft(setEdgeArgument(draft, selectedEdge.id, edgeArgument), 'Connection argument mapped'); } catch (cause) { setError(String(cause)); } }}>Apply mapping</button><button className="delete-button" disabled={executionActive} onClick={() => deleteEdge(selectedEdge.id)}>Delete connection</button></section></div> : <div className="inspector-empty"><span className="empty-mark">↖</span><p>Select a task node to view descriptive metadata and edit this draft instance.</p><small>Connections need explicit argument mappings before a run.</small></div>}

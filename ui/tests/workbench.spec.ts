@@ -31,7 +31,7 @@ test('demo renders a real canvas with execution safely unavailable', async ({ pa
   const external: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('request', (request) => {
-    if (request.url().startsWith('http') && !request.url().startsWith('http://127.0.0.1:')) external.push(request.url());
+    if (request.url().startsWith('http') && new URL(request.url()).hostname !== '127.0.0.1') external.push(request.url());
   });
   await page.goto('/');
   await expect(page.getByTestId('task-node')).toHaveCount(3);
@@ -249,8 +249,10 @@ test('consecutive library additions use non-overlapping default positions', asyn
 test('inspector connects and deletes; invalid parameters do not change saved data', async ({ page }) => {
   await page.goto('/');
   await node(page, 'demo-count').click();
-  await page.getByLabel('Connect to node', { exact: true }).selectOption('demo-read');
-  await page.getByRole('button', { name: 'Connect nodes', exact: true }).click();
+  await expect(page.getByLabel('Add connection target', { exact: true })).not.toBeVisible();
+  await page.getByRole('button', { name: 'Add connection', exact: true }).click();
+  await page.getByLabel('Add connection target', { exact: true }).selectOption('demo-read');
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
   await expect.poll(async () => (await stored(page))?.edges.length).toBe(3);
   await page.getByRole('button', { name: 'Delete connection to Read documents', exact: true }).click();
   await expect.poll(async () => (await stored(page))?.edges.length).toBe(2);
@@ -261,6 +263,146 @@ test('inspector connects and deletes; invalid parameters do not change saved dat
   await page.getByRole('button', { name: 'Delete node', exact: true }).click();
   await expect.poll(async () => (await stored(page))?.edges.length).toBe(1);
   await expect(page.getByTestId('task-node')).toHaveCount(2);
+});
+
+test('the inspector reflects existing incoming and outgoing canvas wires', async ({ page }) => {
+  await page.goto('/');
+  await node(page, 'demo-normalize').click();
+  await expect(page.getByRole('heading', { name: 'Incoming connections' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Select connection from Read documents' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Outgoing connections' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Select connection to Count words' })).toBeVisible();
+  await page.getByRole('button', { name: 'Select connection to Count words' }).click();
+  await expect(page.getByLabel('Connection target argument', { exact: true })).toBeVisible();
+});
+
+test('dragged wires and the outgoing add control stay synchronized', async ({ page }) => {
+  await page.goto('/');
+  await node(page, 'demo-read').click();
+  const outgoing = page.getByRole('region', { name: 'Outgoing connections', exact: true });
+  await outgoing.getByRole('button', { name: 'Add connection', exact: true }).click();
+  const target = outgoing.getByLabel('Add connection target', { exact: true });
+  const option = target.locator('option[value="demo-normalize"]');
+  await expect(option).toHaveJSProperty('disabled', true);
+  await expect(option).toContainText('connected');
+  await outgoing.getByRole('button', { name: 'Delete connection to Normalize text', exact: true }).click();
+  await expect(option).toHaveJSProperty('disabled', false);
+  await target.selectOption('demo-normalize');
+
+  const from = (await node(page, 'demo-read').locator('.source').boundingBox())!;
+  const to = (await node(page, 'demo-normalize').locator('.target').boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 12 });
+  await page.mouse.up();
+  await expect(outgoing.getByRole('button', { name: 'Select connection to Normalize text' })).toBeVisible();
+  await expect(option).toHaveJSProperty('disabled', true);
+  await expect(target).toHaveValue('');
+  await expect(outgoing.getByRole('button', { name: 'Connect', exact: true })).toBeDisabled();
+  await expect.poll(async () => (await stored(page))?.edges.filter((edge) => edge.source === 'demo-read' && edge.target === 'demo-normalize').length).toBe(1);
+
+  const edge = (await stored(page))!.edges.find((edge) => edge.source === 'demo-read' && edge.target === 'demo-normalize')!;
+  const updater = page.locator(`.react-flow__edge[data-id="${edge.id}"] .react-flow__edgeupdater-target`);
+  const endpoint = (await updater.boundingBox())!;
+  const pane = (await page.locator('.react-flow__pane').boundingBox())!;
+  await page.mouse.move(endpoint.x + endpoint.width / 2, endpoint.y + endpoint.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(pane.x + pane.width - 40, pane.y + 90, { steps: 12 });
+  await page.mouse.up();
+  await node(page, 'demo-read').click();
+  const add = outgoing.getByRole('button', { name: 'Add connection', exact: true });
+  if (await add.getAttribute('aria-expanded') === 'false') await add.click();
+  await expect(option).toHaveJSProperty('disabled', false);
+  await expect(outgoing.getByRole('button', { name: 'Select connection to Normalize text' })).toHaveCount(0);
+  await target.selectOption('demo-normalize');
+  await outgoing.getByRole('button', { name: 'Connect', exact: true }).click();
+  await expect.poll(async () => (await stored(page))?.edges.length).toBe(2);
+  await expect(page.locator('.react-flow__edge')).toHaveCount(2);
+  await node(page, 'demo-normalize').click();
+  await expect(page.getByRole('button', { name: 'Select connection from Read documents' })).toBeVisible();
+});
+
+test('wire parameter labels are hidden without losing their mappings', async ({ page }) => {
+  const draft = createDemoDraft();
+  draft.edges[0].argument = 'documents';
+  draft.edges[1].argument = 'normalized_documents';
+  await page.addInitScript(({ key, text }) => localStorage.setItem(key, text), { key: STORAGE_KEY, text: JSON.stringify(draft) });
+  await page.goto('/');
+  await expect(page.locator('.react-flow__edge')).toHaveCount(2);
+  await expect(page.locator('.react-flow__edge-textwrapper')).toHaveCount(0);
+  await node(page, 'demo-normalize').click();
+  await expect(page.getByLabel('Connection target argument to Read documents', { exact: true })).toHaveValue('documents');
+  await expect(page.getByLabel('Connection target argument to Count words', { exact: true })).toHaveValue('normalized_documents');
+  expect((await stored(page))?.edges).toEqual(draft.edges);
+});
+
+test('ports use accessible labels and tooltips instead of decorative input/output text', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('task-node')).toHaveCount(3);
+  await expect(page.locator('.node-port-labels')).toHaveCount(0);
+  for (const task of await page.getByTestId('task-node').all()) {
+    await expect(task.getByLabel('Draft input', { exact: true })).toHaveAttribute('title', 'Input: connect an upstream task');
+    await expect(task.getByLabel('Draft output', { exact: true })).toHaveAttribute('title', 'Output: connect a downstream task');
+  }
+});
+
+test('wires meet solid port dots without a dark gap at different zoom levels', async ({ page }, info) => {
+  await page.setViewportSize({ width: 2512, height: 1282 });
+  await page.goto('/');
+  for (const zoom of [0.75, 1, 2]) {
+    const draft = createDemoDraft();
+    draft.viewport = { x: 80, y: 56, zoom };
+    await page.evaluate(({ key, text }) => localStorage.setItem(key, text), { key: STORAGE_KEY, text: JSON.stringify(draft) });
+    await page.reload();
+    const source = node(page, 'demo-read').getByLabel('Draft output', { exact: true });
+    const target = node(page, 'demo-normalize').getByLabel('Draft input', { exact: true });
+    for (const handle of [source, target]) {
+      await expect(handle).toHaveCSS('border-width', '0px');
+      await expect(handle).toHaveCSS('width', '13px');
+      await expect(handle).toHaveCSS('height', '13px');
+      await expect(handle).toHaveCSS('background-color', 'rgb(144, 169, 110)');
+    }
+    const edge = page.locator('.react-flow__edge[data-id="demo-edge-read-normalize"] .react-flow__edge-path');
+    await expect(edge).toHaveCSS('stroke', 'rgb(144, 169, 110)');
+    await expect.poll(() => page.evaluate(() => {
+      const path = document.querySelector<SVGPathElement>('.react-flow__edge[data-id="demo-edge-read-normalize"] .react-flow__edge-path')!;
+      const matrix = path.getScreenCTM()!;
+      const start = path.getPointAtLength(0).matrixTransform(matrix);
+      const end = path.getPointAtLength(path.getTotalLength()).matrixTransform(matrix);
+      const source = document.querySelector('[data-node-id="demo-read"] .source')!.getBoundingClientRect();
+      const target = document.querySelector('[data-node-id="demo-normalize"] .target')!.getBoundingClientRect();
+      return Math.max(Math.abs(start.x - source.right), Math.abs(start.y - (source.top + source.height / 2)),
+        Math.abs(end.x - target.left), Math.abs(end.y - (target.top + target.height / 2)));
+    })).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: info.outputPath(`continuous-ports-${zoom}.png`) });
+  }
+});
+
+test('edge endpoints reconnect and preserve a wire on Escape', async ({ page }) => {
+  await page.goto('/');
+  const targetUpdater = page.locator('.react-flow__edge[data-id="demo-edge-read-normalize"] .react-flow__edgeupdater-target');
+  const countTarget = node(page, 'demo-count').locator('.target');
+  const from = (await targetUpdater.boundingBox())!;
+  const to = (await countTarget.boundingBox())!;
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down(); await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 10 }); await page.mouse.up();
+  await expect.poll(async () => (await stored(page))?.edges.find((edge) => edge.id === 'demo-edge-read-normalize')?.target).toBe('demo-count');
+
+  const movedUpdater = page.locator('.react-flow__edge[data-id="demo-edge-read-normalize"] .react-flow__edgeupdater-target');
+  const moved = (await movedUpdater.boundingBox())!;
+  await page.mouse.move(moved.x + moved.width / 2, moved.y + moved.height / 2); await page.mouse.down(); await page.keyboard.press('Escape'); await page.mouse.up();
+  await expect.poll(async () => (await stored(page))?.edges.some((edge) => edge.id === 'demo-edge-read-normalize')).toBe(true);
+});
+
+test('releasing an edge endpoint on an empty pane disconnects only that wire', async ({ page }) => {
+  await page.goto('/');
+  const updater = page.locator('.react-flow__edge[data-id="demo-edge-read-normalize"] .react-flow__edgeupdater-target');
+  const endpoint = (await updater.boundingBox())!;
+  const pane = (await page.locator('.react-flow__pane').boundingBox())!;
+  await page.mouse.move(endpoint.x + endpoint.width / 2, endpoint.y + endpoint.height / 2); await page.mouse.down();
+  await page.mouse.move(pane.x + pane.width - 40, pane.y + 90, { steps: 10 }); await page.mouse.up();
+  await expect.poll(async () => (await stored(page))?.edges.some((edge) => edge.id === 'demo-edge-read-normalize')).toBe(false);
+  expect((await stored(page))?.edges.some((edge) => edge.id === 'demo-edge-normalize-count')).toBe(true);
 });
 
 test('pointer connection and node dragging update the independent graph', async ({ page }) => {

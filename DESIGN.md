@@ -47,7 +47,7 @@ separate from the released application-user manual.
 One task vocabulary, another authoring surface. React Flow owns presentation,
 never Weavem execution. Node instances reference task records; duplicate instances
 are allowed. Each executable wire names its destination argument and passes the
-whole upstream result; task descriptions are not machine-validated type schemas.
+whole upstream result; task descriptions are not machine-validated type schemas. The canvas and inspector read the same draft edge list: both incoming and outgoing wires remain inspectable, mappable, selectable, and deletable. Reconnecting a wire on an empty canvas disconnects it; invalid, cancelled, and outside-canvas releases preserve it.
 Published provenance is metadata, not a claim of verified bytes or trusted code.
 Preserve current work when input is invalid; confirm before replacing a draft.
 
@@ -66,7 +66,8 @@ Motion is limited to interaction feedback. No remote fonts or image assets.
 
 Task library/search/provenance filters, metadata-driven task node with generic
 handles, graph controls/minimap, draft toolbar/status, node inspector, JSON
-parameter editor, and draggable/keyboard panel separators. Run/cancel sits at the
+parameter editor, incoming/outgoing connection lists with mapping controls,
+reconnectable wire endpoints, and draggable/keyboard panel separators. Run/cancel sits at the
 right of the shared draft-action toolbar with play/stop icons and no divider line.
 The toolbar aligns with the canvas at the default panel widths and stays anchored
 when either panel is resized; resizing the window still adapts its width.
@@ -78,6 +79,14 @@ Panel boundaries use only the resizer line. Cancel uses a muted red fill with
 bright off-white text and icons; idle Run retains the sage accent.
 Keyboard connection controls, replacement confirmation, and visible
 import/storage errors remain available. Native CSS owns tokens and component states.
+Outgoing connections contain a collapsible Add connection control. Its choices
+reflect the same graph and eligibility rules as pointer wiring: existing targets
+are marked connected and duplicate wires cannot be added. Wire parameter labels
+are hidden on the canvas; mappings remain editable in the inspector and are
+preserved for execution and export.
+Port dots meet the wires continuously with no dark border. Direction is available
+through accessible labels and hover tooltips, not repeated input/output text on
+every card.
 Execution controls and status labels reuse these components without changing
 the sage/olive palette.
 

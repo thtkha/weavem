@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const port = Number(process.env.WEAVEM_UI_TEST_PORT || 4173);
+const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: './tests',
@@ -18,13 +19,13 @@ export default defineConfig({
   use: {
     ...devices['Desktop Chrome'],
     viewport: { width: 1600, height: 1000 },
-    baseURL: `http://127.0.0.1:${port}`,
+    baseURL,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
   webServer: {
     command: `npm run preview -- --host 127.0.0.1 --port ${port} --strictPort`,
-    url: `http://127.0.0.1:${port}`,
+    url: baseURL,
     reuseExistingServer: false,
     timeout: 30_000,
   },

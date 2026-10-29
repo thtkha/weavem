@@ -6,6 +6,10 @@ import {
   STORAGE_KEY,
   addTask,
   connectNodes,
+  canConnectNodes,
+  clearEdgeArgument,
+  eligibleTargetArguments,
+  reconnectNodes,
   createDemoDraft,
   createEmptyDraft,
   projectFlowDraft,
@@ -150,6 +154,63 @@ describe('draft model', () => {
     expect(() => connectNodes(forward, 'missing', two.nodes[1].id)).toThrow(/nodes in this draft/);
   });
 
+  it('keeps canvas and inspector connection data in one draft edge list', () => {
+    const draft = createDemoDraft();
+    expect(draft.edges.filter((edge) => edge.target === 'demo-normalize')).toMatchObject([{ source: 'demo-read' }]);
+    expect(draft.edges.filter((edge) => edge.source === 'demo-normalize')).toMatchObject([{ target: 'demo-count' }]);
+  });
+
+  it('shares add eligibility with pointer connections and rejects duplicate unmapped wires', () => {
+    const draft = createDemoDraft();
+    expect(canConnectNodes(draft, 'demo-read', 'demo-read')).toBe(false);
+    expect(canConnectNodes(draft, 'missing', 'demo-count')).toBe(false);
+    expect(canConnectNodes(draft, 'demo-read', 'demo-normalize')).toBe(false);
+    expect(() => connectNodes(draft, 'demo-read', 'demo-normalize')).toThrow(/already exists/);
+    const disconnected = { ...draft, edges: draft.edges.filter((edge) => edge.source !== 'demo-read') };
+    expect(canConnectNodes(disconnected, 'demo-read', 'demo-normalize')).toBe(true);
+    const linked = connectNodes(disconnected, 'demo-read', 'demo-normalize');
+    expect(canConnectNodes(linked, 'demo-read', 'demo-normalize')).toBe(false);
+  });
+
+  it('still permits another wire to a distinct available input on an already connected task', () => {
+    const draft = createDemoDraft();
+    draft.catalog.tasks.find((task) => task.taskId === 'text.normalize')!.inputs = ['documents', 'extra'];
+    draft.edges[0].argument = 'documents';
+    expect(canConnectNodes(draft, 'demo-read', 'demo-normalize')).toBe(true);
+    const linked = connectNodes(draft, 'demo-read', 'demo-normalize');
+    expect(linked.edges.at(-1)?.argument).toBe('extra');
+    expect(canConnectNodes(linked, 'demo-read', 'demo-normalize')).toBe(false);
+  });
+
+  it('suggests exactly one unused named input and resets a changed reconnect target', () => {
+    const one = addTask(createEmptyDraft(demoCatalog), demoCatalog.tasks[0].key);
+    const two = addTask(one, demoCatalog.tasks[1].key);
+    const linked = connectNodes(two, one.nodes[0].id, two.nodes[1].id);
+    expect(linked.edges[0].argument).toBe('documents');
+    expect(eligibleTargetArguments(linked, two.nodes[1].id)).toEqual([]);
+    const third = addTask(linked, demoCatalog.tasks[2].key);
+    const moved = reconnectNodes(third, linked.edges[0].id, one.nodes[0].id, third.nodes[2].id);
+    expect(moved.edges[0].argument).toBe('normalized_documents');
+  });
+
+  it('recognizes a conservative name-and-annotation input description', () => {
+    const catalog = { ...demoCatalog, tasks: [demoCatalog.tasks[0], { ...demoCatalog.tasks[1], inputs: ['text: str', 'natural language prose'] }] };
+    const first = addTask(createEmptyDraft(catalog), catalog.tasks[0].key);
+    const second = addTask(first, catalog.tasks[1].key);
+    expect(connectNodes(second, first.nodes[0].id, second.nodes[1].id).edges[0].argument).toBe('text');
+  });
+
+  it('can clear a mapping without deleting its wire', () => {
+    const mapped = setEdgeArgument(createDemoDraft(), 'demo-edge-read-normalize', 'documents');
+    expect(clearEdgeArgument(mapped, 'demo-edge-read-normalize').edges[0].argument).toBeUndefined();
+  });
+
+  it('preserves an edge mapping when only its source reconnects', () => {
+    const draft = setEdgeArgument(createDemoDraft(), 'demo-edge-read-normalize', 'documents');
+    const moved = reconnectNodes(draft, 'demo-edge-read-normalize', 'demo-count', 'demo-normalize');
+    expect(moved.edges.find((edge) => edge.id === 'demo-edge-read-normalize')?.argument).toBe('documents');
+  });
+
   it('migrates schema 1 generic wires to schema 2 without inventing argument mappings', () => {
     const legacy = createDemoDraft() as unknown as { schema: number };
     legacy.schema = 1;
@@ -164,7 +225,7 @@ describe('draft model', () => {
     const two = addTask(one, catalog.tasks[1].key);
     const linked = connectNodes(two, two.nodes[0].id, two.nodes[1].id);
     const bindings = Object.fromEntries(catalog.tasks.map((task) => [task.key, 'alias']));
-    expect(() => executionGraph(linked, bindings)).toThrow(/target argument/);
+    expect(executionGraph(linked, bindings)).toMatchObject({ edges: [{ argument: 'documents' }] });
     const mapped = setEdgeArgument(linked, linked.edges[0].id, 'documents');
     expect(executionGraph(mapped, bindings)).toMatchObject({ kind: 'weavem.graph', schema: 1, edges: [{ argument: 'documents' }] });
     const reverse = connectNodes(mapped, mapped.nodes[1].id, mapped.nodes[0].id);

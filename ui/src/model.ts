@@ -366,15 +366,66 @@ export function addTask(draft: EditorDraft, taskKey: string, position: Point = {
   };
 }
 
+export function eligibleTargetArguments(draft: EditorDraft, target: string, excludeEdgeId?: string): string[] {
+  const current = validateDraft(draft);
+  const node = current.nodes.find((item) => item.id === target);
+  if (!node) fail('Connections must use nodes in this draft');
+  const task = current.catalog.tasks.find((item) => item.key === node.taskKey);
+  if (!task) return [];
+  // `inputs` is descriptive metadata. Treat only simple identifiers as named
+  // callable arguments; prose remains unknown rather than being guessed.
+  const namedInputs = task.inputs.flatMap((input) => {
+    // We accept a bare name or a simple `name: annotation` description, but
+    // never attempt to turn general prose into an executable argument name.
+    const match = input.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?::\s*[^,]+)?\s*$/);
+    return match ? [match[1]] : [];
+  });
+  const supplied = new Set(current.edges.filter((edge) => edge.target === target && edge.id !== excludeEdgeId)
+    .map((edge) => edge.argument).filter((argument): argument is string => Boolean(argument)));
+  return namedInputs.filter((input) => !supplied.has(input) && !Object.hasOwn(node.parameters, input));
+}
+
+function suggestedArgument(draft: EditorDraft, target: string, excludeEdgeId?: string): string | undefined {
+  const candidates = eligibleTargetArguments(draft, target, excludeEdgeId);
+  return candidates.length === 1 ? candidates[0] : undefined;
+}
+
+function assertConnection(draft: EditorDraft, source: string, target: string): void {
+  if (source === target) fail('A node cannot connect to itself');
+  const ids = new Set(draft.nodes.map((node) => node.id));
+  if (!ids.has(source) || !ids.has(target)) fail('Connections must use nodes in this draft');
+}
+
+function newConnectionArgument(draft: EditorDraft, source: string, target: string): string | undefined {
+  assertConnection(draft, source, target);
+  const argument = suggestedArgument(draft, target);
+  // An existing unmapped wire must be mapped, not duplicated by the other UI path.
+  if (draft.edges.some((edge) => edge.source === source && edge.target === target && (edge.argument === undefined || edge.argument === argument || argument === undefined))) fail('That connection already exists');
+  return argument;
+}
+
+/** The add control and pointer wiring use the same connection eligibility rules. */
+export function canConnectNodes(draft: EditorDraft, source: string, target: string): boolean {
+  try { newConnectionArgument(validateDraft(draft), source, target); return true; }
+  catch { return false; }
+}
+
 export function connectNodes(draft: EditorDraft, source: string, target: string): EditorDraft {
   const current = validateDraft(draft);
-  if (source === target) fail('A node cannot connect to itself');
-  const ids = new Set(current.nodes.map((node) => node.id));
-  if (!ids.has(source) || !ids.has(target)) fail('Connections must use nodes in this draft');
-  if (current.edges.some((edge) => edge.source === source && edge.target === target && !edge.argument)) {
-    fail('That connection already exists');
-  }
-  return { ...current, edges: [...current.edges, { id: freshId('edge'), source, target }] };
+  const argument = newConnectionArgument(current, source, target);
+  return { ...current, edges: [...current.edges, { id: freshId('edge'), source, target, ...(argument === undefined ? {} : { argument }) }] };
+}
+
+/** Reconnect a draft edge while retaining its mapping when its target is unchanged. */
+export function reconnectNodes(draft: EditorDraft, id: string, source: string, target: string): EditorDraft {
+  const current = validateDraft(draft);
+  const existing = current.edges.find((edge) => edge.id === id);
+  if (!existing) fail(`Unknown connection: ${id}`);
+  assertConnection(current, source, target);
+  if (existing.source === source && existing.target === target) return current;
+  const argument = existing.target === target ? existing.argument : suggestedArgument(current, target, id);
+  if (current.edges.some((edge) => edge.id !== id && edge.source === source && edge.target === target && edge.argument === argument)) fail('That connection already exists');
+  return { ...current, edges: current.edges.map((edge) => edge.id === id ? { ...edge, source, target, ...(argument === undefined ? { argument: undefined } : { argument }) } : edge) };
 }
 
 export function setEdgeArgument(draft: EditorDraft, id: string, argument: string): EditorDraft {
@@ -382,6 +433,13 @@ export function setEdgeArgument(draft: EditorDraft, id: string, argument: string
   if (!argument.trim()) fail('Connection argument is required for execution');
   if (!current.edges.some((edge) => edge.id === id)) fail(`Unknown connection: ${id}`);
   return { ...current, edges: current.edges.map((edge) => edge.id === id ? { ...edge, argument: argument.trim() } : edge) };
+}
+
+/** Clear a draft-only mapping while retaining the visible connection. */
+export function clearEdgeArgument(draft: EditorDraft, id: string): EditorDraft {
+  const current = validateDraft(draft);
+  if (!current.edges.some((edge) => edge.id === id)) fail(`Unknown connection: ${id}`);
+  return { ...current, edges: current.edges.map((edge) => edge.id === id ? { ...edge, argument: undefined } : edge) };
 }
 
 /** Validate a draft as an executable graph without treating descriptions as types. */
