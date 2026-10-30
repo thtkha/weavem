@@ -48,7 +48,7 @@ spacing:
   group: "8px"
 ---
 
-# Design
+# Design — expressive experiment
 
 ## Colors
 
@@ -64,11 +64,18 @@ legibility changes, not a claim of WCAG conformance.
 
 ## Source of truth
 
-Status: Active · 2026-10-28 · Surface: local node-editor prototype.
+Status: Isolated comparison candidate · 2026-10-30 · Surface: local node editor.
+Branch: `experiment/impeccable-expressive`; based on practical checkpoint `d193682`.
+This is not selected for promotion and does not replace the owner-approved
+continuation design. The user explicitly allowed freer palette/layout experiments
+inside this lab.
 Evidence: the owner-approved interactive/dark/React Flow choices; masterplan v8
 sections 18, 26 (Visual representation), and 29.7; the existing
 [project metadata API](docs/users/reference.md#local-project-metadata-python-api).
-The owner-provided `color_shades.jpg` defines the sage/olive palette; the existing workbench layout is preserved.
+The continuation design uses the owner-provided sage/olive palette. This candidate
+explores a blue-black/cyan instrument desk while retaining the three-region
+workbench and all execution semantics. The comparison brief is recorded in
+[the lab design review](docs/project/impeccable-lab-design-review.md).
 This is a prototype design contract, not a new supported Python feature.
 
 ## Brand
@@ -118,19 +125,31 @@ Preserve current work when input is invalid; confirm before replacing a draft.
 
 ## Visual language
 
-Deep olive canvas (#0c0f09), dark olive panels (#080a06), muted borders (#374227),
-off-white text (#edf1e7), secondary text (#c6d2b4), and sage (#90a96e)
-for primary actions, wires, focus, and selection. Hover accents use #aabd90.
-These colors come from the owner-provided palette; warning/error colors stay distinct. Blue/purple badges distinguish provenance and
-backend without implying safety. System sans-serif UI, monospace identifiers.
-Use an 8px spacing rhythm, 6–10px corner radii, thin borders, and quiet shadows.
-Task cards have clear hierarchy and one meaningful accent; SVG icons are inline.
-Motion is limited to interaction feedback. No remote fonts or image assets.
+Blue-black canvas (#111a26), ink-dark panels (#0b121b), task surfaces
+(#1b2b3b), and stronger control surfaces (#24374a). Text is cool-white
+(#edf5fa), secondary text is blue-tinted (#b7cbd8), and cyan (#78d4dc)
+marks execution, wires, focus, and selection. Control boundaries use #71899b;
+quiet structural rules use #3e5366. Error/warning/provenance remain distinct
+and labelled rather than decorative.
+
+The instrument-desk identity comes from stronger hierarchy: 16px task titles,
+14px inspector sections, 12px prose/controls, 11px metadata; a named flow row,
+compact labelled-for-accessibility history controls, and a separate execution
+group anchored to the canvas boundary. Details use local/system sans and code
+identifiers use monospace. No remote fonts or image assets.
+
+The normal workbench has no decorative or perpetual motion. Selected nodes use
+an offset outline; panels, native scrolling, and graph geometry remain stable.
+The opt-in Motion lab is the only ambitious effect: a native View Transition
+morphs an illustrative whole-result value into one selected field. It never
+runs tasks, edits drafts, or signals real execution. Unsupported/reduced-motion
+paths show the same sample instantly. Native dialog handles Escape, background
+inertness, and focus; closing returns to the Motion lab trigger.
 
 ### Scrollbars
 
-Native scrolling uses a slim, rounded olive thumb (`#5e704a`) on a transparent
-track, brightening to sage (`#90a96e`) on thumb hover/drag where supported.
+Native scrolling uses a slim, rounded olive thumb (`#52778b`) on a transparent
+track, brightening to sage (`#78d4dc`) on thumb hover/drag where supported.
 Chromium/Edge/WebKit use 6px scrollbars without arrow buttons; Firefox uses
 standard thin scrollbars with browser-defined geometry. Apply consistently to
 panels, logs, text fields, and horizontal overflow; do not replace browser
@@ -156,7 +175,7 @@ drag and Add task behaviors are unchanged.
 The canvas header controls only
 canvas fullscreen; React Flow retains its bottom-left zoom and fit controls.
 Panel boundaries use only the resizer line. Cancel uses a muted red fill with
-bright off-white text and icons; idle Run retains the sage accent.
+bright off-white text and icons; idle Run uses the cyan accent.
 Keyboard connection controls, replacement confirmation, and visible
 import/storage errors remain available. Tailwind theme tokens own the shared palette and control styles; native CSS retains canvas and layout integration.
 Outgoing connections contain a collapsible Add connection control. Its choices
@@ -167,8 +186,8 @@ preserved for execution and export.
 Port dots meet the wires continuously with no dark border. Direction is available
 through accessible labels and hover tooltips, not repeated input/output text on
 every card.
-Execution controls and status labels reuse these components without changing
-the sage/olive palette.
+Execution controls and status labels reuse the same components with the candidate
+blue-black/cyan palette; semantic status labels remain unchanged.
 
 ### Inspector comparison: collapsible sections
 
@@ -184,7 +203,7 @@ Selecting a wire changes the
 header to identify that connection rather than incorrectly describing the
 inspector as empty. Connection rows name their peer once and expose one
 argument-mapping control; they do not repeat the same mapping as decorative
-text. Section headings use 13px, field labels and controls 12px, helper
+text. Section headings use 14px, field labels and controls 12px, helper
 metadata 11px, and the established 8/12/16px spacing rhythm.
 
 ### Styling and component boundaries

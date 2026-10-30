@@ -1,3 +1,4 @@
+import { themeColor } from './theme';
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { createDemoDraft, STORAGE_KEY } from '../src/model';
@@ -256,12 +257,12 @@ test('an active run locks mutation, supports cancellation, and clears results on
   await expect(page.getByRole('button', { name: 'Cancel run', exact: true })).toBeVisible();
   const cancel = page.getByRole('button', { name: 'Cancel run', exact: true });
   await page.mouse.move(0, 0);
-  await expect(cancel).toHaveCSS('background-color', 'rgb(117, 70, 69)');
-  await expect(cancel).toHaveCSS('color', 'rgb(237, 241, 231)');
-  await expect(cancel.locator('svg')).toHaveCSS('color', 'rgb(237, 241, 231)');
+  await expect(cancel).toHaveCSS('background-color', await themeColor(page, '--color-danger'));
+  await expect(cancel).toHaveCSS('color', await themeColor(page, '--color-ink'));
+  await expect(cancel.locator('svg')).toHaveCSS('color', await themeColor(page, '--color-ink'));
   await cancel.hover();
-  await expect(cancel).toHaveCSS('background-color', 'rgb(135, 82, 82)');
-  await expect(cancel).toHaveCSS('color', 'rgb(237, 241, 231)');
+  await expect(cancel).toHaveCSS('background-color', await themeColor(page, '--color-danger-hover'));
+  await expect(cancel).toHaveCSS('color', await themeColor(page, '--color-ink'));
   await expect(page.getByLabel('Flow name', { exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: /^Add task / }).first()).toBeDisabled();
   await page.getByRole('button', { name: 'Cancel run', exact: true }).click();
@@ -409,11 +410,11 @@ test('wires retain distinct selected and keyboard-focused styling', async ({ pag
   await page.goto('/');
   const edge = page.locator('.react-flow__edge').first();
   const path = edge.locator('.react-flow__edge-path');
-  await expect(path).toHaveCSS('stroke', 'rgb(144, 169, 110)');
+  await expect(path).toHaveCSS('stroke', await themeColor(page, '--color-accent'));
   await edge.focus();
   await expect(path).toHaveCSS('stroke', 'rgb(85, 85, 85)');
   await node(page, 'demo-normalize').click();
-  await expect(path).toHaveCSS('stroke', 'rgb(144, 169, 110)');
+  await expect(path).toHaveCSS('stroke', await themeColor(page, '--color-accent'));
   await page.getByRole('button', { name: 'Select connection from Read documents' }).click();
   await expect(edge).toHaveClass(/selected/);
   await expect(path).toHaveCSS('stroke', 'rgb(85, 85, 85)');
@@ -503,10 +504,10 @@ test('wires meet solid port dots without a dark gap at different zoom levels', a
       await expect(handle).toHaveCSS('border-width', '0px');
       await expect(handle).toHaveCSS('width', '13px');
       await expect(handle).toHaveCSS('height', '13px');
-      await expect(handle).toHaveCSS('background-color', 'rgb(144, 169, 110)');
+      await expect(handle).toHaveCSS('background-color', await themeColor(page, '--color-accent'));
     }
     const edge = page.locator('.react-flow__edge[data-id="demo-edge-read-normalize"] .react-flow__edge-path');
-    await expect(edge).toHaveCSS('stroke', 'rgb(144, 169, 110)');
+    await expect(edge).toHaveCSS('stroke', await themeColor(page, '--color-accent'));
     await expect.poll(() => page.evaluate(() => {
       const path = document.querySelector<SVGPathElement>('.react-flow__edge[data-id="demo-edge-read-normalize"] .react-flow__edge-path')!;
       const matrix = path.getScreenCTM()!;
@@ -905,7 +906,7 @@ test('resizers provide the single visible vertical panel boundary', async ({ pag
   const divider = page.getByRole('separator', { name: 'Resize task library' });
   expect(await divider.evaluate((element) => getComputedStyle(element, '::after').width)).toBe('1px');
   await divider.hover();
-  await expect.poll(() => divider.evaluate((element) => getComputedStyle(element, '::after').backgroundColor)).toBe('rgb(144, 169, 110)');
+  await expect.poll(() => divider.evaluate((element) => getComputedStyle(element, '::after').backgroundColor)).toBe(await themeColor(page, '--color-accent'));
 });
 
 

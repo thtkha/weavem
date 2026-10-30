@@ -49,6 +49,7 @@ import { ResultViewer } from './ResultViewer';
 import { createDraftHistory, commitDraft, undoDraft, redoDraft, canUndo, canRedo, copySelection, pasteSelection, type DraftClipboard } from './editorHistory';
 import { RunInspection, type RunInspectionRecord } from './RunInspection';
 import { EditorToolbar } from './components/EditorToolbar';
+import { MotionLab } from './components/MotionLab';
 
 type NodeData = {
   nodeId: string;
@@ -178,10 +179,10 @@ function TaskNode({ data, selected }: NodeProps<Node<NodeData, 'task'>>) {
         aria-label="Draft input"
         title="Input: connect an upstream task"
       />
-      <div className="node-kicker">{task.provenance} task</div>
       <strong className="node-title">{data.label}</strong>
       <code className="node-id">{task.taskId}</code>
       <div className="node-metadata">
+        <span>{task.provenance}</span>
         <span>{task.version}</span>
         <span>{task.backend}</span>
       </div>
@@ -1000,8 +1001,9 @@ export default function App() {
             <div className="brand">
               <span className="brand-mark">W</span>
               <span>weavem</span>
-              <span className="prototype-badge">prototype</span>
+              <span className="prototype-badge">expressive lab</span>
             </div>
+            <MotionLab />
           </div>
           <EditorToolbar busy={executionActive} isProjectFlow={sessionMatchesDraft} canEdit={canvasEditingAllowed}
             flowName={draft.name} onFlowNameChange={setName} onFlowNameBlur={() => { editGroup.current = null; }} onNew={() => requestAction({ kind: 'new' })}
@@ -1052,7 +1054,7 @@ export default function App() {
         <aside className="library panel" aria-label="Task library">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">Task library</p>
+              <span className="visually-hidden">Task library</span>
               <h1>{draft.catalog.name}</h1>
             </div>
             <span className={`catalog-badge ${draft.catalog.kind}`}>
@@ -1194,14 +1196,14 @@ export default function App() {
             </div>
           )}
           <div className="canvas-footer">{executionActive ? (run?.phase === 'preparing' ? (run.message ?? 'Preparing flow…') : `Run ${run?.runId ?? 'submission'} is active; editing is locked`) : sessionMatchesDraft ? 'Ready to run · connections require target argument mapping' : 'Draft wiring · connect a local project to run'}</div>
-          {run && logOpen && <section className="run-log panel" aria-label="Run log"><div className="panel-heading"><div><p className="eyebrow">Local run</p><h2>{run.status === 'running' && run.phase === 'preparing' ? (run.message ?? 'Preparing flow…') : run.status}</h2></div><button className="icon-button" aria-label="Hide run log" onClick={() => setLogOpen(false)}>{icon('x')}</button></div><code>{run.runId}{run.flowName ? ` · ${run.flowName}${run.revision ? ` @ ${run.revision}` : ''}` : ''}</code><pre>{run.logs || 'Waiting for task output…'}</pre><ResultViewer value={run.resultValue} fallback={run.result} />{run.error && <p role="alert">{run.error}</p>}{run.errorDetails && <pre aria-label="Failure details">{JSON.stringify(run.errorDetails, null, 2)}</pre>}</section>}
+          {run && logOpen && <section className="run-log panel" aria-label="Run log"><div className="panel-heading"><div><h2>{run.status === 'running' && run.phase === 'preparing' ? (run.message ?? 'Preparing flow…') : run.status}</h2></div><button className="icon-button" aria-label="Hide run log" onClick={() => setLogOpen(false)}>{icon('x')}</button></div><code>{run.runId}{run.flowName ? ` · ${run.flowName}${run.revision ? ` @ ${run.revision}` : ''}` : ''}</code><pre>{run.logs || 'Waiting for task output…'}</pre><ResultViewer value={run.resultValue} fallback={run.result} />{run.error && <p role="alert">{run.error}</p>}{run.errorDetails && <pre aria-label="Failure details">{JSON.stringify(run.errorDetails, null, 2)}</pre>}</section>}
         </section>
         <ResizeHandle side="inspector" width={layout.inspectorWidth} onResize={(width) => updatePanelWidth('inspector', width)} />
 
         <aside className="inspector panel" aria-label="Node inspector">
           <div className="panel-heading inspector-panel-heading">
             <div>
-              <p className="eyebrow">Inspector</p>
+              <span className="visually-hidden">Inspector</span>
               <h2>{selectedNode && selectedTask ? selectedNode.label : selectedEdge ? 'Connection' : 'Nothing selected'}</h2>
               {selectedNode && selectedTask && <div className="inspector-header-identity">
                 <code>{selectedTask.taskId}</code>
@@ -1308,8 +1310,8 @@ export default function App() {
         </footer>
       </div>
 
-      {saveAsOpen && <div className="modal-backdrop" role="presentation"><section ref={dialog} className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="save-as-title"><p className="eyebrow">Save flow as</p><h2 id="save-as-title">Create an ordinary project flow</h2><Field label="New flow name"><input aria-label="New flow name" value={saveAsName} onChange={(event) => setSaveAsName(event.target.value)} /></Field><p>Use a Python identifier. This writes the standard flow files under <code>flows/</code>.</p>{saveAsError && <p role="alert">{saveAsError}</p>}<div className="dialog-actions"><Button disabled={submitting} onClick={() => setSaveAsOpen(false)}>Cancel</Button><Button variant="primary" disabled={submitting} onClick={() => void saveFlow(true, saveAsName).then(() => setSaveAsOpen(false)).catch((cause: unknown) => setSaveAsError(cause instanceof Error ? cause.message : String(cause)))}>Save as</Button></div></section></div>}
-      {pending && <div className="modal-backdrop" role="presentation"><section ref={dialog} className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="replace-title"><p className="eyebrow">Replace current draft?</p><h2 id="replace-title">Your current graph will be replaced.</h2><p>Export it first if you need a portable copy. Invalid files never change the current draft.</p><div className="dialog-actions"><Button onClick={() => setPending(null)}>Cancel</Button><Button variant="primary" onClick={() => void executePending(pending)}>Replace draft</Button></div></section></div>}
+      {saveAsOpen && <div className="modal-backdrop" role="presentation"><section ref={dialog} className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="save-as-title"><h2 id="save-as-title">Create an ordinary project flow</h2><Field label="New flow name"><input aria-label="New flow name" value={saveAsName} onChange={(event) => setSaveAsName(event.target.value)} /></Field><p>Use a Python identifier. This writes the standard flow files under <code>flows/</code>.</p>{saveAsError && <p role="alert">{saveAsError}</p>}<div className="dialog-actions"><Button disabled={submitting} onClick={() => setSaveAsOpen(false)}>Cancel</Button><Button variant="primary" disabled={submitting} onClick={() => void saveFlow(true, saveAsName).then(() => setSaveAsOpen(false)).catch((cause: unknown) => setSaveAsError(cause instanceof Error ? cause.message : String(cause)))}>Save as</Button></div></section></div>}
+      {pending && <div className="modal-backdrop" role="presentation"><section ref={dialog} className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="replace-title"><h2 id="replace-title">Your current graph will be replaced.</h2><p>Export it first if you need a portable copy. Invalid files never change the current draft.</p><div className="dialog-actions"><Button onClick={() => setPending(null)}>Cancel</Button><Button variant="primary" onClick={() => void executePending(pending)}>Replace draft</Button></div></section></div>}
     </main>
   );
 }

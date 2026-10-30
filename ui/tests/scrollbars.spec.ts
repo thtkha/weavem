@@ -1,15 +1,16 @@
+import { themeColor } from './theme';
 import { expect, test, type Locator } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
 // Headless Chromium hides native scrollbars by default, including their hit targets.
 test.use({ launchOptions: { ignoreDefaultArgs: ['--hide-scrollbars'] } });
 
-async function expectCustomScrollbar(element: Locator) {
+async function expectCustomScrollbar(element: Locator, color: string) {
   expect(await element.evaluate((el) => {
     const bar = getComputedStyle(el, '::-webkit-scrollbar');
     const thumb = getComputedStyle(el, '::-webkit-scrollbar-thumb');
     return { width: bar.width, height: bar.height, color: thumb.backgroundColor, radius: thumb.borderRadius };
-  })).toEqual({ width: '6px', height: '6px', color: 'rgb(94, 112, 74)', radius: '999px' });
+  })).toEqual({ width: '6px', height: '6px', color, radius: '999px' });
 }
 
 test('panels and JSON fields retain native scrolling with matching slim scrollbars', async ({ page }, info) => {
@@ -22,7 +23,7 @@ test('panels and JSON fields retain native scrolling with matching slim scrollba
   await parameters.fill(JSON.stringify(Object.fromEntries(Array.from({ length: 60 }, (_, i) => [`field${i}`, 'value '.repeat(60)])), null, 2));
   await parameters.evaluate((el) => el.setAttribute('wrap', 'off'));
   for (const element of [library, inspector, parameters]) {
-    await expectCustomScrollbar(element);
+    await expectCustomScrollbar(element, await themeColor(page, '--color-scrollbar'));
     expect(await element.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
   }
   // Wheel scrolling, keyboard editing and thumb dragging stay browser-owned.
@@ -66,7 +67,7 @@ test('run logs use the same scrollbar and forced colors restore system styling',
   await page.getByRole('button', { name: 'Run flow', exact: true }).click();
   const log = page.getByRole('region', { name: 'Run log', exact: true });
   await expect(log).toContainText('A line of output');
-  await expectCustomScrollbar(log);
+  await expectCustomScrollbar(log, await themeColor(page, '--color-scrollbar'));
   await log.hover(); await page.mouse.wheel(0, 400);
   await expect.poll(() => log.evaluate((el) => el.scrollTop)).toBeGreaterThan(0);
   await page.emulateMedia({ forcedColors: 'active' });

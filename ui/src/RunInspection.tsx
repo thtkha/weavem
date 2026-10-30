@@ -21,7 +21,7 @@ export function RunInspection({ inspection, onClose }: Props) {
   const { snapshot, state } = inspection;
   const graph = snapshot.graph;
   return <section className="run-inspection panel" aria-label="Last run">
-    <header className="panel-heading"><div><p className="eyebrow">Execution evidence</p><h2>Last run</h2></div><button className="icon-button" aria-label="Close last run" onClick={onClose}>×</button></header>
+    <header className="panel-heading"><div><h2>Last run</h2></div><button className="icon-button" aria-label="Close last run" onClick={onClose}>×</button></header>
     <dl>
       <dt>Run</dt><dd><code>{inspection.runId}</code></dd>
       <dt>Flow revision</dt><dd><code>{snapshot.revision}</code></dd>
