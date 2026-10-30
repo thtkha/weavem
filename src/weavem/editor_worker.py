@@ -153,9 +153,15 @@ def _run_saved_flow(request: dict[str, Any], emit: Callable[[dict[str, object]],
     target = load_local_flow(name, project=project,
                              expected_source_sha256=opened.get("sourceSha256"),
                              expected_metadata_sha256=opened.get("metadataSha256"))
-    source_path = Path(project) / "flows" / f"{name}.py"
-    trace = (_GeneratedFlowTrace(opened["source"], source_path, name, graph, emit)
-             if opened.get("editable") and isinstance(graph, dict) else None)
+    trace = None
+    if opened.get("editable") and isinstance(graph, dict):
+        from .config import resolve_project
+        from .flows import _spec
+        # Match the ordinary loader's filename, including configured roots and
+        # sidecars whose declared source filename differs from the local name.
+        _, source_path = _spec(resolve_project(project), name,
+                               expected_metadata_sha256=opened.get("metadataSha256"))
+        trace = _GeneratedFlowTrace(opened["source"], source_path, name, graph, emit)
     emit({"type": "run", "status": "running"})
     previous_trace = sys.gettrace()
     try:
