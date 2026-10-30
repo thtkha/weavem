@@ -1,3 +1,4 @@
+import { themeColor } from './theme';
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
@@ -237,5 +238,5 @@ test('raw parameter JSON uses the editor theme instead of browser white', async 
     const style = getComputedStyle(element);
     return { background: style.backgroundColor, ink: style.color };
   });
-  expect(theme).toEqual({ background: 'rgb(8, 10, 6)', ink: 'rgb(237, 241, 231)' });
+  expect(theme).toEqual({ background: await themeColor(page, '--color-panel'), ink: await themeColor(page, '--color-ink') });
 });
