@@ -1,5 +1,5 @@
 import { themeColor } from './theme';
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { readFile } from 'node:fs/promises';
 
 const metadataFile = new URL('./metadata.json', import.meta.url).pathname;

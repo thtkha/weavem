@@ -1,7 +1,8 @@
 import { themeColor } from './theme';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from './fixtures';
 import { readFile } from 'node:fs/promises';
-import { createDemoDraft, STORAGE_KEY } from '../src/model';
+import { STORAGE_KEY } from '../src/model';
+import { createDemoDraft } from './fixtures/demo';
 import type { EditorDraft } from '../src/types';
 
 const metadataFile = new URL('./metadata.json', import.meta.url).pathname;
@@ -41,7 +42,7 @@ async function openInspectorDetails(page: Page) {
   if (await details.getAttribute('open') === null) await details.locator('summary').click();
 }
 
-test('demo renders a real canvas with execution safely unavailable', async ({ page }, info) => {
+test('a restored legacy draft renders a real canvas with execution safely unavailable', async ({ page }, info) => {
   const errors: string[] = [];
   const external: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -50,7 +51,7 @@ test('demo renders a real canvas with execution safely unavailable', async ({ pa
   });
   await page.goto('/');
   await expect(page.getByTestId('task-node')).toHaveCount(3);
-  await expect(page.getByText('Sample catalog', { exact: true })).toBeVisible();
+  await expect(page.getByText('Browser draft', { exact: true })).toBeVisible();
   await expect(page.getByText('Draft wiring · connect a local project to run')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Run flow', exact: true })).toBeDisabled();
   expect((await page.getByRole('region', { name: 'Draft canvas' }).boundingBox())?.height).toBeGreaterThan(400);
@@ -607,7 +608,7 @@ test('real SDK metadata imports tasks, not a reconstructed Python flow', async (
   await page.getByRole('button', { name: 'Import metadata', exact: true }).click();
   await (await chooser).setFiles(metadataFile);
   await replace(page);
-  await expect(page.getByText('Project metadata', { exact: true })).toBeVisible();
+  await expect(page.getByText('Browser draft', { exact: true })).toBeVisible();
   await expect(page.getByTestId('task-node')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Add task text.normalize', exact: true })).toHaveCount(2);
   await page.getByRole('button', { name: 'released', exact: true }).click();
@@ -647,6 +648,7 @@ test('quota failure is visible and still allows export', async ({ page }) => {
     Storage.prototype.setItem = () => { throw new DOMException('Quota exceeded', 'QuotaExceededError'); };
   });
   await page.goto('/');
+  await page.getByLabel('Flow name', { exact: true }).fill('Storage check');
   await expect(page.getByRole('alert')).toContainText('Could not save draft');
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export draft', exact: true }).click();
@@ -716,7 +718,7 @@ test('even an empty renamed draft requires confirmation before catalog replaceme
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page.getByLabel('Flow name', { exact: true })).toHaveValue('Keep this empty composition');
-  await expect(page.getByText('Sample catalog', { exact: true })).toBeVisible();
+  await expect(page.getByText('Browser draft', { exact: true })).toBeVisible();
 });
 
 test('unavailable browser storage does not prevent editing or exporting', async ({ page }) => {
@@ -725,7 +727,7 @@ test('unavailable browser storage does not prevent editing or exporting', async 
   });
   await page.goto('/');
   await expect(page.getByRole('alert')).toContainText('Browser storage is unavailable');
-  await expect(page.getByTestId('task-node')).toHaveCount(3);
+  await expect(page.getByTestId('task-node')).toHaveCount(0);
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export draft', exact: true }).click();
   expect((await download).suggestedFilename()).toMatch(/\.json$/);

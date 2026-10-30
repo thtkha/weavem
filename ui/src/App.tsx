@@ -21,7 +21,6 @@ import {
   addTask,
   connectNodes,
   canConnectNodes,
-  createDemoDraft,
   createEmptyDraft,
   projectFlowDraft,
   importMetadata,
@@ -49,7 +48,6 @@ import { ResultViewer } from './ResultViewer';
 import { createDraftHistory, commitDraft, undoDraft, redoDraft, canUndo, canRedo, copySelection, pasteSelection, type DraftClipboard } from './editorHistory';
 import { RunInspection, type RunInspectionRecord } from './RunInspection';
 import { EditorToolbar } from './components/EditorToolbar';
-import { MotionLab } from './components/MotionLab';
 
 type NodeData = {
   nodeId: string;
@@ -65,7 +63,7 @@ type PendingAction =
   | { kind: 'flow'; name: string }
   | { kind: 'attach'; session: EditorSession; runId: string };
 
-type EditorSession = { token: string; project: string; metadata: unknown; bindings: Record<string, string>; parameterHints?: Record<string, TaskParameterHints>; flows?: FlowSummary[]; activeRunId?: string | null; flow?: ExecutionGraph | null };
+type EditorSession = { environment?: { pythonExecutable: string; pythonVersion: string; weavemVersion: string }; token: string; project: string; metadata: unknown; bindings: Record<string, string>; parameterHints?: Record<string, TaskParameterHints>; flows?: FlowSummary[]; activeRunId?: string | null; flow?: ExecutionGraph | null };
 type LoadedFlow = { name: string; revision: string | null; editable: boolean; reason?: string; source?: string };
 type SavedFlowResponse = Partial<ProjectFlow> & { name: string; revision: string; editable?: boolean; reason?: string };
 
@@ -242,13 +240,13 @@ export default function App() {
   const storage = useMemo(safeStorage, []);
   const initial = useMemo(() => loadStoredDraft(storage), [storage]);
   const initialLayout = useMemo(() => loadEditorLayout(storage), [storage]);
-  const [draft, setDraft] = useState<EditorDraft>(() => initial.draft ?? createDemoDraft());
+  const [draft, setDraft] = useState<EditorDraft>(() => initial.draft ?? { ...createEmptyDraft({ name: 'No project connected', kind: 'project', tasks: [] }), name: 'new_flow' });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [measurements, setMeasurements] = useState<Record<string, { width: number; height: number }>>({});
   const [selectedEdgeIds, setSelectedEdgeIds] = useState<Set<string>>(() => new Set());
   const [search, setSearch] = useState('');
   const [provenance, setProvenance] = useState<'all' | 'local' | 'released'>('all');
-  const [status, setStatus] = useState(initial.draft ? 'Restored browser draft' : 'Demo catalog · browser only');
+  const [status, setStatus] = useState(initial.draft ? 'Restored browser draft' : 'Connecting to project…');
   const [error, setError] = useState<string | null>(initial.error);
   const [autosavePaused, setAutosavePaused] = useState(Boolean(initial.error));
   const [pending, setPending] = useState<PendingAction | null>(null);
@@ -259,7 +257,9 @@ export default function App() {
   const [connectionAdderOpen, setConnectionAdderOpen] = useState(false);
   const [edgeArgument, setEdgeArgumentText] = useState('');
   const [session, setSession] = useState<EditorSession | null>(null);
-  const [sessionMessage, setSessionMessage] = useState('Disconnected: run this editor with weavem editor --project PATH');
+  const [sessionMessage, setSessionMessage] = useState('Start the editor with weavem editor --project PATH.');
+  const [connectionPhase, setConnectionPhase] = useState<'loading' | 'connected' | 'failed'>('loading');
+  const [connectionError, setConnectionError] = useState<string | null>(null);
   const [run, setRun] = useState<RunState | null>(null);
   const [sampleRun, setSampleRun] = useState<RunState | null>(null);
   const [loadedFlow, setLoadedFlow] = useState<LoadedFlow | null>(null);
@@ -299,6 +299,18 @@ export default function App() {
   const [inspectRun, setInspectRun] = useState(false);
   const resultAutoOpenedFor = useRef<string | null>(null);
   const revisionMismatchedRun = useRef<string | null>(null);
+  const sessionRef = useRef<EditorSession | null>(null);
+  const connectionAttempt = useRef(0);
+  const untouchedStartup = useRef(!initial.draft && !initial.error);
+
+  useEffect(() => { sessionRef.current = session; }, [session]);
+
+  const requestAction = useCallback((action: PendingAction) => {
+    // Even an empty restored/imported graph can represent meaningful work.
+    untouchedStartup.current = false;
+    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setPending(action);
+  }, []);
 
   useEffect(() => { draftRef.current = draft; }, [draft]);
 
@@ -358,7 +370,7 @@ export default function App() {
   const executionActive = Boolean(running || submitting);
   const sessionMatchesDraft = Boolean(session && draft.catalog.kind === 'project' && draft.catalog.name === session.project);
   const visualEditingAllowed = Boolean(sessionMatchesDraft && (loadedFlow === null || loadedFlow.editable));
-  // Demos and imported browser drafts remain useful visual-only authoring.
+  // Restored/imported browser drafts remain recoverable visual-only authoring.
   // Only a loaded Python flow explicitly marked source-only is read-only.
   const canvasEditingAllowed = !executionActive && loadedFlow?.editable !== false;
   const visibleTasks = useMemo(() => draft.catalog.tasks.filter((task) => {
@@ -450,9 +462,10 @@ export default function App() {
   );
 
   const requestApi = useCallback(async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
-    if (!session && path !== '/api/session') throw new Error('Connect a project before running');
+    const currentSession = sessionRef.current;
+    if (!currentSession && path !== '/api/session') throw new Error('Connect a project before running');
     const headers = new Headers(init.headers);
-    if (path !== '/api/session' && session) headers.set('X-Weavem-Token', session.token);
+    if (path !== '/api/session' && currentSession) headers.set('X-Weavem-Token', currentSession.token);
     if (init.body) headers.set('Content-Type', 'application/json');
     const response = await fetch(path, { ...init, headers });
     const payload: unknown = await response.json().catch(() => ({}));
@@ -463,7 +476,7 @@ export default function App() {
       throw new Error(response.status === 404 ? 'The local execution bridge is unavailable. Start with weavem editor --project PATH.' : `Editor bridge request failed (${response.status})`);
     }
     return payload as T;
-  }, [session]);
+  }, []);
 
   const applyOpenedFlow = useCallback((catalog: ReturnType<typeof importMetadata>, opened: ProjectFlow) => {
     if (!opened.graph) throw new Error(opened.reason ?? 'This flow cannot be displayed as a complete editable graph.');
@@ -496,42 +509,69 @@ export default function App() {
     return { name: opened.name, revision: opened.revision, editable: opened.editable, reason: opened.reason, source: opened.source } satisfies LoadedFlow;
   }, [applyOpenedFlow, requestApi, session]);
 
-  const connectProject = useCallback(async () => {
+  const connectProject = useCallback(async (automatic = false, externalSignal?: AbortSignal) => {
+    const attempt = ++connectionAttempt.current;
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    externalSignal?.addEventListener('abort', abort, { once: true });
+    const timeout = window.setTimeout(abort, 10_000);
+    setConnectionPhase('loading'); setConnectionError(null);
     try {
-      const next = await requestApi<EditorSession>('/api/session');
+      const next = await requestApi<EditorSession>('/api/session', { signal: controller.signal });
+      if (controller.signal.aborted || attempt !== connectionAttempt.current) return;
       if (!next.token || !next.project || !next.bindings || !next.metadata) throw new Error('The editor bridge returned an invalid session');
       const catalog = importMetadata(JSON.stringify(next.metadata));
-      // An active run must not silently replace a visible draft. Defer every
-      // session/state mutation until the user accepts the replacement dialog.
+      // An existing run can replace the visible source only after explicit consent.
       if (next.activeRunId) {
+        setConnectionPhase('connected');
         requestAction({ kind: 'attach', session: next, runId: next.activeRunId });
         return;
       }
-      setSession(next);
-      setFlowSummaries(next.flows ?? []);
+      sessionRef.current = next;
+      setSession(next); setFlowSummaries(next.flows ?? []);
       setSessionMessage(`Connected to ${next.project}`);
-      setRunError(null);
-      const changingProject = draft.catalog.kind !== 'project' || draft.catalog.name !== next.project;
-      // Never replace browser work just because the bridge connected. The
-      // confirmation also keeps legacy drafts available for export/recovery.
-      if (changingProject) {
-        requestAction({ kind: 'metadata', catalogText: JSON.stringify(next.metadata) });
+      setRunError(null); setConnectionPhase('connected');
+      const current = draftRef.current;
+      const changingProject = current.catalog.kind !== 'project' || current.catalog.name !== next.project;
+      if (automatic && untouchedStartup.current) {
+        // This flag represents a genuinely untouched initialization placeholder,
+        // never a guess based on an empty node list or an empty flow name.
+        const connected = { ...createEmptyDraft(catalog), name: 'new_flow' };
+        untouchedStartup.current = false;
+        draftRef.current = connected; history.current = createDraftHistory(connected);
+        setDraft(connected); setLoadedFlow(null); setDirty(false);
+        setStatus('Project connected; choose a flow or create a new one');
+      } else if (changingProject) {
+        if (automatic) setStatus('Browser draft retained; refresh the project to use its task catalog');
+        else requestAction({ kind: 'metadata', catalogText: JSON.stringify(next.metadata) });
       } else {
         try {
-          // Refresh descriptive task data without inventing a second source of
-          // truth for the current graph. If identities changed, retain the
-          // current draft and ask the user to reopen/reconcile deliberately.
-          const refreshed = parseDraft(serializeDraft({ ...draft, catalog }));
-          setDraft(refreshed);
+          const refreshed = parseDraft(serializeDraft({ ...current, catalog }));
+          draftRef.current = refreshed; setDraft(refreshed);
         } catch {
           setStatus('Project metadata changed; current unsaved flow was retained. Reopen a flow after reconciling its task bindings.');
         }
       }
     } catch (cause) {
-      setSession(null);
-      setSessionMessage(cause instanceof Error ? cause.message : 'Could not connect to the local project');
+      if (externalSignal?.aborted || attempt !== connectionAttempt.current) return;
+      const message = controller.signal.aborted ? 'The project connection timed out. Check the local editor and retry.' : cause instanceof Error ? cause.message : 'Could not connect to the local project';
+      sessionRef.current = null; setSession(null);
+      setConnectionPhase('failed'); setConnectionError(message);
+      setSessionMessage('Disconnected: run this editor with weavem editor --project PATH');
+      setStatus('Project connection unavailable; browser draft retained');
+    } finally {
+      window.clearTimeout(timeout);
+      externalSignal?.removeEventListener('abort', abort);
     }
-  }, [draft, requestApi]);
+  }, [requestApi, requestAction]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    // Deferring one tick avoids a duplicate bootstrap during StrictMode's
+    // development effect replay, without coupling connection to draft edits.
+    const timer = window.setTimeout(() => { void connectProject(true, controller.signal); }, 0);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [connectProject]);
 
   const saveFlow = useCallback(async (saveAs = false, nameOverride?: string, acquireLock = true): Promise<LoadedFlow> => {
     if (acquireLock) {
@@ -657,7 +697,7 @@ export default function App() {
   }, [run?.runId, run?.status]);
 
   useEffect(() => {
-    if (autosavePaused) return undefined;
+    if (autosavePaused || untouchedStartup.current) return undefined;
     const timeout = window.setTimeout(() => {
       const result = saveStoredDraft(storage, draft);
       if (result.error) {
@@ -674,6 +714,7 @@ export default function App() {
         setError('The draft is locked while a run is active. Cancel or wait for it to finish.');
         return;
       }
+      untouchedStartup.current = false;
       if (resumeAutosave) { history.current = createDraftHistory(next); setSampleRun(null); }
       else {
         const group = message === 'Nodes moving' ? 'drag' : message === 'Editing flow name' ? 'name' : message === 'Editing node details' ? 'details' : null;
@@ -948,12 +989,6 @@ export default function App() {
     }
   }, [draft.catalog, flow, loadFlow, updateDraft]);
 
-  const requestAction = (action: PendingAction) => {
-    // Empty graphs can still contain a title, imported catalog and viewport.
-    // Confirm all replacements instead of guessing whether that work matters.
-    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    setPending(action);
-  };
 
   const readFile = async (file: File | undefined, kind: 'metadata' | 'draft') => {
     if (!file) return;
@@ -1002,9 +1037,15 @@ export default function App() {
             <div className="brand">
               <span className="brand-mark">W</span>
               <span>weavem</span>
-              <span className="prototype-badge">expressive lab</span>
             </div>
-            <MotionLab />
+            <details className="project-environment">
+              <summary>Project environment</summary>
+              <div className="project-environment-content">
+                <p>{session?.project ?? 'No project connected'}</p>
+                <code>{session?.environment?.pythonExecutable ?? 'Interpreter unavailable'}</code>
+                <p>{session?.environment ? `Python ${session.environment.pythonVersion} · Weavem ${session.environment.weavemVersion}` : 'Runtime version information unavailable'}</p>
+              </div>
+            </details>
           </div>
           <EditorToolbar busy={executionActive} isProjectFlow={sessionMatchesDraft} canEdit={canvasEditingAllowed}
             flowName={draft.name} onFlowNameChange={setName} onFlowNameBlur={() => { editGroup.current = null; }} onNew={() => requestAction({ kind: 'new' })}
@@ -1059,7 +1100,7 @@ export default function App() {
               <h1>{draft.catalog.name}</h1>
             </div>
             <span className={`catalog-badge ${draft.catalog.kind}`}>
-              {draft.catalog.kind === 'demo' ? 'Sample catalog' : 'Project metadata'}
+              {sessionMatchesDraft ? 'Project metadata' : 'Browser draft'}
             </span>
           </div>
           <p className="library-count">{draft.catalog.tasks.length} task{draft.catalog.tasks.length === 1 ? '' : 's'} · descriptive metadata</p>
@@ -1105,7 +1146,7 @@ export default function App() {
                 </button>
               </article>
             ))}
-            {visibleTasks.length === 0 && <p className="empty-list">No tasks match this search.</p>}
+            {visibleTasks.length === 0 && <p className="empty-list">{draft.catalog.tasks.length ? 'No tasks match this search.' : sessionMatchesDraft ? 'No tasks are registered in this project.' : 'Connect a project to discover its tasks.'}</p>}
           </div>
         </aside>
         <ResizeHandle side="library" width={layout.libraryWidth} onResize={(width) => updatePanelWidth('library', width)} />
@@ -1122,6 +1163,9 @@ export default function App() {
           }}
           onDragOver={(event) => event.preventDefault()}
         >
+          {connectionPhase === 'loading' && <div className="connection-notice" role="status">Connecting to the local project…</div>}
+          {connectionPhase === 'failed' && <div className="connection-notice"><p role="status">{connectionError}</p><p>Start the editor with <code>weavem editor --project PATH</code>, then retry.</p><Button onClick={() => void connectProject(true)}>Retry connection</Button></div>}
+          {connectionPhase === 'connected' && session && !sessionMatchesDraft && <div className="connection-notice"><p>Your browser draft is preserved. Refresh the project to use its task catalog.</p><Button onClick={() => void connectProject()}>Use project catalog</Button></div>}
           <div className="canvas-header">
             <div>
               <span className="eyebrow">Composition draft</span>
@@ -1173,7 +1217,7 @@ export default function App() {
               setSelectedId(null);
               setSelectedEdgeIds(new Set());
             }}
-            onMoveEnd={(_, viewport) => { if (!executionActive && visualEditingAllowed) { setDraft((current) => ({ ...current, viewport })); if (draft.catalog.kind === 'project') setDirty(true); } }}
+            onMoveEnd={(event, viewport) => { if (!executionActive && visualEditingAllowed) { if (event) untouchedStartup.current = false; setDraft((current) => ({ ...current, viewport })); if (draft.catalog.kind === 'project') setDirty(true); } }}
             defaultViewport={draft.viewport ?? defaultViewport}
             deleteKeyCode={null}
             multiSelectionKeyCode={['Meta', 'Control']}
@@ -1189,11 +1233,11 @@ export default function App() {
           {loadedFlow && !loadedFlow.editable && (
             <div className="source-only-notice" role="note">Source flow: {loadedFlow.reason ?? 'The canvas cannot safely rewrite this Python source.'} You can still run it with JSON parameters.</div>
           )}
-          {draft.nodes.length === 0 && (
+          {draft.nodes.length === 0 && (!loadedFlow || loadedFlow.editable) && (
             <div className="canvas-empty">
               <span className="empty-mark">+</span>
-              <strong>Start a composition draft</strong>
-              <p>Add a task from the library, or drag one onto this canvas.</p>
+              <strong>{sessionMatchesDraft ? 'Choose a flow or create a new one.' : 'Your browser draft'}</strong>
+              <p>{sessionMatchesDraft ? 'Open a saved flow above, or add tasks from the library.' : 'Connect a project to discover tasks. You can still open or export a browser draft.'}</p>
             </div>
           )}
           <div className="canvas-footer">{executionActive ? (run?.phase === 'preparing' ? (run.message ?? 'Preparing flow…') : `Run ${run?.runId ?? 'submission'} is active; editing is locked`) : sessionMatchesDraft ? 'Ready to run · connections require target argument mapping' : 'Draft wiring · connect a local project to run'}</div>

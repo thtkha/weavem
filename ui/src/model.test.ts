@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { demoCatalog } from './demo';
+import { demoCatalog, createDemoDraft } from '../tests/fixtures/demo';
 import type { ExecutionGraph } from './types';
 import {
   STORAGE_KEY,
@@ -10,7 +10,6 @@ import {
   clearEdgeArgument,
   eligibleTargetArguments,
   reconnectNodes,
-  createDemoDraft,
   createEmptyDraft,
   projectFlowDraft,
   executionGraph,

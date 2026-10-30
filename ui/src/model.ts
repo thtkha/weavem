@@ -11,9 +11,8 @@ import type {
   Point,
   Viewport,
 } from './types';
-import { demoCatalog, demoEdges, demoNodes } from './demo';
 
-/** Browser-local key. Drafts are never sent to a service by this prototype. */
+/** Browser-local recovery key, retained across editor versions. */
 export const STORAGE_KEY = 'weavem.node-editor.draft.v1';
 
 const DRAFT_KIND = 'weavem.editor-draft';
@@ -145,7 +144,7 @@ function taskIdentity(task: CatalogTask): string {
 /**
  * Turn a read-only `Project.metadata()` schema-1 snapshot into the editor's
  * intentionally smaller catalog. It imports metadata only; it never imports
- * task or flow code and treats flow specs as out of scope for this prototype.
+ * task or flow code and treats flow specs as out of scope for the editor.
  */
 export function importMetadata(text: string): Catalog {
   let parsed: unknown;
@@ -351,11 +350,6 @@ export function flowLayout(draft: EditorDraft): FlowLayout {
     viewport: current.viewport,
     nodes: current.nodes.map(({ id, position, label, notes }) => ({ id, position, label, notes })),
   };
-}
-
-export function createDemoDraft(): EditorDraft {
-  const draft = createEmptyDraft(demoCatalog);
-  return validateDraft({ ...draft, name: 'Document processing (demo)', nodes: demoNodes, edges: demoEdges, viewport: { x: 80, y: 56, zoom: 0.9 } });
 }
 
 export function parseDraft(text: string): EditorDraft {

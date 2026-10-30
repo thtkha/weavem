@@ -1,6 +1,7 @@
-import type { Catalog, DraftEdge, DraftNode } from './types';
+import type { Catalog, DraftEdge, DraftNode } from '../../src/types';
+import { createEmptyDraft, parseDraft } from '../../src/model';
 
-/** Synthetic, non-executable starter content for the visual prototype. */
+/** Explicit synthetic content for legacy draft and graph interaction tests only. */
 export const demoCatalog: Catalog = {
   name: 'Synthetic document pipeline',
   kind: 'demo',
@@ -31,3 +32,7 @@ export const demoEdges: DraftEdge[] = [
   { id: 'demo-edge-read-normalize', source: 'demo-read', target: 'demo-normalize' },
   { id: 'demo-edge-normalize-count', source: 'demo-normalize', target: 'demo-count' },
 ];
+
+export function createDemoDraft() {
+  return parseDraft(JSON.stringify({ ...createEmptyDraft(demoCatalog), name: 'Document processing (demo)', nodes: demoNodes, edges: demoEdges, viewport: { x: 80, y: 56, zoom: .9 } }));
+}

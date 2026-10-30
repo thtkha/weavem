@@ -106,13 +106,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   border-radius: 7px;
   font: 800 14px ui-monospace, SFMono-Regular, Menlo, monospace;
 }
-.prototype-badge, .catalog-badge, .provenance {
+.catalog-badge, .provenance {
   @apply text-caption leading-none py-[5px] px-[7px] border border-solid border-line rounded-full font-control uppercase tracking-[.07em] text-muted;
-}
-.prototype-badge {
-  color: var(--color-warning);
-  border-color: #594f34;
-  background: #29261e;
 }
 .draft-name {
   display: flex;
@@ -949,3 +944,13 @@ input, textarea { caret-color: var(--color-accent); }
 input::placeholder, textarea::placeholder { color: var(--color-muted); opacity: 1; }
 .parameter-editor textarea::placeholder, .connection-row input::placeholder,
 .editor-toolbar input::placeholder { color: var(--color-muted); opacity: 1; }
+
+/* Connection and runtime information stay local, explicit and recoverable. */
+.project-environment { position: relative; color: var(--color-muted); font-size: 12px; }
+.project-environment summary { cursor: pointer; min-height: 24px; line-height: 24px; }
+.project-environment summary:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+.project-environment-content { position: absolute; top: 100%; left: 0; z-index: 40; width: min(440px, calc(100vw - 48px)); padding: 12px; border: 1px solid var(--color-control-line); border-radius: var(--radius-control); background: var(--color-panel); overflow-wrap: anywhere; box-shadow: 0 12px 28px #0008; }
+.project-environment-content p { margin: 0 0 8px; line-height: 1.5; }
+.connection-notice { position: absolute; top: 82px; left: 20px; z-index: 5; max-width: min(440px, calc(100% - 40px)); padding: 16px; border: 1px solid var(--color-line); border-radius: var(--radius-card); color: var(--color-muted); background: var(--color-panel); font-size: 12px; line-height: 1.5; }
+.connection-notice p { margin: 0 0 12px; }
+.connection-notice p:last-child { margin-bottom: 0; }

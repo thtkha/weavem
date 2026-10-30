@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('undo redo and copying a selected node preserve the authored draft', async ({ page }) => {
   await page.goto('/');

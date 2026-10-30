@@ -66,9 +66,8 @@ try {
   page.on('pageerror', (error) => pageErrors.push(error.message));
   page.on('dialog', (dialog) => { dialogs.push(dialog.message()); void dialog.dismiss(); });
   await page.goto(url);
-  await page.getByRole('button', { name: 'Connect project', exact: true }).click();
+  await expect(page.getByLabel('Open project flow', { exact: true })).toBeEnabled();
   const replace = page.getByRole('button', { name: 'Replace draft', exact: true });
-  await replace.click();
   await page.getByLabel('Open project flow', { exact: true }).selectOption('document_summary');
   await replace.click();
   await expect(page.getByTestId('task-node')).toHaveCount(3);
@@ -117,7 +116,7 @@ try {
   await page.screenshot({ path: path.join(output, 'completed.png'), fullPage: true });
   await writeFile(path.join(output, 'result.json'), `${JSON.stringify({ url, runId, state, pageErrors }, null, 2)}\n`);
   await page.reload();
-  await page.getByRole('button', { name: 'Connect project', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Refresh project', exact: true })).toBeVisible();
   if (await replace.isVisible()) await replace.click();
   await page.getByLabel('Open project flow', { exact: true }).selectOption('visual_summary');
   await replace.click();

@@ -1,5 +1,5 @@
 {
-  "name": "@weavem/node-editor-prototype",
+  "name": "@weavem/editor",
   "version": "0.0.0",
   "private": true,
   "type": "module",

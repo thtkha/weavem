@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDemoDraft } from './model';
+import { createDemoDraft } from '../tests/fixtures/demo';
 import { canRedo, canUndo, commitDraft, copySelection, createDraftHistory, pasteSelection, redoDraft, undoDraft } from './editorHistory';
 
 describe('draft history', () => {

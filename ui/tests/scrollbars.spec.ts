@@ -1,5 +1,5 @@
 import { themeColor } from './theme';
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test, type Locator } from './fixtures';
 import { readFile } from 'node:fs/promises';
 
 // Headless Chromium hides native scrollbars by default, including their hit targets.

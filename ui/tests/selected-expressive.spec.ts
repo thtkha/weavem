@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test('selected Expressive composition uses the approved olive palette on rendered surfaces', async ({ page }) => {
   await page.goto('/');
@@ -16,9 +16,7 @@ test('selected Expressive composition uses the approved olive palette on rendere
     };
   });
   expect(colors).toEqual({ canvas: 'rgb(12, 15, 9)', panel: 'rgb(8, 10, 6)', task: 'rgb(33, 40, 24)', run: 'rgb(144, 169, 110)', runInk: 'rgb(16, 20, 12)', metadata: 'rgb(198, 210, 180)', inputBorder: 'rgb(114, 132, 94)' });
-  await page.getByRole('button', { name: 'Motion lab', exact: true }).click();
-  await expect(page.getByRole('dialog')).toHaveCSS('background-color', 'rgb(8, 10, 6)');
-  expect(await page.getByRole('dialog').evaluate(element => getComputedStyle(element, '::backdrop').backgroundColor)).toBe('rgba(8, 10, 6, 0.79)');
+
 });
 
 test('Expressive toolbar control baselines and canvas actions align at supported widths', async ({ page }) => {
