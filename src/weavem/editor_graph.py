@@ -62,7 +62,7 @@ def _project_config(project: Project | str | Path):
     if isinstance(project, Project):
         # Project intentionally exposes metadata, rather than its selection
         # internals. Resolve the freshly reported root to get current bindings.
-        return resolve_project(project.metadata()["project"]["root"])
+        return resolve_project(project._metadata(include_flows=False)["project"]["root"])
     return resolve_project(project)
 
 
@@ -107,7 +107,7 @@ def editor_catalog(project: Project | str | Path) -> dict[str, Any]:
     intentionally absent until a project author binds them in ``weavem.toml``.
     """
     active = project if isinstance(project, Project) else Project.open(project)
-    metadata = active.metadata()
+    metadata = active._metadata(include_flows=False)
     config = _project_config(active)
     bindings: dict[str, str] = {}
     hints: dict[str, Any] = {}
