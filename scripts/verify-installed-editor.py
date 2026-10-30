@@ -71,6 +71,8 @@ try:
         time.sleep(.5)
     assert state['status']=='completed',state
     assert sys.executable in state['result'], state
+    assert state['nodes']['identity']['status']=='completed', state['nodes']
+    assert sys.executable in json.dumps(state['nodes']['identity']), state['nodes']
     from weavem.flows import load_local_flow
     assert load_local_flow('installed_identity',project=project)()=={'identity':sys.executable}
     cli=subprocess.run([sys.executable,'-I','-m','weavem','--project',str(project),'flow','run','installed_identity'],env=env,cwd=root,text=True,capture_output=True,timeout=180)
