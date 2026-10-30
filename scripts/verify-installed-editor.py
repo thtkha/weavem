@@ -58,6 +58,9 @@ try:
     key='local:'+str((task/'task.toml').resolve())
     graph={'kind':'weavem.graph','schema':1,'name':'installed_identity','nodes':[{'id':'identity','taskKey':key,'parameters':{}}],'edges':[]}
     saved=json.loads(request('/api/flows/installed_identity',{'graph':graph,'layout':None,'expectedRevision':None},token)[0])
+    listed=json.loads(request('/api/flows',token=token)[0])
+    assert any(item['name']=='installed_identity' for item in listed['flows']), listed
+    assert (project/'flows/installed_identity.py').is_file()
     state=json.loads(request('/api/runs',{'flowName':'installed_identity','revision':saved['revision'],'params':{}},token)[0])
     for _ in range(240):
         state=json.loads(request('/api/runs/'+state['runId'],token=token)[0])
