@@ -128,10 +128,14 @@ active. The selected branch is not yet merged to `feature/editor-experience`,
 branch-root `BRANCH_HANDOFF.md` for current verification and next review gate.
 
 
-Selected Expressive implementation **`98aae6d`** applies the approved olive palette
+Selected Expressive implementation **`98aae6d`**, with final followup **`8e37c00`**, applies the approved olive palette
 without losing its composition. The palette/alignment pass verifies40 unit and
-66 Chromium tests plus typecheck/lint/build; source detector empty, rendered scene
+67 Chromium tests plus typecheck/lint/build; source detector empty, rendered scene
 has only the unsuppressed system-font taste heuristic. It corrects control
 baselines, select/JSON font consistency and narrow execution grouping; no runtime
 or saved-flow contract changed. See the selected section of the lab report and
 BRANCH_HANDOFF.md. The UI is still branch-only; original continuation is untouched.
+
+Final mapping-control followup `8e37c00` removes a browser-default input in wire
+inspection; the fresh complete Chromium suite passes **67/67**. Documentation
+commit(s) record this state without implying promotion to another branch.

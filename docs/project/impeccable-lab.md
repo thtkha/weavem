@@ -227,7 +227,7 @@ parts, or retain the original. No branch has been merged or released.
 
 ## Selected Expressive palette/alignment verification — 2026-10-30
 
-The chosen UI is **`98aae6d`** on `experiment/impeccable-expressive`, not yet
+The chosen UI is **`98aae6d`** plus mapping-control followup **`8e37c00`** on `experiment/impeccable-expressive`, not yet
 merged into the original continuation branch. Expressive composition, hierarchy,
 icon history and optional Motion lab remain; its cyan/blue palette is rejected and
 replaced with the owner's exact approved sage/olive colors. Current normative
@@ -245,7 +245,7 @@ The consistency pass fixed measured issues rather than redesigning again:
 - Motion backdrop, minimap mask, page metadata and form states use the approved
   palette; distinct error/warning/provenance colors remain intentional.
 
-Final verification: **40 units,66/66 Chromium tests, typecheck, lint, build and diff
+Final verification: **40 units,67/67 Chromium tests, typecheck, lint, build and diff
 checks pass**. Source detector is empty; selected-task rendered detector has only
 one unsuppressed Inter taste warning, no tiny-text/contrast defects. Selected
 node/wire, fullscreen, reduced motion and forced colors were rendered without
@@ -257,3 +257,9 @@ Evidence: original `.artifacts/node-editor/impeccable-lab/evidence/selected-expr
 Only **http://localhost:4183** remains active. Original/practical/calm previews are
 retired; their branches, recorded tradeoffs and evidence are retained as history.
 No automatic merge, release, or push follows this selection.
+
+Final selected-wire review additionally caught an unthemed browser-default field
+path input. Shared recipe followup `8e37c00` aligns it with its adjacent selector
+(32px height, 12px type, semantic olive surface/ink/border). The regression was
+run red before fixing it; the final **67/67** browser suite passes. This concrete
+consistency fix is included in the built 4183 preview, not left as a suggestion.

@@ -107,7 +107,8 @@ the separate integration decision.
 
 ## Selected palette/alignment implementation — 2026-10-30
 
-Current UI implementation is **`98aae6d`**. It restores all practical/approved
+Current UI implementation is **`98aae6d`**, with shared mapping-control followup
+**`8e37c00`**. It restores all practical/approved
 color values while retaining Expressive typography, grouping and interaction
 hierarchy. Canvas/panels are `#0c0f09`/`#080a06`, secondary metadata `#c6d2b4`,
 and primary sage `#90a96e`. Semantic status/provenance colors remain distinct.
@@ -117,7 +118,7 @@ use the selected palette; no stale cyan accent or blue surface literal remains.
 Measured inconsistencies corrected: flow and run controls were 7.5px above their
 adjacent input baseline, the flow picker fell back to weight 400 from an invalid
 font shorthand, and run JSON used browser-default 16px rather than the control's
-12px scale. At1100/1280px, the nested run-action auto margin separated its input
+12px scale. At 1100/1280px, the nested run-action auto margin separated its input
 from the button; their gap is now 18px. Run/fullscreen right edges already matched
 and are deliberately preserved. Resizing panels keeps the established toolbar
 anchor, rather than pretending the toolbar follows a resized canvas edge.
@@ -130,7 +131,7 @@ intentional narrow layout to wrap the name input onto a separate row.
 Final checks on this UI commit:
 
 - **40 unit tests**, TypeScript, ESLint, build, and diff check passed.
-- **66/66 Chromium tests passed**, 55.1s, including 2 new rendered regressions and
+- **67/67 Chromium tests passed**, 55.5s, including 3 new rendered regressions and
   inherited graph/mapping/parameter/run/result/dialog/history/resize/scroll tests.
 - Source detector `[]`; selected-task rendered detector only the existing
   unsuppressed Inter/system-font taste heuristic. No contrast/tiny-text findings.
@@ -151,3 +152,10 @@ Current evidence is in original
 `fullscreen-final.json`. The original/practical/calm previews are retired;
 branches and evidence are historical, not deleted. Only **http://localhost:4183**
 is active, serving static frontend assets without an executable project bridge.
+
+The final selected-wire screenshot review found one additional inconsistency:
+Field path used an unthemed browser-gray 18px input outside connection rows.
+`8e37c00` extends the existing mapping selector recipe to its input, yielding
+32px themed surface/ink/control-border and 12px text. `wire-red.log` records the
+failing regression; the final 67-test suite includes that corrected control.
+`final-rendered.json` and refreshed `after-selected-wire.png` verify the result.
