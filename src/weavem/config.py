@@ -13,6 +13,7 @@ class ProjectConfig:
     store_path: Path
     work_dir: Path
     config_path: Path | None = None
+    flow_paths: tuple[Path, ...] = ()
 
 
 def _bound(root: Path, value: str | Path) -> Path:
@@ -32,7 +33,7 @@ def _read_config(path: Path | None) -> dict[str, object]:
     section = data.get("weavem", {}) if "weavem" in data else {key: value for key, value in data.items() if key != "tasks"}
     if not isinstance(section, dict):
         raise ContractError("weavem.toml must contain a table")
-    allowed = {"store", "store_path", "work_dir", "artifacts_dir"}
+    allowed = {"store", "store_path", "work_dir", "artifacts_dir", "flow_paths"}
     unknown = set(section) - allowed
     if unknown:
         raise ContractError(f"unknown project config fields: {', '.join(sorted(unknown))}")
@@ -78,5 +79,17 @@ def resolve_project(project: str | Path | None = None, *, cwd: str | Path | None
                     raise ContractError(f"{key} must be a string")
                 return _bound(root, value)
         return root / default
+    raw_paths = settings.get("flow_paths", ["flows"])
+    if not isinstance(raw_paths, list) or not raw_paths or any(not isinstance(p, str) or not p.strip() for p in raw_paths):
+        raise ContractError("flow_paths must be a non-empty array of directory strings")
+    # Keep lexical paths until safety checks, so normalization cannot hide symlinks.
+    paths = []
+    for value in raw_paths:
+        lexical = Path(value).expanduser()
+        if not lexical.is_absolute(): lexical = root / lexical
+        if any(p.is_symlink() for p in (lexical, *lexical.parents)):
+            raise ContractError(f"symlinked flow directory is not allowed: {lexical}")
+        normalized = lexical.resolve()
+        if normalized not in paths: paths.append(normalized)
     return ProjectConfig(root=root, store_path=choice(store, "WEAVEM_STORE", ("store", "store_path"), "task-store"),
-                         work_dir=choice(work_dir, "WEAVEM_ARTIFACTS_DIR", ("work_dir", "artifacts_dir"), ".artifacts"), config_path=config_path)
+                         work_dir=choice(work_dir, "WEAVEM_ARTIFACTS_DIR", ("work_dir", "artifacts_dir"), ".artifacts"), config_path=config_path, flow_paths=tuple(paths))

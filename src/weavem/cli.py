@@ -209,7 +209,10 @@ def _new_flow(args):
     from .contracts import _validate_identity
     _validate_identity(name, "0.1.0")
     project = resolve_project(args.project)
-    flows = project.root / "flows"
+    from .flow_sources import flow_directories, flow_metadata_path
+    flows = flow_metadata_path(project, name).parent
+    if flows != flow_directories(project)[0] or (flows / f"{name}.toml").exists():
+        raise BuildError(f"refusing to overwrite existing flow: {name}")
     if flows.is_symlink() or (flows.exists() and not flows.is_dir()):
         raise BuildError("flows must be a regular project directory")
     init = flows / "__init__.py"
@@ -236,9 +239,9 @@ def _new_flow(args):
         f'source = "{name}.py"\nexport = "{name}"\ntasks = []\n', encoding="utf-8")
     tests.mkdir(parents=True)
     (tests / "test_flow.py").write_text(
-        f"import unittest\nfrom flows.{name} import {name}\n\n"
+        f"import unittest\nfrom pathlib import Path\nfrom weavem.flows import load_local_flow\n\n"
         "class FlowTests(unittest.TestCase):\n"
-        f"    def test_result(self):\n        self.assertIsNone({name}.fn())\n", encoding="utf-8")
+        f"    def test_result(self):\n        self.assertIsNone(load_local_flow({name!r}, project=Path(__file__).resolve().parents[3]).fn())\n", encoding="utf-8")
 
 
 def _run_flow(args):

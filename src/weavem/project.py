@@ -69,7 +69,7 @@ class Project:
         except (OSError, ValueError) as exc:
             raise ContractError(f"cannot inspect project {self._target}: {exc}") from exc
 
-    def _metadata(self) -> dict:
+    def _metadata(self, *, include_flows: bool = True) -> dict:
         config = resolve_project(self._target)
         bindings = read_bindings(config)
         paths = set(_task_files(config.root / 'tasks',
@@ -96,20 +96,19 @@ class Project:
             tasks.append({'path': str(path.resolve()), 'metadata': spec.to_mapping()})
 
         flows = []
-        flow_root = config.root / 'flows'
-        if not flow_root.is_symlink():
-            for path in sorted(flow_root.glob('*.toml')):
-                _regular(path)
-                try:
-                    data = tomllib.loads(path.read_text())
-                    spec = FlowSpec.from_mapping(data.get('flow', data))
-                    _source(path, spec.source)
-                    missing = sorted(set(spec.tasks) - bindings.keys())
-                    if missing:
-                        raise ContractError(f"undefined task aliases: {', '.join(missing)}")
-                except (ContractError, ValueError) as exc:
-                    raise ContractError(f"flow definition {path}: {exc}") from exc
-                flows.append({'path': str(path.resolve()), 'metadata': spec.to_mapping()})
+        from .flow_sources import flow_definitions
+        for path in (flow_definitions(config).values() if include_flows else ()):
+            _regular(path)
+            try:
+                data = tomllib.loads(path.read_text())
+                spec = FlowSpec.from_mapping(data.get('flow', data))
+                _source(path, spec.source)
+                missing = sorted(set(spec.tasks) - bindings.keys())
+                if missing:
+                    raise ContractError(f"undefined task aliases: {', '.join(missing)}")
+            except (ContractError, ValueError) as exc:
+                raise ContractError(f"flow definition {path}: {exc}") from exc
+            flows.append({'path': str(path.resolve()), 'metadata': spec.to_mapping()})
 
         releases = {}
         for alias, binding in sorted(bindings.items()):

@@ -56,13 +56,12 @@ def _name(name: Any) -> str:
 
 def _paths(project: str | Path | None, name: str) -> tuple[Any, Path, Path, Path]:
     config = resolve_project(project)
-    root = config.root / "flows"
-    if root.is_symlink() or (root.exists() and not root.is_dir()):
-        raise FlowPersistenceError("flows must be a regular project directory")
-    # Reads must not create project state.  save_flow creates this directory only
-    # after all path checks have passed.
-    # Child lexical paths are bare names, so they cannot escape this root.
-    return config, root / f"{name}.py", root / f"{name}.toml", root / f"{name}.layout.json"
+    from .flow_sources import flow_metadata_path
+    metadata = flow_metadata_path(config, name)
+    source = metadata.parent / f"{name}.py"
+    if metadata.is_file() and not metadata.is_symlink():
+        source = metadata.parent / _sidecar(_read(metadata, _MAX_SOURCE)).source
+    return config, source, metadata, metadata.parent / f"{name}.layout.json"
 
 
 def _regular(path: Path, *, required: bool = False) -> bool:
@@ -331,8 +330,6 @@ def _generated_source(name: str, graph: dict[str, Any], aliases: dict[str, str],
 def _metadata(name: str, task_aliases: list[str], old: bytes | None) -> bytes:
     if old is not None:
         spec = _sidecar(old)
-        if spec.source != f"{name}.py" or spec.export != name:
-            raise FlowPersistenceError("editor flow metadata source/export must match its flow name")
         flow_id, version = spec.flow_id, spec.version
     else:
         flow_id, version = name, "0.1.0"
@@ -340,7 +337,7 @@ def _metadata(name: str, task_aliases: list[str], old: bytes | None) -> bytes:
     # silently change aliases containing newlines/backslashes in literal TOML.
     aliases = list(dict.fromkeys(task_aliases))
     text = "[flow]\nschema = 1\n"
-    for key, value in (("flow_id", flow_id), ("version", version), ("source", name + ".py"), ("export", name)):
+    for key, value in (("flow_id", flow_id), ("version", version), ("source", spec.source if old is not None else name + ".py"), ("export", spec.export if old is not None else name)):
         text += f"{key} = {json.dumps(value)}\n"
     text += f"tasks = {json.dumps(aliases)}\n"
     return text.encode()
@@ -437,7 +434,7 @@ def _atomic_write(files: list[tuple[Path, bytes | None]], expected: list[bytes |
     than promising a filesystem-wide compare-and-swap transaction.
     """
     paths = [path for path, _ in files]
-    journal = paths[0].parent / f".weavem-editor-{paths[0].stem}.journal"
+    journal = paths[0].parent / f".weavem-editor-{paths[1].stem}.journal"
     staged: list[tuple[Path, Path | None]] = []
     journal_temporary = None
     journal_written = False
@@ -488,12 +485,11 @@ def _atomic_write(files: list[tuple[Path, bytes | None]], expected: list[bytes |
             journal_temporary.unlink(missing_ok=True)
 
 def list_flows(project: str | Path | None = None) -> list[dict[str, Any]]:
-    config = resolve_project(project); root = config.root / "flows"
-    if root.is_symlink(): raise FlowPersistenceError("flows must be a regular project directory")
-    if not root.exists(): return []
+    config = resolve_project(project)
+    from .flow_sources import flow_definitions
     catalog = editor_catalog(config.root)
     result = []
-    for metadata in sorted(root.glob("*.toml")):
+    for metadata in flow_definitions(config).values():
         name = metadata.stem
         try:
             item = open_flow(name, config.root, _catalog=catalog)
@@ -534,9 +530,10 @@ def _open_flow_locked(name: str, project, *, _catalog=None) -> dict[str, Any]:
               "source": source.decode("utf-8", errors="replace"),
               "metadata": metadata.decode("utf-8", errors="replace")}
     try:
-        if spec.source != f"{name}.py" or spec.export != name:
+        if spec.export != name:
             raise FlowPersistenceError("source/export differs from the flow filename; visual rewriting is unavailable")
         graph = _parse_source(source, spec, _catalog or editor_catalog(config.root))
+        graph["name"] = name
         return {**common, "editable": True, "reason": None, "graph": graph}
     except FlowPersistenceError as exc:
         return {**common, "editable": False, "reason": str(exc), "graph": None}
@@ -581,7 +578,7 @@ def _save_flow_under_process_lock(name, graph, layout, expected_revision, config
     # changing side effects when visually reopening handwritten source.
     order = (original_order if all(positions[edge["source"]] < positions[edge["target"]]
                                    for edge in graph["edges"]) else plan.order)
-    generated = _generated_source(name, graph, aliases, order)
+    generated = _generated_source(_sidecar(old_metadata).export if old_metadata is not None else name, graph, aliases, order)
     generated_metadata = _metadata(name, [aliases[node["taskKey"]] for node in graph["nodes"]], old_metadata)
     _sidecar(generated_metadata)  # Refuse invalid definitions before committing any file.
     if layout is not None:

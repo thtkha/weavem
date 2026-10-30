@@ -44,8 +44,9 @@ def _spec(project, name: str, *, expected_metadata_sha256: str | None = None) ->
     if (not name.isidentifier() or keyword.iskeyword(name)
             or (name.startswith("__") and name.endswith("__"))):
         raise FlowError("local flow name must be a non-reserved Python identifier")
-    root = project.root / "flows"
-    sidecar = root / f"{name}.toml"
+    from .flow_sources import flow_metadata_path
+    sidecar = flow_metadata_path(project, name)
+    root = sidecar.parent
     _regular_tree(sidecar)
     try:
         raw = sidecar.read_bytes()
