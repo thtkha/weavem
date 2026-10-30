@@ -22,6 +22,8 @@ class FlowDiscoveryTests(unittest.TestCase):
         with workspace() as raw:
             root=Path(raw); self.fixture(root)
             self.assertEqual(resolve_project(root).flow_paths,(root/'pipelines',root/'extra'))
+            (root/'extra/nested').mkdir()
+            (root/'extra/nested/ignored.toml').write_text('not valid TOML [')
             self.assertEqual([x['name'] for x in list_flows(root)],['existing'])
             self.assertEqual(Path(Project.open(root).metadata()['flows'][0]['path']),root/'extra/existing.toml')
             opened=open_flow('existing',root)
