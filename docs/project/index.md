@@ -43,3 +43,5 @@ history index when an evaluation is complete. Do not promote a historical
 recommendation to current policy merely by moving its file.
 
 - [Impeccable comparison lab](impeccable-lab.md) — isolated editor experiments and verification.
+
+- [Installed project editor integration](editor-integration.md) — current source-branch work and acceptance evidence.
