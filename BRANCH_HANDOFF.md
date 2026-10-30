@@ -41,14 +41,27 @@ for scope, verification gates, and current status.
 
 ## Verification and next action
 
-**Integrated verification is in progress.** Lane checks are not a substitute for
-the fresh combined Python/frontend/browser/installed-package checks. Retain failed
-and passing evidence under `.artifacts/node-editor/product-editor/evidence/`.
-The leader records final outcomes after the verification agents return; do not
-infer a completed release gate from this documentation commit.
+**Integrated verification passed (2026-10-30).** Final source includes
+`2d9a932` (startup body-stall handling), `707ccd6` (configured-source node tracing),
+and installed-gate regressions `0ad2e30` / `8f4bc2e`. Full Python: 240 passing;
+frontend: 40 unit and 77 browser tests, typecheck/lint/build passing. The final
+installed candidate passed no-Node backend/asset/custom-root trace tests and real
+GUI native save/run, Last run inspection, CLI and Python parity.
+
+Final evidence root: `.artifacts/node-editor/product-editor/evidence/`;
+`integrated-packaging/final-*` outputs and `integrated-frontend/`. The wheel is
+`integrated-packaging/final-dist/weavem-0.1.0a2-py3-none-any.whl` beneath that
+evidence root; its sdist rebuild contains identical production UI assets without
+Node. Consumer dependencies were reused locally, not freshly downloaded; remote
+CI and other platforms remain unverified. No release or main merge occurred.
+Earlier failed/intermediate evidence remains intact. See the
+[integration acceptance record](docs/project/editor-integration.md#final-integrated-acceptance-2026-10-30)
+for precise limits and artifact identity.
 
 Use the [editor guide](ui/README.md), [walkthrough](examples/editor-local/README.md),
 and [reference](docs/maintainers/editor-reference.md). The old selected-design
 handoff remains a [historical record](docs/project/expressive-branch-handoff.md),
 not the current operating instructions. Historical branches and evidence remain
-intact; no preview is promised by this handoff.
+intact. The real project-backed local preview is recorded in the gitignored
+`.artifacts/node-editor/product-editor/evidence/runtime.json`; runtime PIDs and
+URLs are local operational evidence, not a permanent service promise.
