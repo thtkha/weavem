@@ -42,4 +42,4 @@ where = ["src"]
 package-dir = {"" = "src"}
 
 [tool.setuptools.package-data]
-weavem = ["_native_headers/*.tar.gz", "_native_headers/*.json", "_native_headers/*LICENSE*"]
+weavem = ["_ui/index.html", "_ui/assets/*", "_native_headers/*.tar.gz", "_native_headers/*.json", "_native_headers/*LICENSE*"]

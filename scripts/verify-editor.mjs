@@ -23,8 +23,10 @@ const project = await mkdtemp(path.join(output, 'project-'));
 await cp(path.join(root, 'examples/editor-local'), project, { recursive: true,
   filter: (source) => !source.split(path.sep).includes('.artifacts') });
 const python = process.env.WEAVEM_EDITOR_PYTHON || 'python';
-const environment = { ...process.env, PYTHONPATH: path.join(root, 'src'),
+const installed = process.env.WEAVEM_EDITOR_INSTALLED === '1';
+const environment = { ...process.env, ...(installed ? {} : { PYTHONPATH: path.join(root, 'src') }),
   WEAVEM_ARTIFACTS_DIR: path.join(output, 'runtime') };
+if (installed) delete environment.PYTHONPATH;
 const dialogs = [];
 const pageErrors = [];
 
@@ -41,9 +43,9 @@ async function stop() {
 try {
   if (!url) {
     server = spawn(python, [
-      '-m', 'weavem', 'editor', '--project', project, '--port', '0',
+      ...(installed ? ['-I'] : []), '-m', 'weavem', 'editor', '--project', project, '--port', '0',
     ], {
-      cwd: root,
+      cwd: installed ? output : root,
       env: environment,
       stdio: ['ignore', 'pipe', 'pipe'],
     });

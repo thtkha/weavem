@@ -6,3 +6,6 @@ recursive-include examples *.md *.toml *.py
 include examples/editor-local/flows/editor.json
 prune examples/local-cross-project/consumer/task-store
 global-exclude __pycache__ *.py[cod]
+
+recursive-include src/weavem/_ui *.html *.js *.css *.svg *.png *.woff *.woff2
+include scripts/stage-editor.py

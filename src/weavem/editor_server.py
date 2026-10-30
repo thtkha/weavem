@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
+import importlib.metadata
+import platform
 import mimetypes
 import os
 from pathlib import Path
@@ -34,15 +36,20 @@ class EditorServerError(ContractError):
 
 
 def _ui_directory(value: str | Path | None) -> Path:
-    """Resolve an explicit UI build, or the checkout's development build."""
+    """Resolve explicit developer assets or the installed, prebuilt UI."""
     candidate = (Path(value).expanduser() if value is not None
-                 else Path(__file__).resolve().parents[2] / "ui" / "dist")
+                 else Path(__file__).resolve().parent / "_ui")
     candidate = candidate.resolve()
     if not candidate.is_dir() or not (candidate / "index.html").is_file():
         raise EditorServerError(
-            f"editor UI build is missing: {candidate}. Run `cd ui && npm run build`, "
-            "or pass --ui-dir PATH.")
+            f"packaged editor assets are missing: {candidate}. Reinstall a complete Weavem distribution. "
+            "Contributors may stage assets with scripts/stage-editor.py or pass --ui-dir PATH.")
     return candidate
+
+
+def _environment_info() -> dict[str, str]:
+    return {"pythonExecutable": sys.executable, "pythonVersion": platform.python_version(),
+            "weavemVersion": importlib.metadata.version("weavem")}
 
 
 def _json_bytes(value: object) -> bytes:
@@ -481,7 +488,7 @@ class EditorHandler(BaseHTTPRequestHandler):
                 self._error(HTTPStatus.BAD_REQUEST, str(exc))
                 return
             self._json(HTTPStatus.OK, {"token": self.server.token, "project": str(self.server.project.root),
-                                       "flows": flows, "activeRunId": active_run_id, **catalog})
+                                       "flows": flows, "activeRunId": active_run_id, "environment": _environment_info(), **catalog})
             return
         if path.startswith("/api/"):
             if not self._authorized():
@@ -625,7 +632,8 @@ def serve_editor(project: str | Path | None, *, port: int = 8765,
         raise EditorServerError("--port must be between 0 and 65535")
     config = resolve_project(project)
     server = EditorHTTPServer(("127.0.0.1", port), config, _ui_directory(ui_dir))
-    print(f"Project: {config.root}\nPython: {sys.executable}", flush=True)
+    environment = _environment_info()
+    print(f"Project: {config.root}\nPython: {environment['pythonExecutable']} ({environment['pythonVersion']})\nWeavem: {environment['weavemVersion']}", flush=True)
     print(f"Weavem editor: http://127.0.0.1:{server.server_port}", flush=True)
     try:
         server.serve_forever()

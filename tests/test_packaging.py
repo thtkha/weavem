@@ -20,3 +20,8 @@ class PackagingTests(unittest.TestCase):
 
     def test_native_extra_remains_a_compatible_no_op(self) -> None:
         self.assertEqual(self.package["project"]["optional-dependencies"]["native"], [])
+
+    def test_prebuilt_editor_assets_are_package_data(self) -> None:
+        patterns = self.package['tool']['setuptools']['package-data']['weavem']
+        self.assertIn('_ui/index.html', patterns)
+        self.assertIn('_ui/assets/*', patterns)

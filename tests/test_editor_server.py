@@ -78,9 +78,22 @@ class EditorServerTests(unittest.TestCase):
     def run_request(self):
         return {"flowName": "demo", "revision": self.flow["revision"], "params": {}}
 
+    def test_default_assets_are_package_owned_not_checkout_dist(self):
+        package = self.server.project.root / 'fake-package'
+        (package / '_ui').mkdir(parents=True)
+        (package / '_ui/index.html').write_text('packaged')
+        with patch('weavem.editor_server.__file__', str(package / 'editor_server.py')):
+            self.assertEqual(package / '_ui', _ui_directory(None))
+            (package / '_ui/index.html').unlink()
+            with self.assertRaisesRegex(ValueError, 'packaged editor assets are missing'):
+                _ui_directory(None)
+
     def test_session_uses_token_and_api_rejects_missing_token(self):
         session = self.session()
         self.assertEqual(str(self.server.project.root), session["project"])
+        self.assertEqual(__import__("sys").executable, session["environment"]["pythonExecutable"])
+        self.assertTrue(session["environment"]["pythonVersion"])
+        self.assertTrue(session["environment"]["weavemVersion"])
         status, _ = self.request("GET", "/api/runs/nope")
         self.assertEqual(401, status)
 

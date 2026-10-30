@@ -17,8 +17,26 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Build and stage the production editor
+        run: |
+          npm ci --prefix ui
+          npm run typecheck --prefix ui
+          npm run lint --prefix ui
+          python scripts/stage-editor.py
       - name: Build the single candidate shared by every verification lane
         run: python -m pip wheel --no-deps . --wheel-dir dist
+      - name: Verify sdist reconstruction without Node
+        run: |
+          python -m pip install setuptools==84.0.0 wheel==0.48.0
+          python setup.py sdist --dist-dir "$RUNNER_TEMP/weavem-sdist"
+          python_bin="$(command -v python)"
+          mkdir -p "$RUNNER_TEMP/no-node" "$RUNNER_TEMP/rebuilt-wheel"
+          PATH="$RUNNER_TEMP/no-node" "$python_bin" -m pip wheel --no-deps --no-build-isolation "$RUNNER_TEMP"/weavem-sdist/*.tar.gz --wheel-dir "$RUNNER_TEMP/rebuilt-wheel"
+          python scripts/verify-ui-package.py --wheel dist/weavem-*.whl --sdist "$RUNNER_TEMP"/weavem-sdist/*.tar.gz --rebuilt-wheel "$RUNNER_TEMP"/rebuilt-wheel/*.whl
       - name: Record and validate the candidate
         run: |
           args=()
@@ -81,6 +99,11 @@ jobs:
           cp scripts/verify-installed-wheel.py "$RUNNER_TEMP/verify-installed-wheel.py"
           cd "$RUNNER_TEMP"
           "$RUNNER_TEMP/weavem-wheel-${{ matrix.python }}/bin/python" -I verify-installed-wheel.py --work-dir "$RUNNER_TEMP/weavem-installed-wheel-${{ matrix.python }}"
+      - name: Verify packaged editor without Node or checkout imports
+        run: |
+          cp scripts/verify-installed-editor.py "$RUNNER_TEMP/verify-installed-editor.py"
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/weavem-wheel-${{ matrix.python }}/bin/python" -I verify-installed-editor.py --work-dir "$RUNNER_TEMP/weavem-editor-${{ matrix.python }}"
       - name: Execute the official user documentation against the installed wheel
         run: |
           bundle="$RUNNER_TEMP/weavem-user-docs-${{ matrix.python }}"
@@ -130,6 +153,7 @@ jobs:
           path: |
             ${{ runner.temp }}/weavem-ci-${{ matrix.python }}
             ${{ runner.temp }}/weavem-installed-wheel-${{ matrix.python }}
+            ${{ runner.temp }}/weavem-editor-${{ matrix.python }}
             ${{ runner.temp }}/weavem-user-docs-evidence-${{ matrix.python }}/result.json
             ${{ runner.temp }}/weavem-user-docs-evidence-${{ matrix.python }}/tutorial.sh
             ${{ runner.temp }}/weavem-user-docs-evidence-${{ matrix.python }}/tutorial.stdout
@@ -239,6 +263,11 @@ jobs:
           cp scripts/verify-installed-wheel.py "$RUNNER_TEMP/verify-installed-wheel.py"
           cd "$RUNNER_TEMP"
           "$RUNNER_TEMP/weavem-wheel-latest/bin/python" -I verify-installed-wheel.py --work-dir "$RUNNER_TEMP/weavem-installed-wheel-latest"
+      - name: Verify packaged editor without Node or checkout imports
+        run: |
+          cp scripts/verify-installed-editor.py "$RUNNER_TEMP/verify-installed-editor.py"
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/weavem-wheel-${{ matrix.python }}/bin/python" -I verify-installed-editor.py --work-dir "$RUNNER_TEMP/weavem-editor-${{ matrix.python }}"
       - name: Execute the official user documentation against the installed wheel
         run: |
           bundle="$RUNNER_TEMP/weavem-user-docs-latest"

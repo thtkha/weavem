@@ -21,3 +21,6 @@ htmlcov/
 ui/node_modules/
 ui/dist/
 ui/.vite/
+
+# Generated runtime editor assets, staged by maintainers before packaging.
+src/weavem/_ui/

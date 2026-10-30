@@ -47,7 +47,9 @@ jobs:
         run: python -m unittest discover -s tests -p 'test_editor*.py' -v
       - name: Run a real native canvas flow in Chromium
         working-directory: .
-        run: node scripts/verify-editor.mjs
+        run: |
+          python scripts/stage-editor.py --skip-build
+          node scripts/verify-editor.mjs
       - name: Preserve browser-test evidence
         if: always()
         uses: actions/upload-artifact@v7
