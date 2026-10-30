@@ -120,7 +120,7 @@ separate from the released application-user manual.
 One task vocabulary, another authoring surface. React Flow owns presentation,
 never Weavem execution. Node instances reference task records; duplicate instances
 are allowed. Each executable wire names its destination argument and passes the
-whole upstream result; task descriptions are not machine-validated type schemas. The canvas and inspector read the same draft edge list: both incoming and outgoing wires remain inspectable, mappable, selectable, and deletable. Reconnecting a wire on an empty canvas disconnects it; invalid, cancelled, and outside-canvas releases preserve it.
+whole upstream result or an explicit nested-field path; task descriptions are not machine-validated type schemas. The canvas and inspector read the same draft edge list: both incoming and outgoing wires remain inspectable, mappable, selectable, and deletable. Reconnecting a wire on an empty canvas disconnects it; invalid, cancelled, and outside-canvas releases preserve it.
 Published provenance is metadata, not a claim of verified bytes or trusted code.
 Preserve current work when input is invalid; confirm before replacing a draft.
 
@@ -295,7 +295,7 @@ from a published flow. Draft schema 1 remains readable; unmapped wires cannot ru
 
 ## Open questions
 
-Typed ports, result-field selection, credentials management, parallel execution,
+Typed ports, credentials management, parallel execution,
 loops, nested flows, scheduling, collaboration, publication, and production
 deployment remain deferred. Execution is trusted local code, not a sandbox;
 cancellation cannot undo side effects.

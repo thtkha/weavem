@@ -45,3 +45,17 @@ test('Expressive toolbar control baselines and canvas actions align at supported
     expect(geometry.overflow).toBeLessThanOrEqual(0);
   }
 });
+
+test('selected wire field-path input uses the same themed control recipe as its selector', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.react-flow__edge').first().click({ force: true });
+  const input = page.getByLabel('Upstream field path', { exact: true });
+  const select = page.getByLabel('Upstream field', { exact: true });
+  await expect(input).toBeVisible();
+  const styles = await Promise.all([input, select].map(control => control.evaluate(element => {
+    const style = getComputedStyle(element);
+    return { height: element.getBoundingClientRect().height, background: style.backgroundColor, color: style.color, border: style.borderTopColor, radius: style.borderTopLeftRadius, fontSize: style.fontSize };
+  })));
+  expect(styles[0]).toEqual(styles[1]);
+  expect(styles[0].height).toBeGreaterThanOrEqual(32);
+});
