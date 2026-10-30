@@ -1,8 +1,8 @@
 # Installed project editor integration
 
-Status: implementation in progress, not released. Approved 2026-10-30.
+Status: lane implementations integrated; combined verification in progress, not released. Approved 2026-10-30.
 Baseline: selected Expressive layout with the approved olive palette, `3430e8e`.
-Target: `prototype/node-editor`; no main merge, push, version bump or release.
+Continuation: `prototype/node-editor`, integrated checkpoint `2665388`; no main merge, push, version bump or release.
 
 ## Contract and execution plan
 
@@ -45,5 +45,42 @@ Evidence: original `.artifacts/node-editor/product-editor/evidence/`.
 
 ## Current results
 
-Pending implementation and integrated validation; historical Impeccable tests do
-not prove this change. See the lane handoffs and final results appended here.
+Implemented lanes are integrated at `2665388`; the [current handoff](../../BRANCH_HANDOFF.md)
+records original and integrated commit IDs. Historical Impeccable results do not
+prove this combined change. Fresh full Python, frontend/browser and installed
+candidate verification are still in progress; do not call the integration accepted
+until the leader records their outcomes.
+
+Discovery lane verification: 42 owned focused checks passed; 55 focused checks
+passed with the proposed catalog integration applied in memory, including native
+boundary tests. That two-caller integration is now committed at `2665388`. An
+earlier full host run reported the then-missing catalog integration plus an
+artifact-directory interference failure; the isolated affected scope passed.
+Failed evidence is retained, not represented as an integrated green run.
+
+The canonical [editor guide](../../ui/README.md) distinguishes installed-candidate
+consumption (prebuilt assets, no Node) from source contribution (Node build/stage).
+The published `0.1.0a2` manual remains unchanged. Configured flow roots, automatic
+chooser behavior and environment ownership are documented in the guide and
+[maintainer reference](../maintainers/editor-reference.md).
+
+## Independent review and documentation reconciliation
+
+The integrated resolver consumers, direct-only scanning, duplicate diagnostics,
+configured-path boundaries, original-source save and metadata-stem journal naming
+were reviewed against their code and regression tests. One remaining integration
+issue was identified: worker tracing still constructs a default `flows/<name>.py`
+path even when the actual loader resolves a different root/source filename.
+Execution loads the right code, but node-level instrumentation can be missed.
+This needs an authoritative resolved trace path and a custom-root node-event
+regression before acceptance; the leader owns the fix and final result update.
+
+Current source/candidate guides now describe packaged assets, source staging,
+automatic chooser startup, configured roots and Python-environment ownership.
+The previous root Expressive handoff is preserved as a historical project record.
+Documentation-only verification: nine documentation-verifier regression tests and
+local path/heading checks across all docs plus the handoff/UI/example guides passed.
+The first documentation check caught a renamed linked heading; its historical
+anchor was restored. Evidence: `product-editor/evidence/integration-review/`
+beneath the agreed artifact directory. These checks do not claim combined runtime
+acceptance or a complete browser walkthrough rerun.

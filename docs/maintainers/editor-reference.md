@@ -1,6 +1,6 @@
 # Unreleased visual editor reference
 
-> **Scope:** source-tree reference for the `feature/editor-experience` branch.
+> **Scope:** source-tree reference for the `prototype/node-editor` branch and its unreleased candidate distributions.
 > It documents an unreleased editor feature and does not alter the released user
 > contract. Start with the human-facing [editor guide](../../ui/README.md) and
 > use the [local execution walkthrough](../../examples/editor-local/README.md)
@@ -10,6 +10,54 @@ The editor is local-first and code-first. Its UI reads task/flow information,
 saves the supported visual subset as ordinary Python flow files, and invokes the
 same local-flow loader as the CLI. It is not a new JavaScript execution engine,
 a hosted API, a sandbox, or a general Python round-trip formatter.
+
+## Installed assets and execution environment
+
+Candidate wheels and sdists contain the production static UI under `weavem/_ui`.
+Consumers launch `python -m weavem editor --project PATH` without Node, npm, a
+frontend development server, or an API service deployment. Contributors stage
+assets using `python scripts/stage-editor.py` after `npm --prefix ui ci`; explicit
+`--ui-dir PATH` remains available for frontend development. No npm runs during
+Python installation or editor startup. Missing assets fail with a diagnostic.
+These are source-branch contracts, not features of published `0.1.0a2`.
+
+The bridge and worker use the launching Python interpreter (`sys.executable`).
+Workers preserve the caller's ordinary environment and Prefect profile; no task
+dependencies or virtual environments are provisioned automatically. Session
+metadata includes `environment.pythonExecutable`, `pythonVersion`, and
+`weavemVersion`; the UI exposes them under **Project environment**. The project is
+selected at startup, not by an arbitrary filesystem path sent from the browser.
+
+On an untouched startup the UI connects and lists real flows without opening or
+running one. Restored/imported/unsaved drafts remain user-owned; project replacement
+requires the existing confirmation path. A failed connection leaves recovery and
+retry available rather than substituting synthetic project tasks.
+
+## Authored-flow discovery and persistence
+
+`[weavem].flow_paths` is an ordered nonempty list of directory strings, defaulting
+to `["flows"]`. An explicit list replaces rather than extends the default. Relative
+paths anchor at the project root; absolute paths are allowed by trusted project
+configuration. Paths are normalized and deduplicated in order, with symlinked roots
+rejected. Each root contributes only its direct `*.toml` sidecars. Discovery does
+not import Python. CLI flow operations, `Project.metadata()`, editor persistence,
+and worker resolution share the same resolver in `flow_sources.py`.
+
+A sidecar's stem is the bare local flow name. Duplicate stems across roots stop
+resolution with both paths named. An invalid sidecar is diagnostic in the editor
+list, while public project metadata remains fail-fast. The editor's internal
+task-only catalog does not weaken that public metadata contract.
+
+New definitions use the first root. Existing updates preserve their directory,
+declared source filename, flow identity/version/export, sidecar and optional layout
+location. The source filename can differ from the local name; an export differing
+from the local name remains source-only, as does unsupported Python. Ordinary flow
+metadata remains required; no second editor-only runtime metadata is introduced.
+Source/sidecar/layout revisions, directory/process locking, atomic writes and
+recovery journals remain in force. Journals are named after the metadata stem,
+including when the source filename differs. Symlink rejection and stale revision
+checks reduce accidental unsafe writes, but do not sandbox trusted configured paths
+or hostile concurrent filesystem mutations.
 
 ## Task interface hints
 
@@ -46,8 +94,8 @@ These formats are not interchangeable.
 | --- | --- | --- | --- |
 | Editor draft (`weavem.editor-draft`) | Browser editing state: catalog, nodes, positions, notes, parameters, connections, viewport | 3 | Reader accepts drafts 1, 2, and 3; it writes schema 3 |
 | Executable graph (`weavem.graph`) | Validated intermediate representation used while saving supported visual flows | 1 or 2 | Schema 1 remains valid for whole-result wires; schema 2 is required when any wire selects an upstream field |
-| Flow source and metadata | Authoritative runnable `flows/<name>.py` and `flows/<name>.toml` | Flow metadata schema is independent | Saved by the editor only for its supported Python subset |
-| Layout (`flows/<name>.layout.json`) | Non-executable positions, labels, notes, and viewport | 1 | Optional; it cannot change runtime behavior |
+| Flow source and metadata | Authoritative Python source and TOML sidecar in a configured root (`flows/` by default) | Flow metadata schema is independent | Saved by the editor only for its supported Python subset |
+| Layout (`<root>/<name>.layout.json`) | Non-executable positions, labels, notes, and viewport | 1 | Optional; it cannot change runtime behavior |
 
 A draft connection can omit `argument` only as legacy editing state. A runnable
 connection needs exactly one valid named target argument. One target argument

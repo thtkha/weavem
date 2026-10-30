@@ -1,59 +1,53 @@
 # Branch status and continuation
 
-**Recorded 2026-10-30.** This is a project-owner/contributor handoff, not a release
-manifest. Commit IDs below identify audited code; later documentation commits may
-advance the branch tips. Check Git before acting on this record.
+**Recorded 2026-10-30 at integrated code checkpoint `2665388`.** This is a
+project-owner/contributor handoff, not a release manifest. Later verification,
+fixes or documentation may advance tips; inspect Git before acting.
 
 ## Where to continue
 
-- Released framework usage: [official user manual](../users/index.md), covering
-  `0.1.0a2`. Do not assume the source editor ships in that wheel.
-- Combined unreleased editor: **`feature/editor-experience`**, application
-  checkpoint `e1bd04c`, then the documentation consolidation pass. Start with the
-  [editor guide](../../ui/README.md), [walkthrough](../../examples/editor-local/README.md),
-  and [source API reference](../maintainers/editor-reference.md).
-- Framework development and working agreements: [maintainer index](../maintainers/index.md)
-  and [context policy](../maintainers/context-policy.md).
+- Released framework usage: [official manual](../users/index.md), covering
+  published `0.1.0a2`; its wheel does not contain this new editor integration.
+- Current unreleased editor: **`prototype/node-editor`**. Read the
+  [current handoff](../../BRANCH_HANDOFF.md), [editor guide](../../ui/README.md),
+  [walkthrough](../../examples/editor-local/README.md), and
+  [integration record](editor-integration.md). Fresh combined checks are in progress.
+- Framework development: [maintainer index](../maintainers/index.md) and
+  [context policy](../maintainers/context-policy.md).
 
 | Branch | Audited code | Status / next action |
 | --- | --- | --- |
-| `main` | `f7758af` | Released-framework documentation baseline; untouched in this pass. No editor feature merge authorized here. |
-| `prototype/node-editor` | `0b6144f` | Python-backed editor checkpoint; awaiting final user review of the experience branch before any feature merge. |
-| `feature/editor-experience` | `e1bd04c` | Authoritative combined review application. All six areas wired together; later commits in this pass are docs only. Preview intentionally stopped. |
-| `feature/task-interfaces` | `98e5c47` | Constituent lane, integrated by cherry-pick with later leader fixes. Handoff docs tip `63bdc85`. Continue on combined branch, not this partial application. |
-| `feature/editor-interactions` | `a26d170` | Constituent history/toolbar lane, integrated by cherry-pick with later leader fixes. Handoff docs tip `550a894`. |
-| `feature/run-inspection` | `83e2e76` | Constituent snapshot/view lane, integrated by cherry-pick with lifecycle fixes. Handoff docs tip `c09e5d4`. |
-| `feat/editor-layout` | `99f9811` | Historical; ancestor of prototype. No new work or deletion authorized. |
-| `feat/editor-connections` | `dbc5907` | Historical; ancestor of prototype. |
-| `feat/editor-parameters` | `4129edd` | Historical; ancestor of prototype. |
-| `feat/editor-scrollbars` | `ef5847c` | Historical; ancestor of prototype. |
-| `feat/editor-tailwind` | `d691407` | Historical; ancestor of prototype. |
-| `feat/inspector-sections` | `00f5587` | Selected inspector direction; ancestor of prototype. |
-| `feat/inspector-tabs` | `632dbd6` | Unselected alternative, not an ancestor of prototype. Preserve for comparison, not as unfinished work to merge automatically. |
+| `main` | `f7758af` | Released-framework baseline, untouched; no editor main merge or release authorized. |
+| `prototype/node-editor` | `2665388` | Authoritative integrated editor continuation. Selected Expressive palette/layout and all three product-editor lanes integrated; pending final checks and owner review. |
+| `work/editor-discovery` | `d7ca07f` | Integrated as `3da6b59`, `d5e2679`, plus leader catalog fix `2665388`. Continue on prototype. |
+| `work/editor-packaging` | `6612db9` | Integrated as `d079781`, `6d3173d`; fresh installed-package/full-Python checks underway. |
+| `work/editor-frontend` | `1b9dcbf` | Integrated as `f9c1b66`; fresh frontend/browser checks underway. |
+| `experiment/impeccable-expressive` | `8e37c00` | Owner-selected composition/palette now integrated into prototype; historical lane, not current application. |
+| `experiment/impeccable-practical`, `experiment/impeccable-calm` | Historical comparison | Unselected alternatives, retained; no automatic merge or deletion. |
+| `feature/editor-experience` | `e1bd04c` | Earlier combined six-area checkpoint, integrated into the later prototype history. Not current continuation. |
+| `feature/task-interfaces` | `98e5c47` | Historical constituent lane; integrated by cherry-pick and later fixes. |
+| `feature/editor-interactions` | `a26d170` | Historical constituent lane; integrated by cherry-pick and later fixes. |
+| `feature/run-inspection` | `83e2e76` | Historical constituent lane; integrated by cherry-pick and lifecycle fixes. |
+| `feat/editor-layout`, `feat/editor-connections`, `feat/editor-parameters` | Historical | Earlier prototype constituents; no new work or deletion authorized. |
+| `feat/editor-scrollbars`, `feat/editor-tailwind`, `feat/inspector-sections` | Historical | Earlier prototype constituents; selected inspector sections retained. |
+| `feat/inspector-tabs` | `632dbd6` | Unselected alternative, retained for comparison. |
 
-Git ancestry alone will not mark the three new lanes merged: their reviewed
-implementation commits were cherry-picked and then integrated, not merged as
-branch ancestry. Each lane's `BRANCH_HANDOFF.md` records ownership, interfaces,
-baseline, checks, known integration gaps and continuation. From any local clone
-containing these refs, inspect them without checking out another branch:
+Cherry-picked implementations do not necessarily appear merged by ancestry.
+Original-to-integrated lane IDs are in the root handoff. Inspect refs with
+`git log --oneline prototype/node-editor` and `git worktree list`; no push or
+fetchability promise is implied. No branch deletion or history rewrite is part
+of this integration. A preview URL in historical records is not a live-service
+promise. The [old Expressive handoff](expressive-branch-handoff.md) is preserved
+as history rather than current operating guidance.
 
-```bash
-git show feature/task-interfaces:BRANCH_HANDOFF.md
-git show feature/editor-interactions:BRANCH_HANDOFF.md
-git show feature/run-inspection:BRANCH_HANDOFF.md
-git log --oneline feature/editor-experience
-git worktree list
-```
-
-Branch refs in this record are local; this pass does not push them. Do not promise
-a colleague can fetch them before an explicit push. The recorded code SHA and
-history explain what was inspected even if branch tips move later.
+The following dated sections retain earlier decisions and evidence. Their old
+branch/preview status is historical; the current table and handoff take precedence.
 
 ## Decisions that constrain continuation
 
 1. **Code first:** task authors write working Python, not mandatory UI schemas,
-   components, or styling. The GUI saves ordinary source in the same `flows/`
-   directory used by code authors. CLI/Python run without the GUI/bridge.
+   components, or styling. The GUI saves ordinary source in the same configured flow
+   directories used by code authors (`flows/` by default). CLI/Python run without the GUI/bridge.
 2. **Suggest, do not invent:** derive supported inputs/defaults/returns/docstrings
    statically. Keep unknowns unknown. Distinguish declared structures from observed
    sample results; do not execute code merely to discover its interface.
@@ -73,11 +67,11 @@ history explain what was inspected even if branch tips move later.
 7. **Local and explicit:** execution bridge stays loopback-only. Verified bytes
    are not a sandbox. Cancellation/Undo cannot reverse task side effects. Last-run
    source snapshots do not guarantee reproducibility of mutable code/services.
-8. **Review gate:** combine changes on the feature branch, present for owner
-   review, then merge into prototype only after approval. No main merge, release,
+8. **Review gate:** the selected experience is now integrated into prototype;
+   fresh checks and owner review remain required before any main merge. No main merge, release,
    publication, history rewrite, cleanup, or branch deletion is implicit.
 
-## Verification and evidence
+## Historical experience verification and evidence
 
 The [prototype record](node-editor-prototype.md#editor-experience-feature-branch-ready-for-review)
 records the implementation acceptance: 226 full Python regression tests, fresh
@@ -87,7 +81,7 @@ CPython 3.15 results, not remote CI, cross-browser, or fresh-machine certificati
 Retained ignored evidence is under `.artifacts/node-editor/experience/`. It is
 optional local evidence, not required reading to recover the design or next step.
 
-## Documentation pass and remaining gates
+## Historical documentation pass and gates
 
 This pass persists the working agreement and branch handoffs, consolidates the
 current guide/reference, and extends the example. Main, prototype, and historical
@@ -116,7 +110,7 @@ therefore remains **Source-verified**, not end-to-end GUI Verified. No code file
 changed in this pass.
 
 
-## Impeccable selection — 2026-10-30
+## Historical Impeccable selection — 2026-10-30
 
 The owner chose `experiment/impeccable-expressive` as the design candidate, with
 its cyan/blue palette explicitly rejected in favor of the approved sage/olive

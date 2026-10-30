@@ -1,18 +1,20 @@
 # Weavem visual flow editor
 
-> **Unreleased editor work.** This guide describes the source-tree editor on the
-> `feature/editor-experience` branch. It is not part of the published `0.1.0a2`
+> **Unreleased editor work.** This guide describes the integrated editor on the
+> `prototype/node-editor` branch and its locally built candidate distributions.
+> It is not part of the published `0.1.0a2`
 > wheel or the released user documentation.
 
 The editor is a local authoring surface for ordinary Weavem flows. It reads a
 project's task bindings and saved flow files, then saves the supported visual
-subset back into that same `flows/` directory. The browser does not execute a
+subset back into the same configured flow directories used by code authors. The
+browser does not execute a
 second graph runtime: **Run flow** invokes the same local-flow loader used by the
 CLI. A flow saved in the editor can run without the editor; a source-only flow
 can run without being visually editable.
 
 Use the complete [local execution walkthrough](../examples/editor-local/README.md)
-to build the frontend, start the loopback bridge, open the supplied flow, and run
+to start the loopback bridge, open the supplied flow, and run
 it. That walkthrough is the canonical procedure; its header records its current
 verification status. The public Python API and persisted editor formats are described in the
 [editor reference](../docs/maintainers/editor-reference.md).
@@ -25,14 +27,71 @@ code. The bridge is loopback-only and checks a per-session request token. This
 reduces exposure; it is **not** a sandbox. Trusted task code still runs with the
 local user's permissions and may have side effects.
 
+### Installed candidate: no frontend tooling
+
+This behavior is unreleased: use a wheel built from this branch, not the published
+`0.1.0a2` wheel. In the project's activated Python environment:
+
+```bash
+python -m pip install /path/to/locally-built-candidate.whl
+python -m weavem editor --project /path/to/project
+```
+
+Open the printed loopback URL. The wheel supplies static UI assets; there is no
+npm step or separate frontend server for consumers. Keep the terminal open and
+stop it with Ctrl+C. Installing Weavem does not install your project's extra task
+dependencies. Launch with the same environment you use for headless runs. The
+**Project environment** disclosure shows the actual project, Python executable,
+Python version, and Weavem version; workers use that interpreter and preserve the
+normal Prefect environment/profile. Missing dependencies require an explicit
+project-environment fix, not an automatic reinstall or another interpreter.
+
+For an editable checkout, contributors build assets with Node 24:
+
+```bash
+npm --prefix ui ci
+python scripts/stage-editor.py
+python -m weavem editor --project examples/editor-local
+```
+
+Staging copies the production build into package-owned `src/weavem/_ui/`. For an
+unstaged frontend build, explicitly pass `--ui-dir ui/dist`. A missing packaged
+build is an actionable error, not an implicit npm download.
+
+### Choose flow locations
+
+In `weavem.toml`, omit this setting to keep `flows/`, or replace the default:
+
+```toml
+[weavem]
+flow_paths = ["pipelines", "shared-flows"]
+```
+
+The ordered, nonempty list accepts project-relative or explicit absolute directory
+paths. Normalized duplicates are removed, preserving order. Only immediate
+`*.toml` sidecars are discovered, not nested folders or arbitrary Python files;
+reading the catalog never imports flow code. The sidecar stem remains the local
+flow name across editor, CLI, and Python metadata. Two roots containing the same
+stem are an error naming both paths, not an override mechanism.
+
+New flows use the first configured root. Updating an existing flow preserves its
+original root, declared Python source filename, metadata, and layout location.
+Each flow still needs its normal metadata sidecar; the layout is optional and
+non-executable. Invalid definitions appear with diagnostics in the editor; public
+`Project.metadata()` remains strict. Configuration is trusted: an absolute root
+allows writes outside the project. Symlinked roots/files are rejected, but this
+is not a filesystem sandbox or a defense against a hostile local account.
+
 ### Author and run flows
 
-1. Connect the selected project, then use **New flow** or **Open flow**.
+1. Open the printed editor URL. It connects to the selected project automatically
+   and lists saved flows without opening or running one. Use **New flow** or
+   **Open flow**; restored/imported drafts are retained, not silently replaced.
 2. Add bound tasks, supply literal JSON parameters, and connect explicit target
    arguments. A task may occur more than once.
 3. Save the flow. The editor writes the ordinary Python flow and its metadata to
    `flows/<name>.py` and `flows/<name>.toml`; optional layout data goes to
-   `flows/<name>.layout.json`.
+   `flows/<name>.layout.json` by default. Configured locations are explained below.
 4. Choose **Run flow**. The bridge rejects an outdated loaded revision before it
    starts the normal loader.
 
@@ -127,7 +186,7 @@ failure details.
 ## Visual-only development server
 
 The Vite development server is useful for visual work but has no execution
-bridge. It displays demo data only. From the repository root, use Node.js 24 and
+bridge. It opens a disconnected workbench without synthetic demo tasks. From the repository root, use Node.js 24 and
 npm:
 
 ```bash
@@ -147,7 +206,7 @@ to the public internet.
 
 The editor uses React, TypeScript, Vite, React Flow, and Tailwind CSS. It builds
 static assets in `dist/`; Node is required to develop or build the frontend, not
-to run a saved Python flow. The local Python bridge retains responsibility for
+to consume an installed editor or run a saved Python flow. The local Python bridge retains responsibility for
 task execution.
 
 - Use semantic tokens in `src/theme.css` for shared colors, typography, spacing,

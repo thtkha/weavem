@@ -7,7 +7,7 @@
 | Escalation | [Repository issues](https://github.com/thtkha/weavem/issues) |
 | Last verified | 2026-10-30 — source inspection; see the project note for execution evidence |
 | Last executed | See [prototype verification record](../../docs/project/node-editor-prototype.md) |
-| Applies to | Source checkout of `feature/editor-experience`; Linux x86_64; local machine only |
+| Applies to | Source checkout of `prototype/node-editor`; Linux x86_64; local machine only |
 | Risk | Medium — real tasks execute with your user permissions |
 | Expected duration | 15–25 minutes; first native compilation can take longer |
 
@@ -26,7 +26,7 @@ returns `{"summarize": "2: 2 words, 12 characters"}`.
 
 ## Scope
 
-Use this walkthrough for the experimental source branch, not the published
+Use this walkthrough for the unreleased integrated source branch, not the published
 `0.1.0a2` wheel. This sample does not read documents, contact services, or publish
 anything. The first native run compiles an extension. Remote execution,
 scheduling, credentials, and production deployment are not included.
@@ -47,10 +47,20 @@ defects through [repository issues](https://github.com/thtkha/weavem/issues), wi
 the branch/revision, failing step, versions, and redacted errors. Do not attach
 credentials, private metadata, or complete customer-data logs.
 
+## Installed candidate versus this contributor walkthrough
+
+A locally built candidate wheel includes the static editor. Its users only need
+their Python environment and `python -m weavem editor --project PATH`; they do not
+need a checkout, Node, or npm. The published `0.1.0a2` wheel does **not** include
+this new editor behavior. This walkthrough intentionally uses the source checkout
+to supply the sample project and verify contributor setup. See the
+[editor guide](../../ui/README.md#installed-candidate-no-frontend-tooling) for
+candidate installation and configured flow locations.
+
 ## Prerequisites and inputs
 
 - A checkout containing `ui/` and `src/weavem/editor_server.py` on
-  `feature/editor-experience`.
+  `prototype/node-editor`.
 - Bash on supported Linux x86_64, standard CPython 3.12–3.15, Node.js 24 with npm,
   and a desktop browser at least 1100 pixels wide.
 - An activated virtual environment with this checkout installed using
@@ -87,7 +97,7 @@ python -c "import weavem; print(weavem.__file__)"
 python -m weavem doctor
 ```
 
-Expected: the `feature/editor-experience` branch, supported Python, Node 24, this checkout's
+Expected: the `prototype/node-editor` branch, supported Python, Node 24, this checkout's
 `src/weavem/__init__.py`, and a successful native environment check. If any check
 fails, stop and correct the environment before compiling. Keep the redacted
 diagnostic output; do not run privileged installation commands automatically.
@@ -102,10 +112,12 @@ diagnostic output; do not run privileged installation commands automatically.
 
 ```bash
 npm --prefix ui ci
-npm --prefix ui run build
+python scripts/stage-editor.py
 ```
 
-**Expected result:** Both commands succeed and `ui/dist/index.html` exists.
+**Expected result:** Both commands succeed and `src/weavem/_ui/index.html` exists.
+Staging builds and copies the static UI into the package; an installed candidate
+already includes those assets and requires no Node/npm at runtime.
 **If this fails:** Stop; retain npm output and confirm Node 24 and registry access.
 **Evidence to retain:** Build output and Node/npm versions.
 **Repeatability:** Safe to repeat; regenerates frontend assets, not project data.
@@ -126,15 +138,19 @@ execute tasks.
 **If this fails:** Stop; use the troubleshooting table. Do not expose the service
 on all interfaces to resolve a connection issue.
 **Evidence to retain:** Printed project path and URL, not the session token.
+Check **Project environment** in the browser: the interpreter should be the same
+activated environment used here. Worker processes use that interpreter and retain
+your normal Prefect configuration; this command does not create another venv.
 **Repeatability:** Start one server only; stop the previous one with Ctrl+C first.
 
 ### Step 3 — Open the ready-to-run project flow
 
 **Goal:** Connect to tasks authorized by the selected project.
 **Run from:** Browser, printed loopback URL.
-**Action:** Choose **Connect project**, then **Replace draft** if prompted.
-If **Connect project** is hidden, open **More** first.
-Select `document_summary` in **Open flow** and confirm **Replace draft**.
+**Action:** Wait for the automatic project connection and flow list. It does not
+open a flow or start a run automatically. Select `document_summary` in **Open flow**
+and confirm **Replace draft** if prompted. If the connection failed, use
+**Connect project** under **More** to retry, rather than clearing browser storage.
 Export the previous draft first if you need it.
 **Expected result:** **document_summary**, with three connected nodes,
 their input parameters, and both argument mappings already filled in. The flow
@@ -345,7 +361,7 @@ projects require task-specific recovery; cancellation is not rollback.
 
 | Symptom | Diagnosis and safe action |
 | --- | --- |
-| Missing UI build | Repeat Step 1 from this checkout; confirm `ui/dist/index.html`. |
+| Missing UI build | Repeat Step 1 from this checkout; confirm `src/weavem/_ui/index.html`. |
 | Disconnected or no execution bridge | Open Step 2's printed URL, not Vite; reconnect once. |
 | Task not bound | In your own project, bind it with `weavem task use ALIAS --path tasks/NAME`; reload the catalog. The sample already has bindings. |
 | Missing argument or unexpected keyword | Correct explicit mappings and applied JSON parameters; task signatures are checked during execution. |
@@ -387,4 +403,4 @@ Execution evidence for this implementation is recorded in the project note.
 
 Weavem maintainers own this guide. Recheck it when CLI flags, graph mappings,
 task bindings, native behavior, supported Python versions, or browser controls
-change. This source-branch prototype is not a promise about released packages.
+change. This unreleased source-branch editor is not a promise about released packages.
