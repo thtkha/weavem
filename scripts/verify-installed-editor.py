@@ -20,7 +20,7 @@ import weavem
 assert Path(weavem.__file__).resolve().is_relative_to(Path(sys.prefix).resolve()), 'Weavem was imported from outside the consumer environment'
 project = root / 'project'
 project.mkdir()
-(project / 'weavem.toml').write_text('[weavem]\n[tasks.identity]\npath="tasks/identity"\n')
+(project / 'weavem.toml').write_text('[weavem]\nflow_paths=["pipelines"]\n[tasks.identity]\npath="tasks/identity"\n')
 task = project / 'tasks/identity'
 task.mkdir(parents=True)
 (task / 'task.toml').write_text('[task]\ntask_id="editor.identity"\nversion="1.0.0"\nbackend="python"\nsource="implementation.py"\nexport="run"\n')
@@ -60,7 +60,10 @@ try:
     saved=json.loads(request('/api/flows/installed_identity',{'graph':graph,'layout':None,'expectedRevision':None},token)[0])
     listed=json.loads(request('/api/flows',token=token)[0])
     assert any(item['name']=='installed_identity' for item in listed['flows']), listed
-    assert (project/'flows/installed_identity.py').is_file()
+    assert (project/'pipelines/installed_identity.py').is_file()
+    (project/'pipelines/broken.toml').write_text('invalid = [\n')
+    refreshed=json.loads(request('/api/session')[0])
+    assert any(item['name']=='broken' and not item['editable'] for item in refreshed['flows']), refreshed['flows']
     state=json.loads(request('/api/runs',{'flowName':'installed_identity','revision':saved['revision'],'params':{}},token)[0])
     for _ in range(240):
         state=json.loads(request('/api/runs/'+state['runId'],token=token)[0])

@@ -111,6 +111,12 @@ try {
   expect(inspection.snapshot.source).toBe(savedSource);
   expect(inspection.state.status).toBe('completed');
   expect(inspection.snapshot.graph.nodes).toHaveLength(3);
+  await page.getByRole('button', { name: 'Last run', exact: true }).click();
+  const lastRun = page.getByRole('region', { name: 'Last run', exact: true });
+  await expect(lastRun).toBeVisible();
+  await expect(lastRun).toContainText(runId);
+  await page.screenshot({ path: path.join(output, 'last-run.png'), fullPage: true });
+  await page.getByRole('button', { name: 'Close last run', exact: true }).click();
   expect(pageErrors).toEqual([]);
   expect(dialogs).toEqual([]);
   await page.screenshot({ path: path.join(output, 'completed.png'), fullPage: true });
