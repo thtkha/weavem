@@ -267,7 +267,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   padding: 0 18px;
 }
 .search input,.field input,.field textarea,.connection-add-form select {
-  @apply w-full text-ink bg-panel border border-solid border-line rounded-field p-[9px] resize-y;
+  @apply w-full text-ink bg-panel border border-solid border-control-line rounded-field p-[9px] resize-y;
 }
 .search input::placeholder,.field textarea::placeholder {
   @apply text-muted;
@@ -476,7 +476,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   margin-top: 10px;
   padding-top: 8px;
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 .node-handle {
   width: 13px;
@@ -530,7 +530,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   background: #15190fd4;
   padding: 5px 7px;
   border-radius: 4px;
-  font-size: 10px;
+  font-size: 11px;
   pointer-events: none;
 }
 .inspector-content {
@@ -591,7 +591,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .mono-break {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px !important;
+  font-size: 11px !important;
   word-break: break-all;
 }
 .field textarea {
@@ -608,7 +608,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .inspector .field input, .inspector .field textarea, .inspector .connection-add-form select,
 .inspector .parameter-field input[type="text"], .inspector .parameter-field input[type="number"],
 .inspector .parameter-field select, .inspector .connection-row input {
-  @apply bg-panel border border-solid border-line rounded-field text-ink text-label p-2;
+  @apply bg-panel border border-solid border-control-line rounded-field text-ink text-label p-2;
 }
 .parameter-editor {
   @apply grid gap-3;
@@ -652,7 +652,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .field-help {
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.4;
   margin: -9px 0 0;
 }
@@ -711,8 +711,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .inspector .run-result { border: 0; display: grid; gap: 8px; margin: 0; padding: 0; }
 .run-result-status { color: var(--color-muted); font-size: 12px; font-weight: 650; margin: 0; text-transform: capitalize; }
 .run-result-status.completed { color: var(--color-soft); }
-.run-result-status.failed { color: #f0a19a; }
-.run-result-status.skipped { color: #bdc5c7; }
+.run-result-status.failed { color: var(--color-failed); }
+.run-result-status.skipped { color: var(--color-skipped); }
 .inspector-empty {
   padding: 42px 24px;
   color: var(--color-muted);
@@ -733,7 +733,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   color: var(--color-muted);
   border-top: 1px solid var(--color-line);
   background: var(--color-panel);
-  font-size: 10px;
+  font-size: 11px;
 }
 .bottom-status span:first-child {
   color: var(--color-muted);
@@ -853,23 +853,23 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   border: 1px solid var(--color-line-hover);
   border-radius: 999px;
   color: var(--color-muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: .04em;
   text-transform: uppercase;
 }
-.node-run-status.running { border-color: #8197ef; color: #aebcff; }
+.node-run-status.running { border-color: var(--color-running-line); color: var(--color-running); }
 .node-run-status.completed { border-color: var(--color-accent); color: var(--color-muted); }
-.node-run-status.failed { border-color: #d77b74; color: #f0a19a; }
-.node-run-status.skipped { border-color: #879196; color: #bdc5c7; }
-.node-run-status.pending { border-color: #b99763; color: #d9bc88; }
+.node-run-status.failed { border-color: var(--color-failed-line); color: var(--color-failed); }
+.node-run-status.skipped { border-color: var(--color-skipped-line); color: var(--color-skipped); }
+.node-run-status.pending { border-color: var(--color-pending-line); color: var(--color-pending); }
 .run-log > code { display: block; color: var(--color-muted); font-size: 11px; }
 
 /* Connection inspection keeps draft.edges as the shared canvas/inspector state. */
 .connection-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
 .connection-row > button:first-child { appearance: none; border: 0; background: transparent; color: inherit; min-width: 0; padding: 0; text-align: left; }
 .connection-row input { grid-column: 1 / -1; width: 100%; min-width: 0; }
-.connection-delete { color: #d99393; background: transparent; border: 0; padding: 3px; font-size: 10px; }
+.connection-delete { color: #d99393; background: transparent; border: 0; padding: 3px; font-size: 11px; }
 
 .canvas-area:fullscreen {
   width: 100vw;
@@ -932,3 +932,9 @@ section[aria-label="Upstream field mapping"] input, section[aria-label="Upstream
 
 section[aria-label="Upstream field mapping"] select { background:var(--color-surface); color:var(--color-ink); border:1px solid var(--color-line); border-radius:var(--radius-control); min-height:32px; font:inherit; font-size:12px; padding:6px; }
 section[aria-label="Upstream field mapping"] label { color:var(--color-muted); font-size:12px; }
+
+/* Practical lab: legible supporting copy without changing the workbench identity. */
+.field-help, .inspector .field-help, .library-task > p, .inspector-empty p { font-size: 12px; }
+input, textarea, select { border-color: var(--color-control-line); }
+::selection { background: var(--color-accent); color: var(--color-on-accent); }
+input, textarea { caret-color: var(--color-accent); }

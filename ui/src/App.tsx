@@ -269,6 +269,7 @@ export default function App() {
   const [activeRunToAttach, setActiveRunToAttach] = useState<string | null>(null);
   const [saveAsOpen, setSaveAsOpen] = useState(false);
   const [saveAsName, setSaveAsName] = useState('');
+  const [saveAsError, setSaveAsError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [logOpen, setLogOpen] = useState(true);
   const [layout, setLayout] = useState<EditorLayout>(initialLayout);
@@ -328,7 +329,7 @@ export default function App() {
     () => draft.edges.map((edge) => ({
       ...edge,
       type: 'smoothstep',
-      markerEnd: { type: MarkerType.ArrowClosed, color: '#90a96e' },
+      markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--color-accent)' },
       selected: selectedEdgeIds.has(edge.id),
       ariaLabel: `Draft connection from ${edge.source} to ${edge.target}`,
     })),
@@ -633,16 +634,19 @@ export default function App() {
   useEffect(() => {
     if (!run || run.status !== 'running') return undefined;
     let cancelled = false;
+    let timer: number | undefined;
+    const controller = new AbortController();
     const poll = async () => {
       try {
-        let next = await requestApi<RunState>(`/api/runs/${encodeURIComponent(run.runId)}`);
+        let next = await requestApi<RunState>(`/api/runs/${encodeURIComponent(run.runId)}`, { signal: controller.signal });
         if (revisionMismatchedRun.current === run.runId) next = { ...next, nodes: {} };
         if (!cancelled) setRun(next);
+        if (next.status !== 'running') return;
       } catch (cause) { if (!cancelled) setRunError(cause instanceof Error ? cause.message : String(cause)); }
+      if (!cancelled) timer = window.setTimeout(() => { void poll(); }, 500);
     };
     void poll();
-    const timer = window.setInterval(() => { void poll(); }, 500);
-    return () => { cancelled = true; window.clearInterval(timer); };
+    return () => { cancelled = true; controller.abort(); window.clearTimeout(timer); };
   }, [requestApi, run?.runId, run?.status]);
 
   useEffect(() => {
@@ -841,7 +845,7 @@ export default function App() {
     updateDraft(pasted.draft, 'Selection pasted'); setSelectedNodeIds(pasted.nodeIds); setSelectedId([...pasted.nodeIds][0] ?? null);
   };
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (pending) return;
+    if (pending || saveAsOpen) return;
     const target = event.target as HTMLElement;
     if (target.closest('input, textarea, select, [contenteditable=true]')) return;
     if ((event.ctrlKey || event.metaKey) && canvasEditingAllowed) {
@@ -867,7 +871,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!pending) {
+    if (!pending && !saveAsOpen) {
       previousFocus.current?.focus();
       previousFocus.current = null;
       return undefined;
@@ -880,6 +884,7 @@ export default function App() {
       if (event.key === 'Escape') {
         event.preventDefault();
         setPending(null);
+        setSaveAsOpen(false);
       }
       if (event.key === 'Tab') {
         const elements = focusable();
@@ -897,7 +902,7 @@ export default function App() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [pending]);
+  }, [pending, saveAsOpen]);
 
   const executePending = useCallback(async (action: PendingAction) => {
     try {
@@ -980,7 +985,7 @@ export default function App() {
 
   return (
     <main className="app-shell" onKeyDown={onKeyDown}>
-      <section className="desktop-notice" aria-label="Desktop requirement" inert={pending ? true : undefined}>
+      <section className="desktop-notice" aria-label="Desktop requirement" inert={pending || saveAsOpen ? true : undefined}>
         <div>
           <strong>Weavem node editor is a desktop workbench.</strong>
           <span>Open this draft on a screen at least 1100px wide to edit it.</span>
@@ -989,7 +994,7 @@ export default function App() {
           {icon('download')} Export draft
         </Button>
       </section>
-      <div ref={workbench} className="workbench" style={{ '--library-width': `${layout.libraryWidth}px`, '--inspector-width': `${layout.inspectorWidth}px` } as React.CSSProperties} inert={pending ? true : undefined}>
+      <div ref={workbench} className="workbench" style={{ '--library-width': `${layout.libraryWidth}px`, '--inspector-width': `${layout.inspectorWidth}px` } as React.CSSProperties} inert={pending || saveAsOpen ? true : undefined}>
         <header className="topbar">
           <div className="topbar-main">
             <div className="brand">
@@ -1002,7 +1007,7 @@ export default function App() {
             flowName={draft.name} onFlowNameChange={setName} onFlowNameBlur={() => { editGroup.current = null; }} onNew={() => requestAction({ kind: 'new' })}
             onImportMetadata={() => metadataInput.current?.click()} onOpenFlow={(name) => requestAction({ kind: 'flow', name })}
             flows={flowSummaries} onSave={() => void saveFlow(false).catch((cause: unknown) => setError(String(cause)))}
-            onSaveAs={() => { setSaveAsName(`${draft.name.trim() || 'new_flow'}_copy`); setSaveAsOpen(true); }}
+            onSaveAs={() => { previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; setSaveAsError(null); setSaveAsName(`${draft.name.trim() || 'new_flow'}_copy`); setSaveAsOpen(true); }}
             onOpenDraft={() => draftInput.current?.click()} onExportDraft={exportDraft} onConnectProject={() => void connectProject()}
             connected={Boolean(session)} canUndo={canvasEditingAllowed && canUndo(history.current)} canRedo={canvasEditingAllowed && canRedo(history.current)}
             canCopy={Boolean(selectedId || selectedNodeIds.size)} canPaste={canvasEditingAllowed && Boolean(clipboard.current)}
@@ -1023,6 +1028,7 @@ export default function App() {
             className="visually-hidden"
             aria-label="Import metadata JSON"
             type="file"
+            tabIndex={-1}
             accept="application/json,.json"
             onChange={(event) => {
               void readFile(event.currentTarget.files?.[0], 'metadata');
@@ -1034,6 +1040,7 @@ export default function App() {
             className="visually-hidden"
             aria-label="Open draft JSON"
             type="file"
+            tabIndex={-1}
             accept="application/json,.json"
             onChange={(event) => {
               void readFile(event.currentTarget.files?.[0], 'draft');
@@ -1169,10 +1176,10 @@ export default function App() {
             multiSelectionKeyCode={['Meta', 'Control']}
             aria-label="Weavem draft graph"
           >
-            <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="#374227" />
+            <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="var(--color-line)" />
             <Controls showInteractive={false} />
             <MiniMap
-              nodeColor={(node) => (node.data as NodeData).task?.provenance === 'released' ? '#8197ef' : '#90a96e'}
+              nodeColor={(node) => (node.data as NodeData).task?.provenance === 'released' ? 'var(--color-released)' : 'var(--color-accent)'}
               maskColor="rgba(16, 20, 12, .7)"
             />
           </ReactFlow>
@@ -1301,7 +1308,7 @@ export default function App() {
         </footer>
       </div>
 
-      {saveAsOpen && <div className="modal-backdrop" role="presentation"><section className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="save-as-title"><p className="eyebrow">Save flow as</p><h2 id="save-as-title">Create an ordinary project flow</h2><Field label="New flow name"><input autoFocus aria-label="New flow name" value={saveAsName} onChange={(event) => setSaveAsName(event.target.value)} /></Field><p>Use a Python identifier. This writes the standard flow files under <code>flows/</code>.</p><div className="dialog-actions"><Button onClick={() => setSaveAsOpen(false)}>Cancel</Button><Button variant="primary" onClick={() => void saveFlow(true, saveAsName).then(() => setSaveAsOpen(false)).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : String(cause)))}>Save as</Button></div></section></div>}
+      {saveAsOpen && <div className="modal-backdrop" role="presentation"><section ref={dialog} className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="save-as-title"><p className="eyebrow">Save flow as</p><h2 id="save-as-title">Create an ordinary project flow</h2><Field label="New flow name"><input aria-label="New flow name" value={saveAsName} onChange={(event) => setSaveAsName(event.target.value)} /></Field><p>Use a Python identifier. This writes the standard flow files under <code>flows/</code>.</p>{saveAsError && <p role="alert">{saveAsError}</p>}<div className="dialog-actions"><Button disabled={submitting} onClick={() => setSaveAsOpen(false)}>Cancel</Button><Button variant="primary" disabled={submitting} onClick={() => void saveFlow(true, saveAsName).then(() => setSaveAsOpen(false)).catch((cause: unknown) => setSaveAsError(cause instanceof Error ? cause.message : String(cause)))}>Save as</Button></div></section></div>}
       {pending && <div className="modal-backdrop" role="presentation"><section ref={dialog} className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="replace-title"><p className="eyebrow">Replace current draft?</p><h2 id="replace-title">Your current graph will be replaced.</h2><p>Export it first if you need a portable copy. Invalid files never change the current draft.</p><div className="dialog-actions"><Button onClick={() => setPending(null)}>Cancel</Button><Button variant="primary" onClick={() => void executePending(pending)}>Replace draft</Button></div></section></div>}
     </main>
   );

@@ -17,7 +17,7 @@ type Props = { inspection: RunInspectionRecord | null; onClose: () => void };
 
 /** Read-only evidence for a saved flow run; never edits the current draft. */
 export function RunInspection({ inspection, onClose }: Props) {
-  if (!inspection) return null;
+  if (!inspection) return <section className="run-inspection panel" aria-label="Last run"><header className="panel-heading"><h2>Last run</h2><button className="icon-button" aria-label="Close last run" onClick={onClose}>×</button></header><p>No recorded run for this flow yet. Return to Edit flow and run the saved flow to capture results.</p></section>;
   const { snapshot, state } = inspection;
   const graph = snapshot.graph;
   return <section className="run-inspection panel" aria-label="Last run">

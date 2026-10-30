@@ -13,6 +13,19 @@ function copy<T>(value: T): T {
   return structuredClone(value);
 }
 
+/** Retained snapshots are immutable; only the live present draft is mutable. */
+function retained(draft: EditorDraft): EditorDraft {
+  const snapshot = copy(draft);
+  const freeze = (value: unknown): void => {
+    if (value && typeof value === 'object') {
+      Object.values(value).forEach(freeze);
+      Object.freeze(value);
+    }
+  };
+  freeze(snapshot);
+  return snapshot;
+}
+
 function equal(left: EditorDraft, right: EditorDraft): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
@@ -26,7 +39,7 @@ export function commitDraft(history: DraftHistory, next: EditorDraft): DraftHist
   const snapshot = copy(next);
   if (equal(history.present, snapshot)) return history;
   return {
-    past: [...history.past.slice(-(HISTORY_LIMIT - 1)), copy(history.present)],
+    past: [...history.past.slice(-(HISTORY_LIMIT - 1)), retained(history.present)],
     present: snapshot,
     future: [],
   };
@@ -40,9 +53,9 @@ export function undoDraft(history: DraftHistory): DraftHistory {
   const previous = history.past.at(-1);
   if (!previous) return history;
   return {
-    past: history.past.slice(0, -1).map(copy),
+    past: history.past.slice(0, -1),
     present: copy(previous),
-    future: [copy(history.present), ...history.future.map(copy)],
+    future: [retained(history.present), ...history.future],
   };
 }
 
@@ -50,9 +63,9 @@ export function redoDraft(history: DraftHistory): DraftHistory {
   const next = history.future[0];
   if (!next) return history;
   return {
-    past: [...history.past.map(copy), copy(history.present)],
+    past: [...history.past, retained(history.present)],
     present: copy(next),
-    future: history.future.slice(1).map(copy),
+    future: history.future.slice(1),
   };
 }
 

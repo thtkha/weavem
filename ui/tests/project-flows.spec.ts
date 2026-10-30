@@ -131,3 +131,50 @@ test('active-run attachment waits for replacement confirmation', async ({ page }
   await expect.poll(() => runFetches).toBeGreaterThan(0);
   await expect(page.getByRole('region', { name: 'Run log', exact: true })).toContainText('active-1');
 });
+
+test('Save as traps focus, reports validation inside the dialog and restores focus', async ({ page }) => {
+  const session = await projectSession();
+  await page.route('**/api/session', route => route.fulfill({ json: session }));
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Connect project', exact: true }).click();
+  await page.getByRole('button', { name: 'Replace draft', exact: true }).click();
+  await page.getByRole('button', { name: 'Add task text.normalize', exact: true }).first().click();
+  const trigger = page.getByRole('button', { name: 'Save as', exact: true });
+  await trigger.click();
+  const modal = page.getByRole('dialog');
+  await modal.getByLabel('New flow name').fill('not valid!');
+  await modal.getByRole('button', { name: 'Save as', exact: true }).click();
+  await expect(modal.getByRole('alert')).toContainText('Flow name');
+  await modal.getByRole('button', { name: 'Save as', exact: true }).focus();
+  await page.keyboard.press('Tab');
+  await expect(modal.getByLabel('New flow name')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(modal).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+  await expect(page.locator('input[type=file]').first()).toHaveAttribute('tabindex', '-1');
+});
+
+test('run polling waits for the previous response and stops after completion', async ({ page }) => {
+  const session = { ...await projectSession(), activeRunId: 'serial-run', flows: [{ name: 'running_flow', revision: 'r1', editable: true }] };
+  let requests = 0;
+  let release: () => void = () => {};
+  const delayed = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/session', route => route.fulfill({ json: session }));
+  await page.route('**/api/flows/running_flow', route => route.fulfill({ json: { name: 'running_flow', revision: 'r1', editable: true, graph: { kind: 'weavem.graph', schema: 1, name: 'running_flow', nodes: [], edges: [] } } }));
+  await page.route('**/api/runs/serial-run', async route => {
+    requests += 1;
+    const number = requests;
+    if (number === 2) await delayed;
+    await route.fulfill({ json: { runId: 'serial-run', status: number >= 3 ? 'completed' : 'running', flowName: 'running_flow', revision: 'r1', nodes: {}, logs: '' } });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Connect project', exact: true }).click();
+  await page.getByRole('button', { name: 'Replace draft', exact: true }).click();
+  await expect.poll(() => requests).toBe(2);
+  await page.waitForTimeout(700);
+  expect(requests).toBe(2);
+  release();
+  await expect(page.getByRole('region', { name: 'Run log', exact: true }).getByRole('heading')).toHaveText('completed');
+  await page.waitForTimeout(700);
+  expect(requests).toBe(3);
+});

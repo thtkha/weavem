@@ -13,10 +13,10 @@ function Tree({ value }: { value: JsonValue }) {
   return <code>{JSON.stringify(value)}</code>;
 }
 
-function Table({ rows }: { rows: JsonObject[] }) {
+export function ResultTable({ rows }: { rows: JsonObject[] }) {
   const keys = [...new Set(rows.flatMap((row) => Object.keys(row)))];
   return <table className="result-table"><thead><tr>{keys.map((key) => <th key={key}>{key}</th>)}</tr></thead><tbody>
-    {rows.map((row, index) => <tr key={index}>{keys.map((key) => <td key={key}><Tree value={row[key] ?? null} /></td>)}</tr>)}
+    {rows.map((row, index) => <tr key={index}>{keys.map((key) => <td key={key}>{Object.hasOwn(row, key) ? <Tree value={row[key]} /> : <span className="field-help">Missing field</span>}</td>)}</tr>)}
   </tbody></table>;
 }
 
@@ -26,7 +26,7 @@ export function ResultViewer({ value, fallback }: Props) {
   if (!value) return fallback ? <pre className="result-viewer">{fallback}</pre> : null;
   if (value.kind === 'json' && value.value !== undefined) {
     const rows = Array.isArray(value.value) && value.value.every(isObject) ? value.value : null;
-    return <section className="result-viewer" aria-label="Structured result">{rows && <button type="button" onClick={() => setTable((current) => !current)}>{table ? "Tree view" : "Table view"}</button>}{rows && table ? <Table rows={rows} /> : <Tree value={value.value} />}{value.truncated && <small>Preview truncated.</small>}</section>;
+    return <section className="result-viewer" aria-label="Structured result">{rows && <button type="button" onClick={() => setTable((current) => !current)}>{table ? "Tree view" : "Table view"}</button>}{rows && table ? <ResultTable rows={rows} /> : <Tree value={value.value} />}{value.truncated && <small>Preview truncated.</small>}</section>;
   }
   return <pre className="result-viewer">{value.preview}{value.truncated ? '\\n[truncated]' : ''}</pre>;
 }

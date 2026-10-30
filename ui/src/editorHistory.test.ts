@@ -30,3 +30,29 @@ describe('draft history', () => {
     expect(pasted.draft.edges).toHaveLength(draft.edges.length + 1);
   });
 });
+
+it('isolates live drafts from saved history during undo and redo', () => {
+  const initial = createDemoDraft();
+  let history = createDraftHistory(initial);
+  initial.name = 'external mutation';
+  expect(history.present.name).not.toBe(initial.name);
+  history = commitDraft(history, { ...history.present, name: 'second' });
+  history = commitDraft(history, { ...history.present, name: 'third' });
+  const undone = undoDraft(history);
+  undone.present.name = 'changed live draft';
+  expect(history.past.at(-1)?.name).toBe('second');
+  const redone = redoDraft(undone);
+  redone.present.name = 'changed again';
+  expect(undone.future[0].name).toBe('third');
+});
+
+it('shares only frozen retained snapshots between history versions', () => {
+  let history = createDraftHistory(createDemoDraft());
+  history = commitDraft(history, { ...history.present, name: 'second' });
+  history = commitDraft(history, { ...history.present, name: 'third' });
+  const undone = undoDraft(history);
+  expect(undone.past[0]).toBe(history.past[0]);
+  expect(Object.isFrozen(undone.past[0].nodes)).toBe(true);
+  expect(() => { undone.past[0].name = 'corruption'; }).toThrow();
+  expect(history.past[0].name).not.toBe('corruption');
+});
