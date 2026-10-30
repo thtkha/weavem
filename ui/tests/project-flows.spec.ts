@@ -178,3 +178,64 @@ test('run polling waits for the previous response and stops after completion', a
   await page.waitForTimeout(700);
   expect(requests).toBe(3);
 });
+
+test('Save as cannot be dismissed while its pending save can still fail', async ({ page }) => {
+  const session = await projectSession();
+  await page.route('**/api/session', route => route.fulfill({ json: session }));
+  let submitted = false;
+  let release: () => void = () => {};
+  const delayed = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/flows/delayed_copy', async route => {
+    submitted = true;
+    await delayed;
+    await route.fulfill({ status: 500, json: { error: 'Simulated save failure' } });
+  });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Connect project', exact: true }).click();
+  await page.getByRole('button', { name: 'Replace draft', exact: true }).click();
+  await page.getByRole('button', { name: 'Add task text.normalize', exact: true }).first().click();
+  await page.getByRole('button', { name: 'Save as', exact: true }).click();
+  const modal = page.getByRole('dialog');
+  await modal.getByLabel('New flow name').fill('delayed_copy');
+  await modal.getByRole('button', { name: 'Save as', exact: true }).click();
+  await expect.poll(() => submitted).toBe(true);
+  await page.waitForTimeout(550);
+  await page.keyboard.press('Escape');
+  await expect(modal).toBeVisible();
+  await expect(modal.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+  release();
+  await expect(modal.getByRole('alert')).toContainText('Simulated save failure');
+  await page.keyboard.press('Escape');
+  await expect(modal).toHaveCount(0);
+});
+
+test('toolbar and inspector field boundaries retain at least 3:1 contrast', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('task-node').first().click();
+  const checks = await page.locator('input:visible, textarea:visible, select:visible').evaluateAll(elements => {
+    const luminance = (color: string) => {
+      const channels = color.match(/[\d.]+/g)!.slice(0, 3).map(Number).map(n => { const s = n / 255; return s <= .04045 ? s / 12.92 : ((s + .055) / 1.055) ** 2.4; });
+      return .2126 * channels[0] + .7152 * channels[1] + .0722 * channels[2];
+    };
+    return elements.map(element => {
+      const style = getComputedStyle(element);
+      const border = luminance(style.borderTopColor);
+      const background = luminance(style.backgroundColor);
+      return { name: element.getAttribute('aria-label') ?? element.tagName, ratio: (Math.max(border, background) + .05) / (Math.min(border, background) + .05) };
+    });
+  });
+  expect(checks.length).toBeGreaterThan(2);
+  for (const check of checks) expect(check.ratio, check.name).toBeGreaterThanOrEqual(3);
+});
+
+test('raw parameter JSON uses the editor theme instead of browser white', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('task-node').first().click();
+  const textarea = page.locator('textarea[aria-label="Draft parameters"]');
+  await expect(textarea).toBeVisible();
+  const theme = await textarea.evaluate(element => {
+    const style = getComputedStyle(element);
+    return { background: style.backgroundColor, ink: style.color, placeholder: getComputedStyle(element, '::placeholder').color };
+  });
+  expect(theme).toEqual({ background: 'rgb(8, 10, 6)', ink: 'rgb(237, 241, 231)', placeholder: 'rgb(198, 210, 180)' });
+});

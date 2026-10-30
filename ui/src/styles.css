@@ -424,7 +424,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   background: #15190fd4;
   border: 1px solid var(--color-line);
   border-radius: 4px 0 0;
-  font-size: 9px;
+  font-size: 11px;
 }
 .react-flow__attribution a {
   color: var(--color-soft);
@@ -449,7 +449,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .node-kicker {
   color: var(--color-muted);
-  font-size: 9px;
+  font-size: 11px;
   letter-spacing: .095em;
   text-transform: uppercase;
   font-weight: 700;
@@ -612,6 +612,10 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 }
 .parameter-editor {
   @apply grid gap-3;
+}
+.parameter-editor textarea {
+  @apply w-full bg-panel text-ink border border-solid border-control-line rounded-field p-2;
+  min-width: 0;
 }
 .parameter-heading, .parameter-label {
   @apply flex justify-between items-center gap-2 text-muted text-label font-field;
@@ -891,7 +895,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   padding: 0 9px;
 }
 .run-parameters { display: grid; gap: 2px; min-width: 104px; }
-.run-parameters > span { color: var(--color-muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; }
+.run-parameters > span { color: var(--color-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
 .run-parameters input { width: 96px; font-family: var(--font-mono); }
 .source-only-notice { position: absolute; z-index: 5; top: 58px; left: 18px; max-width: min(520px, calc(100% - 36px)); padding: 10px 12px; border: 1px solid var(--color-warning); border-radius: 7px; background: var(--color-surface); color: var(--color-muted); font-size: .8rem; }
 .run-inspection { position: absolute; z-index: 12; right: 18px; top: 58px; width: min(430px, calc(100% - 36px)); max-height: calc(100% - 90px); overflow: auto; padding: 14px; }
@@ -904,8 +908,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .editor-toolbar { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; min-width: 0; padding: 8px 12px; }
 .toolbar-group { display: flex; min-width: 0; align-items: center; gap: 6px; }
 .toolbar-group-flow { flex-wrap: wrap; }.toolbar-group-edit { flex: 0 0 auto; }.toolbar-group-run { justify-self: end; flex: 0 0 auto; }
-.toolbar-flow-name { display: grid; gap: 2px; min-width: 142px; color: var(--color-muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; }
-.toolbar-flow-name input, .editor-toolbar .flow-picker select, .editor-toolbar .run-parameters input { min-height: 32px; border: 1px solid var(--color-line); border-radius: var(--radius-control, 6px); background: var(--color-surface); color: var(--color-ink); padding: 0 9px; }
+.toolbar-flow-name { display: grid; gap: 2px; min-width: 142px; color: var(--color-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.toolbar-flow-name input, .editor-toolbar .flow-picker select, .editor-toolbar .run-parameters input { min-height: 32px; border: 1px solid var(--color-control-line); border-radius: var(--radius-control, 6px); background: var(--color-surface); color: var(--color-ink); padding: 0 9px; }
 .toolbar-flow-name input { min-width: 0; width: 100%; font: 650 .82rem var(--font-sans); text-transform: none; letter-spacing: normal; }
 .editor-toolbar .button { min-height: 32px; padding-block: 6px; }.editor-toolbar .run-parameters { min-width: 104px; }
 .toolbar-overflow { position: relative; flex: 0 0 auto; }.toolbar-overflow > summary { min-height: 32px; display: inline-flex; align-items: center; padding: 0 9px; border: 1px solid var(--color-line); border-radius: var(--radius-control, 6px); background: var(--color-control); color: var(--color-ink); cursor: pointer; font: 650 .76rem var(--font-sans); list-style: none; }.toolbar-overflow > summary::-webkit-details-marker { display: none; }
@@ -930,7 +934,7 @@ section[aria-label="Upstream field mapping"] { min-width:0; display:grid; gap:6p
 section[aria-label="Upstream field mapping"] label { min-width:0; display:grid; gap:4px; }
 section[aria-label="Upstream field mapping"] input, section[aria-label="Upstream field mapping"] select { width:100%; min-width:0; max-width:100%; }
 
-section[aria-label="Upstream field mapping"] select { background:var(--color-surface); color:var(--color-ink); border:1px solid var(--color-line); border-radius:var(--radius-control); min-height:32px; font:inherit; font-size:12px; padding:6px; }
+section[aria-label="Upstream field mapping"] select { background:var(--color-surface); color:var(--color-ink); border:1px solid var(--color-control-line); border-radius:var(--radius-control); min-height:32px; font:inherit; font-size:12px; padding:6px; }
 section[aria-label="Upstream field mapping"] label { color:var(--color-muted); font-size:12px; }
 
 /* Practical lab: legible supporting copy without changing the workbench identity. */
@@ -938,3 +942,7 @@ section[aria-label="Upstream field mapping"] label { color:var(--color-muted); f
 input, textarea, select { border-color: var(--color-control-line); }
 ::selection { background: var(--color-accent); color: var(--color-on-accent); }
 input, textarea { caret-color: var(--color-accent); }
+
+.save-state, .library-count, .canvas-summary, .canvas-footer { font-size: 12px; }
+.react-flow__attribution a { font-size: 11px; }
+input::placeholder, textarea::placeholder { color: var(--color-muted); opacity: 1; }
