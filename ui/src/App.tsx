@@ -518,7 +518,9 @@ export default function App() {
     setConnectionPhase('loading'); setConnectionError(null);
     try {
       const next = await requestApi<EditorSession>('/api/session', { signal: controller.signal });
-      if (controller.signal.aborted || attempt !== connectionAttempt.current) return;
+      if (externalSignal?.aborted || attempt !== connectionAttempt.current) return;
+      // An aborted body read can be recovered by requestApi's JSON fallback.
+      if (controller.signal.aborted) throw new Error('Session request timed out');
       if (!next.token || !next.project || !next.bindings || !next.metadata) throw new Error('The editor bridge returned an invalid session');
       const catalog = importMetadata(JSON.stringify(next.metadata));
       // An existing run can replace the visible source only after explicit consent.
@@ -1355,7 +1357,7 @@ export default function App() {
         </footer>
       </div>
 
-      {saveAsOpen && <div className="modal-backdrop" role="presentation"><section ref={dialog} className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="save-as-title"><h2 id="save-as-title">Create an ordinary project flow</h2><Field label="New flow name"><input aria-label="New flow name" disabled={submitting} value={saveAsName} onChange={(event) => setSaveAsName(event.target.value)} /></Field><p>Use a Python identifier. This writes the standard flow files under <code>flows/</code>.</p>{saveAsError && <p role="alert">{saveAsError}</p>}<div className="dialog-actions"><Button disabled={submitting} onClick={() => setSaveAsOpen(false)}>Cancel</Button><Button variant="primary" disabled={submitting} onClick={() => void saveFlow(true, saveAsName).then(() => setSaveAsOpen(false)).catch((cause: unknown) => setSaveAsError(cause instanceof Error ? cause.message : String(cause)))}>Save as</Button></div></section></div>}
+      {saveAsOpen && <div className="modal-backdrop" role="presentation"><section ref={dialog} className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="save-as-title"><h2 id="save-as-title">Create an ordinary project flow</h2><Field label="New flow name"><input aria-label="New flow name" disabled={submitting} value={saveAsName} onChange={(event) => setSaveAsName(event.target.value)} /></Field><p>Use a Python identifier. This writes standard flow files into the first configured flow directory.</p>{saveAsError && <p role="alert">{saveAsError}</p>}<div className="dialog-actions"><Button disabled={submitting} onClick={() => setSaveAsOpen(false)}>Cancel</Button><Button variant="primary" disabled={submitting} onClick={() => void saveFlow(true, saveAsName).then(() => setSaveAsOpen(false)).catch((cause: unknown) => setSaveAsError(cause instanceof Error ? cause.message : String(cause)))}>Save as</Button></div></section></div>}
       {pending && <div className="modal-backdrop" role="presentation"><section ref={dialog} className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="replace-title"><h2 id="replace-title">Your current graph will be replaced.</h2><p>Export it first if you need a portable copy. Invalid files never change the current draft.</p><div className="dialog-actions"><Button onClick={() => setPending(null)}>Cancel</Button><Button variant="primary" onClick={() => void executePending(pending)}>Replace draft</Button></div></section></div>}
     </main>
   );

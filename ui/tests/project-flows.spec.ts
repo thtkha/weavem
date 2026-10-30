@@ -101,6 +101,7 @@ test('Save as updates the visible flow name only after the new flow is saved', a
   await page.getByRole('dialog').getByRole('button', { name: 'Replace draft', exact: true }).click();
   await page.getByRole('button', { name: 'Add task text.normalize', exact: true }).first().click();
   await page.getByRole('button', { name: 'Save as', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('first configured flow directory');
   await page.getByLabel('New flow name', { exact: true }).fill('renamed_flow');
   await page.getByRole('dialog').getByRole('button', { name: 'Save as', exact: true }).click();
   await expect(page.getByLabel('Flow name', { exact: true })).toHaveValue('renamed_flow');

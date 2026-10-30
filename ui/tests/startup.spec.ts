@@ -75,8 +75,8 @@ test('same-project restored work survives automatic connection without opening a
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
 
-test('legacy browser draft remains recoverable when a different project connects', async ({ page }) => {
-  const draft = createDemoDraft();
+for (const schema of [2, 3]) test(`schema ${schema} legacy browser draft remains recoverable when a different project connects`, async ({ page }) => {
+  const draft = { ...createDemoDraft(), schema };
   await page.addInitScript(({ key, value }) => localStorage.setItem(key, value), { key: STORAGE_KEY, value: JSON.stringify(draft) });
   await mockSession(page);
   await page.goto('/');
@@ -88,6 +88,9 @@ test('legacy browser draft remains recoverable when a different project connects
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(page.getByTestId('task-node')).toHaveCount(3);
+  await expect.poll(() => page.evaluate(key => JSON.parse(localStorage.getItem(key)!).schema, STORAGE_KEY)).toBe(3);
+  const stored = await page.evaluate(key => JSON.parse(localStorage.getItem(key)!), STORAGE_KEY);
+  expect(stored).toMatchObject({ name: draft.name, catalog: draft.catalog, nodes: draft.nodes, edges: draft.edges });
 });
 
 test('corrupt storage is never overwritten by an automatic project connection', async ({ page }) => {
@@ -168,4 +171,24 @@ test('an older startup response cannot overwrite a newer explicit connection', a
   await expect(page.getByText('Connected to /stale-project', { exact: false })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: session.project, exact: true })).toBeVisible();
   expect(requests).toBe(2);
+});
+
+test('session body timeout cannot leave startup loading after response headers arrive', async ({ page }) => {
+  await page.clock.install();
+  await page.addInitScript(() => {
+    const fetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      if (input !== '/api/session') return fetch(input, init);
+      const response = new Response('{}', { status: 200 });
+      response.json = () => new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+      });
+      return Promise.resolve(response);
+    };
+  });
+  await page.goto('/');
+  await page.clock.runFor(10_001);
+  await expect(page.getByText('The project connection timed out. Check the local editor and retry.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Connecting to the local project…', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Retry connection', exact: true })).toBeEnabled();
 });

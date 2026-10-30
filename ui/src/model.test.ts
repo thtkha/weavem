@@ -211,7 +211,7 @@ describe('draft model', () => {
     expect(moved.edges.find((edge) => edge.id === 'demo-edge-read-normalize')?.argument).toBe('documents');
   });
 
-  it('migrates schema 1 generic wires to schema 2 without inventing argument mappings', () => {
+  it('migrates schema 1 generic wires to schema 3 without inventing argument mappings', () => {
     const legacy = createDemoDraft() as unknown as { schema: number };
     legacy.schema = 1;
     const migrated = parseDraft(JSON.stringify(legacy));
