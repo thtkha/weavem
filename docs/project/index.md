@@ -41,3 +41,5 @@ New owner-facing planning notes or decision records belong in this section.
 Separate proposed work from shipped behavior, and add a dated entry to the
 history index when an evaluation is complete. Do not promote a historical
 recommendation to current policy merely by moving its file.
+
+- [Impeccable comparison lab](impeccable-lab.md) — isolated editor experiments and verification.

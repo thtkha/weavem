@@ -1,4 +1,66 @@
+---
+name: Weavem practical comparison
+description: Owner-approved sage and olive workbench with practical accessibility fixes
+colors:
+  canvas: "#0c0f09"
+  panel: "#080a06"
+  surface: "#212818"
+  control: "#262e1b"
+  control-hover: "#323d24"
+  line: "#374227"
+  control-line: "#72845e"
+  running: "#aebcff"
+  running-line: "#8197ef"
+  failed: "#f0a19a"
+  failed-line: "#d77b74"
+  skipped: "#bdc5c7"
+  skipped-line: "#879196"
+  pending: "#d9bc88"
+  pending-line: "#b99763"
+  line-hover: "#485733"
+  ink: "#edf1e7"
+  muted: "#c6d2b4"
+  accent: "#90a96e"
+  accent-hover: "#aabd90"
+  on-accent: "#10140c"
+  soft: "#c2cfaf"
+  secondary-line: "#596b3f"
+  local-line: "#728a52"
+  released: "#b4c1ff"
+  released-line: "#566494"
+  danger: "#754645"
+  danger-hover: "#875252"
+  danger-ink: "#efb1ae"
+  warning: "#d8c28a"
+  error: "#e0ab6f"
+  scrollbar: "#5e704a"
+typography:
+  label:
+    fontFamily: "ui-sans-serif, system-ui, sans-serif"
+    fontSize: "12px"
+    fontWeight: 650
+rounded:
+  control: "7px"
+  field: "6px"
+  card: "8px"
+spacing:
+  base: "4px"
+  group: "8px"
+---
+
 # Design
+
+## Colors
+
+Extracted theme tokens appear in the frontmatter; `ui/src/theme.css` remains
+the executable source. This experiment preserves canvas, panel, accent and text
+colors, strengthening control boundaries and tokenizing execution states.
+
+## Typography
+
+System UI sans-serif with monospace reserved for identifiers/code. Functional
+metadata has an 11px floor; explanatory help uses 12px. These are practical
+legibility changes, not a claim of WCAG conformance.
 
 ## Source of truth
 
