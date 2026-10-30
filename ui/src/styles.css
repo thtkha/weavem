@@ -923,7 +923,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 /* Keep execution anchored to the default canvas boundary, not the viewport. */
 .editor-toolbar { grid-column:3; display:flex; flex-wrap:wrap; padding:10px 16px; }
 .toolbar-group-run { margin-left:auto; }
-.editor-toolbar .flow-picker select { font:var(--font-control); font-size:12px; max-width:180px; }
+.editor-toolbar .flow-picker select { font:var(--font-weight-control) 12px var(--font-sans); max-width:180px; }
 .last-run-overlay .run-inspection { position:static; width:100%; max-height:none; }
 
 .result-viewer { overflow:auto; max-height:360px; overflow-wrap:anywhere; }

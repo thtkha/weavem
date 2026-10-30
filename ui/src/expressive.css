@@ -1,4 +1,4 @@
-/* Isolated instrument-desk candidate. Shared model and execution stay untouched. */
+/* Selected instrument-desk composition in the owner-approved olive palette. Shared model and execution stay untouched. */
   :root { color-scheme: dark; }
   ::selection { background: var(--color-accent); color: var(--color-on-accent); }
   input, textarea { caret-color: var(--color-accent); }
@@ -12,14 +12,16 @@
   .brand-mark { border: 0; border-radius: 6px; background: var(--color-accent); color: var(--color-on-accent); }
   .prototype-badge { text-transform: none; letter-spacing: normal; font-weight: 500; color: var(--color-muted); background: none; border: 0; padding: 0; }
   .editor-toolbar { gap: 12px; padding-block: 14px; }
-  .toolbar-group-flow { flex-basis: 100%; gap: 8px; }
+  .toolbar-group-flow { flex-basis: 100%; gap: 8px; align-items: flex-end; }
   .toolbar-flow-name { min-width: 152px; flex: 1; text-transform: none; letter-spacing: normal; font-size: 11px; }
   .toolbar-flow-name input { font-size: 14px; font-weight: 650; }
   .toolbar-group-edit { gap: 3px; padding-right: 10px; border-right: 1px solid var(--color-line); }
   .toolbar-group-edit .button { width: 32px; min-width: 32px; font-size: 0; padding-inline: 0; background: transparent; border-color: transparent; }
   .toolbar-group-edit .button svg { width: 16px; height: 16px; }
   .toolbar-group-edit .button:hover:not(:disabled) { background: var(--color-control); border-color: var(--color-control-line); }
-  .toolbar-group-run { gap: 10px; }
+  .toolbar-group-run { gap: 10px; align-items: flex-end; }
+  .toolbar-group-run .run-actions { margin-left: 0; }
+  .editor-toolbar .run-parameters input { font-size: 12px; }
   .editor-toolbar .run-parameters > span { text-transform: none; letter-spacing: normal; font-size: 11px; }
   .editor-toolbar .button.primary { background: var(--color-control); color: var(--color-ink); border-color: var(--color-control-line); }
   .editor-toolbar .run-actions .button.primary { background: var(--color-accent); color: var(--color-on-accent); border-color: var(--color-accent); }
@@ -65,7 +67,7 @@
   .motion-lab-trigger { align-self: flex-start; min-height: 32px; padding: 6px 10px; color: var(--color-muted); background: transparent; }
   .motion-lab-trigger svg { width: 16px; height: 16px; }
   .motion-lab { color: var(--color-ink); background: var(--color-panel); border: 1px solid var(--color-control-line); border-radius: 14px; padding: 28px; width: min(860px, calc(100vw - 48px)); max-height: calc(100vh - 48px); overflow: auto; box-shadow: 0 24px 80px #00000070; }
-  .motion-lab::backdrop { background: #02060bc9; }
+  .motion-lab::backdrop { background: var(--color-backdrop); }
   .motion-lab-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
   .motion-lab-header h2 { margin: 0; font-size: 24px; letter-spacing: -.025em; }
   .motion-lab-header p { font-size: 12px; color: var(--color-warning); margin: 10px 0 0; }

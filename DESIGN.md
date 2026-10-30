@@ -1,6 +1,6 @@
 ---
-name: Weavem practical comparison
-description: Owner-approved sage and olive workbench with practical accessibility fixes
+name: Weavem selected Expressive workbench
+description: Expressive composition with owner-approved sage and olive palette
 colors:
   canvas: "#0c0f09"
   panel: "#080a06"
@@ -36,7 +36,7 @@ colors:
   scrollbar: "#5e704a"
 typography:
   label:
-    fontFamily: "ui-sans-serif, system-ui, sans-serif"
+    fontFamily: 'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
     fontSize: "12px"
     fontWeight: 650
 rounded:
@@ -48,7 +48,7 @@ spacing:
   group: "8px"
 ---
 
-# Design — expressive experiment
+# Design — selected Expressive composition
 
 ## Colors
 
@@ -64,17 +64,18 @@ legibility changes, not a claim of WCAG conformance.
 
 ## Source of truth
 
-Status: Isolated comparison candidate · 2026-10-30 · Surface: local node editor.
+Status: Owner-selected composition and palette · 2026-10-30 · Surface: local node editor.
 Branch: `experiment/impeccable-expressive`; based on practical checkpoint `d193682`.
-This is not selected for promotion and does not replace the owner-approved
-continuation design. The user explicitly allowed freer palette/layout experiments
-inside this lab.
+The owner selected the Expressive composition while explicitly restoring the
+approved sage/olive palette. This branch is not yet merged into the continuation
+branch or released; selection is not a publication claim.
 Evidence: the owner-approved interactive/dark/React Flow choices; masterplan v8
 sections 18, 26 (Visual representation), and 29.7; the existing
 [project metadata API](docs/users/reference.md#local-project-metadata-python-api).
-The continuation design uses the owner-provided sage/olive palette. This candidate
-explores a blue-black/cyan instrument desk while retaining the three-region
-workbench and all execution semantics. The comparison brief is recorded in
+The selected design uses the owner-provided sage/olive palette and the Expressive
+instrument-desk composition, retaining the three-region workbench and all execution
+semantics. The earlier blue-black/cyan palette is historical, not the current
+visual authority. The comparison brief is recorded in
 [the lab design review](docs/project/impeccable-lab-design-review.md).
 This is a prototype design contract, not a new supported Python feature.
 
@@ -125,11 +126,11 @@ Preserve current work when input is invalid; confirm before replacing a draft.
 
 ## Visual language
 
-Blue-black canvas (#111a26), ink-dark panels (#0b121b), task surfaces
-(#1b2b3b), and stronger control surfaces (#24374a). Text is cool-white
-(#edf5fa), secondary text is blue-tinted (#b7cbd8), and cyan (#78d4dc)
-marks execution, wires, focus, and selection. Control boundaries use #71899b;
-quiet structural rules use #3e5366. Error/warning/provenance remain distinct
+Deep olive canvas (#0c0f09), dark olive panels (#080a06), task surfaces
+(#212818), and control surfaces (#262e1b). Text is off-white (#edf1e7),
+secondary text is muted sage (#c6d2b4), and sage (#90a96e) marks execution,
+wires, focus and selection. Control boundaries use #72845e; quiet structural
+rules use #374227. Error/warning/provenance remain distinct
 and labelled rather than decorative.
 
 The instrument-desk identity comes from stronger hierarchy: 16px task titles,
@@ -148,8 +149,8 @@ inertness, and focus; closing returns to the Motion lab trigger.
 
 ### Scrollbars
 
-Native scrolling uses a slim, rounded olive thumb (`#52778b`) on a transparent
-track, brightening to sage (`#78d4dc`) on thumb hover/drag where supported.
+Native scrolling uses a slim, rounded olive thumb (`#5e704a`) on a transparent
+track, brightening to sage (`#90a96e`) on thumb hover/drag where supported.
 Chromium/Edge/WebKit use 6px scrollbars without arrow buttons; Firefox uses
 standard thin scrollbars with browser-defined geometry. Apply consistently to
 panels, logs, text fields, and horizontal overflow; do not replace browser
@@ -175,7 +176,7 @@ drag and Add task behaviors are unchanged.
 The canvas header controls only
 canvas fullscreen; React Flow retains its bottom-left zoom and fit controls.
 Panel boundaries use only the resizer line. Cancel uses a muted red fill with
-bright off-white text and icons; idle Run uses the cyan accent.
+bright off-white text and icons; idle Run uses the sage accent.
 Keyboard connection controls, replacement confirmation, and visible
 import/storage errors remain available. Tailwind theme tokens own the shared palette and control styles; native CSS retains canvas and layout integration.
 Outgoing connections contain a collapsible Add connection control. Its choices
@@ -187,7 +188,7 @@ Port dots meet the wires continuously with no dark border. Direction is availabl
 through accessible labels and hover tooltips, not repeated input/output text on
 every card.
 Execution controls and status labels reuse the same components with the candidate
-blue-black/cyan palette; semantic status labels remain unchanged.
+sage/olive palette; semantic status labels remain unchanged.
 
 ### Inspector comparison: collapsible sections
 
@@ -315,3 +316,21 @@ code; the latter is read-only recorded evidence tied to a source revision.
 Standard tree/table viewers suffice; no task-bundled JavaScript or plugin system.
 Toolbar controls share sizing and typography, with execution anchored to the
 canvas boundary and secondary actions accessible through More when constrained.
+
+
+## Selected palette and alignment verification
+
+The selected variant keeps the Expressive 16px task titles, 14px section titles,
+12px prose/controls and 11px metadata rather than reverting to the practical
+variant's denser type scale. The run JSON field is explicitly 12px monospace;
+the project flow picker uses the shared 650 control weight instead of an invalid
+font shorthand falling back to 400. Flow-row buttons and the Run button align
+to the adjacent input's bottom edge; narrow layouts may wrap the name field
+onto its own row. Canvas/header action right edges remain aligned at the default
+panel widths with the existing 16px inset. Resized panels intentionally do not
+move the default-canvas-anchored toolbar.
+
+The Motion lab backdrop and minimap mask are semantic olive tokens rather than
+stray blue-black literals. Hover, selection, focus, native scrollbars, warning,
+failure, and provenance colors keep their distinct roles. Semantic blue/purple
+provenance or running status does not imply a return to the discarded cyan theme.

@@ -1183,7 +1183,7 @@ export default function App() {
             <Controls showInteractive={false} />
             <MiniMap
               nodeColor={(node) => (node.data as NodeData).task?.provenance === 'released' ? 'var(--color-released)' : 'var(--color-accent)'}
-              maskColor="rgba(16, 20, 12, .7)"
+              maskColor="var(--color-canvas-mask)"
             />
           </ReactFlow>
           {loadedFlow && !loadedFlow.editable && (
