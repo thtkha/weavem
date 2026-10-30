@@ -114,3 +114,24 @@ and documentation test log. No editor preview was started, no new wheel was buil
 or released, and the extended browser click-through was not rerun. The walkthrough
 therefore remains **Source-verified**, not end-to-end GUI Verified. No code files
 changed in this pass.
+
+
+## Impeccable selection — 2026-10-30
+
+The owner chose `experiment/impeccable-expressive` as the design candidate, with
+its cyan/blue palette explicitly rejected in favor of the approved sage/olive
+colors. Preserve its layout, hierarchy and interactions; verify consistency and
+alignment after recoloring. Original/practical/calm previews are retired, while
+branches and comparison evidence remain historical. Only static preview4183 is
+active. The selected branch is not yet merged to `feature/editor-experience`,
+`prototype/node-editor` or main. See [lab report](impeccable-lab.md) and the
+branch-root `BRANCH_HANDOFF.md` for current verification and next review gate.
+
+
+Selected Expressive implementation **`98aae6d`** applies the approved olive palette
+without losing its composition. The palette/alignment pass verifies40 unit and
+66 Chromium tests plus typecheck/lint/build; source detector empty, rendered scene
+has only the unsuppressed system-font taste heuristic. It corrects control
+baselines, select/JSON font consistency and narrow execution grouping; no runtime
+or saved-flow contract changed. See the selected section of the lab report and
+BRANCH_HANDOFF.md. The UI is still branch-only; original continuation is untouched.

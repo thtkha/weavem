@@ -1,6 +1,17 @@
 # Impeccable comparison lab
 
-Status: **implemented in isolated experiment branches; owner selection pending**. Baseline: `f0a6fa6` on `feature/editor-experience`.
+## Owner selection — 2026-10-30
+
+**Selected:** Expressive composition and interactions, restored to the owner’s
+approved sage/olive palette. The original, practical and calm comparison previews
+are retired; their branches and evidence remain historical, not active choices.
+Only `http://localhost:4183` is served. No integration to prototype/main or release
+is implied. The earlier comparison and test results below are historical evidence;
+new palette/alignment verification is recorded at the end of this report.
+
+## Historical four-way comparison
+
+Status at the original comparison: **implemented; selection was then pending**. Baseline: `f0a6fa6` on `feature/editor-experience`.
 This is owner-facing experiment evidence, not the released user manual.
 
 ## Approved result and boundaries
@@ -137,7 +148,7 @@ JSON/screenshots/rendered detectors, baseline build, practical regressions, a hi
 microbenchmark, redacted tooling protocol trials and real GUI/Python/CLI parity.
 These summaries remain tracked because the evidence directory is machine-local.
 
-## Review previews and safe restart
+## Historical comparison previews and safe restart
 
 Static comparison previews contain only frontend assets and synthetic browser
 state; **Connect project / Run flow cannot execute a project through these URLs**.
@@ -184,7 +195,7 @@ showed the workbench; narrower widths showed recovery. Reduced-motion and
 forced-color media were emulated, not physical-device or screen-reader tests.
 Screenshots and browser JSON describe the final rendered built outputs.
 
-The temporary static comparison server PID for this session is 3759848:
+Historical comparison server PID (superseded by owner selection) was 3759848:
 `kill -TERM 3759848` stops all four previews. Verify the PID still names
 `serve_previews.py` before using it later; PIDs can be reused. Its runtime record
 is `evidence/runtime.json`. The Python execution bridge on 4195 and Impeccable
@@ -212,3 +223,37 @@ No implementation work remains in the approved lab scope. The live TSX mapper
 and pinning incompatibilities are documented outcomes, not silently omitted tasks.
 The next decision belongs to the owner: keep practical fixes, choose any visual
 parts, or retain the original. No branch has been merged or released.
+
+
+## Selected Expressive palette/alignment verification — 2026-10-30
+
+The chosen UI is **`98aae6d`** on `experiment/impeccable-expressive`, not yet
+merged into the original continuation branch. Expressive composition, hierarchy,
+icon history and optional Motion lab remain; its cyan/blue palette is rejected and
+replaced with the owner's exact approved sage/olive colors. Current normative
+values are in `ui/src/theme.css` and DESIGN.md. No dependencies, public Python
+interfaces, flow formats, or execution semantics changed.
+
+The consistency pass fixed measured issues rather than redesigning again:
+- Flow/run controls now share the adjacent input bottom baseline.
+- Invalid flow-picker font shorthand is replaced by the shared 650 weight; JSON run
+  input is 12px monospace rather than browser-default 16px.
+- Narrow execution parameters stay next to Run instead of separated by a large
+  auto-margin gap; actual gap 18px at 1100px.
+- The existing Run/fullscreen default-canvas right alignment is preserved across
+  1100/1280/1600/2512px, as is the independent resized-panel toolbar anchor.
+- Motion backdrop, minimap mask, page metadata and form states use the approved
+  palette; distinct error/warning/provenance colors remain intentional.
+
+Final verification: **40 units,66/66 Chromium tests, typecheck, lint, build and diff
+checks pass**. Source detector is empty; selected-task rendered detector has only
+one unsuppressed Inter taste warning, no tiny-text/contrast defects. Selected
+node/wire, fullscreen, reduced motion and forced colors were rendered without
+page errors. Real fullscreen activation was awaited successfully; the early
+immediate probe's false result was an async timing issue in the evidence harness.
+See branch-root BRANCH_HANDOFF.md for exact logs and limitations.
+
+Evidence: original `.artifacts/node-editor/impeccable-lab/evidence/selected-expressive/`.
+Only **http://localhost:4183** remains active. Original/practical/calm previews are
+retired; their branches, recorded tradeoffs and evidence are retained as history.
+No automatic merge, release, or push follows this selection.

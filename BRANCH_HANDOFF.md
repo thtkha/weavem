@@ -1,7 +1,7 @@
-# Expressive Impeccable candidate
+# Selected Expressive workbench
 
-**Branch:** `experiment/impeccable-expressive` · **Status:** isolated owner-review
-candidate, not selected or merged into the continuation branch.
+**Branch:** `experiment/impeccable-expressive` · **Status:** owner-selected
+composition and restored approved palette; not merged or released.
 
 ## Baseline and ownership
 
@@ -15,7 +15,7 @@ candidate, not selected or merged into the continuation branch.
 
 ## What to review
 
-The blue-black/cyan **instrument desk** emphasizes the saved flow name, compact
+The selected sage/olive **instrument desk** emphasizes the saved flow name, compact
 history controls, a clear execution focal point, larger task titles, and a
 readable inspector. The library, canvas, and inspector remain resizable; all
 authoring, result, connection, import/export, history, and execution controls
@@ -33,7 +33,7 @@ native dialog behavior. The actual editor has no decorative animation loop.
 | Command | Demonstration | Judgment |
 | --- | --- | --- |
 | `bolder` | Larger task identity and decisive execution hierarchy, not gratuitous effects. | Reconsider after owner comparison. |
-| `colorize` | New semantic blue-black/cyan token palette; no gradients or fake status. | Reconsider: subjective replacement of the approved olive palette. |
+| `colorize` | Approved sage/olive tokens applied to the selected Expressive composition. | Keep: the owner rejected the earlier cyan palette. |
 | `layout` | Flow-name row, compact history group, separated execution, calmer inspector rhythm. | Keep the useful grouping if it wins task-based review. |
 | `typeset` | 16px task titles, 14px section titles, 12px prose/controls, 11px metadata. | Keep legibility improvements, assess density at 1100px. |
 | `animate` | User-triggered native field-value morph in the isolated sample. | Keep as a demonstration, not a requirement for ordinary mapping. |
@@ -45,7 +45,7 @@ The motion direction was constrained by the approved isolated experiment brief:
 a meaningful field/connection transition, not a shader, perpetual moving wires,
 new runtime, sound, or device access. This was not a new aesthetic approval.
 
-## Verification and evidence
+## Historical cyan-comparison verification and evidence
 
 Evidence root on the authoring machine:
 `.artifacts/node-editor/impeccable-lab/evidence/expressive/` in the original
@@ -100,5 +100,54 @@ Motion lab removed entirely.
 
 Leader serves this branch's built `ui/dist/` at its assigned static preview URL.
 No long-lived preview was left running by this lane. Compare with practical and
-calm on the same fixture and viewport, then let the owner select the changes to
-keep. Do not merge, publish, or infer that the experimental palette is approved.
+calm on the same fixture and viewport, then review the selected implementation. The owner selected the Expressive
+composition with the restored original palette; do not merge or publish without
+the separate integration decision.
+
+
+## Selected palette/alignment implementation — 2026-10-30
+
+Current UI implementation is **`98aae6d`**. It restores all practical/approved
+color values while retaining Expressive typography, grouping and interaction
+hierarchy. Canvas/panels are `#0c0f09`/`#080a06`, secondary metadata `#c6d2b4`,
+and primary sage `#90a96e`. Semantic status/provenance colors remain distinct.
+The page theme color, Motion lab backdrop, minimap mask and native form states
+use the selected palette; no stale cyan accent or blue surface literal remains.
+
+Measured inconsistencies corrected: flow and run controls were 7.5px above their
+adjacent input baseline, the flow picker fell back to weight 400 from an invalid
+font shorthand, and run JSON used browser-default 16px rather than the control's
+12px scale. At1100/1280px, the nested run-action auto margin separated its input
+from the button; their gap is now 18px. Run/fullscreen right edges already matched
+and are deliberately preserved. Resizing panels keeps the established toolbar
+anchor, rather than pretending the toolbar follows a resized canvas edge.
+
+New palette/font/baseline/grouping assertions were run red before the relevant
+fixes. One initial command used the wrong cwd and did not create the test; it is
+not claimed as behavioral red evidence. Corrected row-aware tests permit the
+intentional narrow layout to wrap the name input onto a separate row.
+
+Final checks on this UI commit:
+
+- **40 unit tests**, TypeScript, ESLint, build, and diff check passed.
+- **66/66 Chromium tests passed**, 55.1s, including 2 new rendered regressions and
+  inherited graph/mapping/parameter/run/result/dialog/history/resize/scroll tests.
+- Source detector `[]`; selected-task rendered detector only the existing
+  unsuppressed Inter/system-font taste heuristic. No contrast/tiny-text findings.
+- Manual rendered checks: selected node/wire, Motion lab, native fullscreen,
+  reduced-motion fallback and forced-color emulation. Actual fullscreen was
+  awaited: active `canvas-area`, execution action visible, no page errors. An
+  earlier immediate probe raced the async API; `fullscreen-final.json` supersedes
+  that one result rather than calling it a product defect.
+- Palette/alignment checked at 1100/1280/1600/2512 CSS pixels; no page overflow.
+  This is Chromium/emulated-media coverage, not physical touch or screen-reader
+  certification. No new Python/native parity execution was needed for color/CSS
+  changes; the earlier shared real-workflow evidence remains in the lab report.
+
+Current evidence is in original
+`.artifacts/node-editor/impeccable-lab/evidence/selected-expressive/`, including
+`red-browser.log`, `group-red.log`, `full-browser.log`, `unit.log`, `typecheck.log`,
+`lint.log`, `build.log`, before/after detectors, screenshots and
+`fullscreen-final.json`. The original/practical/calm previews are retired;
+branches and evidence are historical, not deleted. Only **http://localhost:4183**
+is active, serving static frontend assets without an executable project bridge.
