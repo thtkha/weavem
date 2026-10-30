@@ -946,3 +946,5 @@ input, textarea { caret-color: var(--color-accent); }
 .save-state, .library-count, .canvas-summary, .canvas-footer { font-size: 12px; }
 .react-flow__attribution a { font-size: 11px; }
 input::placeholder, textarea::placeholder { color: var(--color-muted); opacity: 1; }
+.parameter-editor textarea::placeholder, .connection-row input::placeholder,
+.editor-toolbar input::placeholder { color: var(--color-muted); opacity: 1; }

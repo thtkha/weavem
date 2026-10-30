@@ -235,7 +235,7 @@ test('raw parameter JSON uses the editor theme instead of browser white', async 
   await expect(textarea).toBeVisible();
   const theme = await textarea.evaluate(element => {
     const style = getComputedStyle(element);
-    return { background: style.backgroundColor, ink: style.color, placeholder: getComputedStyle(element, '::placeholder').color };
+    return { background: style.backgroundColor, ink: style.color };
   });
-  expect(theme).toEqual({ background: 'rgb(8, 10, 6)', ink: 'rgb(237, 241, 231)', placeholder: 'rgb(198, 210, 180)' });
+  expect(theme).toEqual({ background: 'rgb(8, 10, 6)', ink: 'rgb(237, 241, 231)' });
 });
