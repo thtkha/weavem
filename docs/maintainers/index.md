@@ -5,6 +5,13 @@ This section is for changing, verifying, and releasing the framework itself.
 Contributor setup and current maintenance procedures live here. Project-owner
 evaluations and historical reports live separately in [project records](../project/index.md).
 
+## Working agreements
+
+Read the [context and handoff policy](context-policy.md). Tracked documentation
+is part of completion: important decisions and continuation instructions must
+not exist only in a conversation. The [branch index](../project/branches.md)
+identifies where ongoing work belongs.
+
 ## Work on the framework
 
 Clone the repository with your organization's GitHub access. From the checkout
@@ -32,6 +39,10 @@ maintainer test material, not the official first-project tutorial.
 See the [frontend README](../../ui/README.md#frontend-contribution-conventions) for
 its styling/component conventions, local setup, and verification. The [design
 contract](../../DESIGN.md) records the approved UI and migration boundaries.
+
+The [source editor API reference](editor-reference.md) documents unreleased
+interfaces separately from the released user manual. The [example walkthrough](../../examples/editor-local/README.md)
+covers using that source editor.
 
 ## Maintenance procedures
 

@@ -1,224 +1,171 @@
-# Weavem node-editor prototype
+# Weavem visual flow editor
 
-A local **Python flow editor and runner**, on the `prototype/node-editor`
-branch. This is not part of the released `0.1.0a2` user experience. The demo
-tasks are synthetic examples, not a built-in executable task catalog.
+> **Unreleased editor work.** This guide describes the source-tree editor on the
+> `feature/editor-experience` branch. It is not part of the published `0.1.0a2`
+> wheel or the released user documentation.
 
-## Run a real canvas flow
+The editor is a local authoring surface for ordinary Weavem flows. It reads a
+project's task bindings and saved flow files, then saves the supported visual
+subset back into that same `flows/` directory. The browser does not execute a
+second graph runtime: **Run flow** invokes the same local-flow loader used by the
+CLI. A flow saved in the editor can run without the editor; a source-only flow
+can run without being visually editable.
 
-Follow the [local execution walkthrough](../examples/editor-local/README.md).
-It builds this frontend and starts `weavem editor --project examples/editor-local`
-from the source checkout. Open the printed **127.0.0.1** URL, connect the project,
-open `document_summary` from **Open flow**, and press **Run flow**. Parameters and argument
-mappings are already supplied for the real native/Python chain.
-The active Python environment executes the tasks. There is no account, hosted
-service, automatic dependency installation, or JavaScript task runtime.
+Use the complete [local execution walkthrough](../examples/editor-local/README.md)
+to build the frontend, start the loopback bridge, open the supplied flow, and run
+it. That walkthrough is the canonical procedure; its header records its current
+verification status. The public Python API and persisted editor formats are described in the
+[editor reference](../docs/maintainers/editor-reference.md).
 
-## Ordinary project flows
+## Editor experience branch
 
-The connected editor discovers the project's normal `flows/<name>.py` modules
-and `flows/<name>.toml` metadata. **New flow**, **Open flow**, **Save**, and
-**Save as** work in that same directory. **Run flow** saves valid changes before
-invoking the normal local-flow loader; save conflicts prevent execution. No
-executable browser graph or editor service is required by the resulting Python.
+The editor works with a project selected when the local bridge starts. It never
+asks the browser to choose a filesystem path, Python interpreter, or arbitrary
+code. The bridge is loopback-only and checks a per-session request token. This
+reduces exposure; it is **not** a sandbox. Trusted task code still runs with the
+local user's permissions and may have side effects.
 
-The visual subset is intentionally narrow: module-level Weavem task bindings,
-a bare `@flow`, sequential keyword task calls using JSON literals or earlier
-results, and a dictionary return of terminal-node results. Supported Python is
-inspected with AST parsing, never imported merely to draw it. Source node/edge
-comments preserve stable visual identities but have no runtime effect. Other
-Python remains intact and runnable with JSON flow arguments, but visual rewriting
-is disabled. The editor does not promise arbitrary-Python round-tripping.
+### Author and run flows
 
-Optional `flows/<name>.layout.json` holds positions, labels, notes, and viewport;
-it is not executable. The source and existing project bindings determine behavior.
-External source/metadata edits invalidate a loaded revision: reload or save a new
-flow rather than overwriting somebody else's work. Existing draft JSON imports
-remain unsaved visual drafts until explicitly saved as a Python flow.
+1. Connect the selected project, then use **New flow** or **Open flow**.
+2. Add bound tasks, supply literal JSON parameters, and connect explicit target
+   arguments. A task may occur more than once.
+3. Save the flow. The editor writes the ordinary Python flow and its metadata to
+   `flows/<name>.py` and `flows/<name>.toml`; optional layout data goes to
+   `flows/<name>.layout.json`.
+4. Choose **Run flow**. The bridge rejects an outdated loaded revision before it
+   starts the normal loader.
 
-The example is `flows/document_summary.py`. Run it without a browser:
+The editable subset is intentionally narrow: module-level Weavem task bindings,
+a bare `@flow`, sequential keyword task calls with JSON literals or earlier
+results, and a dictionary return of terminal results. The editor preserves
+unsupported Python and can still run it with JSON flow arguments, but it does
+not rewrite it or promise arbitrary-Python round-tripping. It does not provide
+nested-flow nodes, loops, parallel scheduling, publication, collaboration, or
+a browser execution engine.
 
-```bash
-python -m weavem --project examples/editor-local flow run document_summary
-```
+A connection supplies one named target argument. Literal parameters and a
+connection cannot supply the same argument; cycles, missing argument mappings,
+and stale release pins stop a run. Descriptive metadata is not a complete type
+system, so a graph that saves can still fail in Python at runtime.
 
-From Python, load the same selected project explicitly:
+### Work with task parameters and results
 
-```python
-from weavem.flows import load_local_flow
+For eligible authored Python tasks, the editor parses source without importing
+or running it. It can present ordinary parameter names, defaults, docstrings,
+`Literal` choices, nullable annotations, locally declared `TypedDict` fields,
+and a return annotation. It does not invent UI definitions for task authors.
 
-result = load_local_flow("document_summary", project="examples/editor-local")()
-print(result)
-```
+The following situations remain intentionally general:
 
-The execution bridge is deliberately **loopback-only**, unlike the visual-only
-development server below. It serves the UI and execution routes from the same
-origin and checks host, origin, and a per-session request token. It does not
-accept a browser-selected project path, interpreter, or arbitrary Python code.
-This is not a sandbox: trusted tasks have your user permissions and may perform
-side effects. Supported native tasks prepare automatically without a compilation confirmation.
-Preparation failures report their actual cause; no privileged OS packages are installed. Published tasks retain the normal integrity/compatibility checks.
-Because each run starts a fresh process, a local native task can compile again on
-each run; published native tasks reuse their selected binary without compilation.
+- An annotation the inspector cannot safely classify uses a JSON control.
+- A compiled or released task without eligible source uses descriptive metadata
+  when available, otherwise a general JSON fallback.
+- Positional-only arguments, `*args`, and `**kwargs` are not exposed as named
+  editor controls.
+- Parameter and output hints are advisory. They do not prove the task accepts a
+  value or guarantee a downstream result shape.
 
-Visual authoring supports sequential acyclic graphs, branches, and joins.
-Each wire passes the whole source result into one explicitly named argument;
-literal JSON parameters supply other arguments. Conflicting assignments,
-unmapped wires, cycles, stale release pins, and unbound tasks prevent execution.
-Missing callable arguments and incompatible values can still fail at runtime:
-descriptive metadata is not a type schema. Positional-only arguments, result-field
-selection, loops, parallelism, nested flows, scheduling, and publication are not
-supported by this prototype.
-Argument names `return_state` and `wait_for` are reserved by Prefect and rejected;
-use an export with different parameter names for this canvas runner.
+Select a connection to choose the whole upstream result, a declared field, an
+observed field, or a manual JSON path such as `["customers", 0, "email"]`. The
+saved Python flow uses ordinary indexing for a selected path. An absent path is
+the whole result. A missing key or index fails at execution. Observed fields are
+examples from a labelled prior result, not a schema; truncated previews do not
+offer observed field choices.
 
-Each run uses a fresh child process and the same saved-flow loader as the CLI.
-Authored retries and Prefect settings are preserved rather than replaced by
-editor defaults. Explicitly choose your Prefect profile before starting the bridge. Graph edits are locked while it runs.
-Failure stops the run and skips unexecuted nodes; cancellation is best-effort
-process termination, **not rollback**. Run diagnostics live under the project's
-configured artifact directory in `editor-runs/`; browser logs are a bounded tail
-and results are bounded previews. Logs, parameters, and previews may contain
-sensitive data. Full results are not intentionally persisted by this runner;
-task code can still write files itself.
-Reloading the page can reconnect to the active run while the same bridge remains
-alive. Restarting the backend does not restore running processes. Cancellation
-cannot undo side effects; check them before retrying a non-demo project.
+Supported built-in results have expandable tree views. Lists of record-like
+values can also use a table view. Other Python values have a bounded textual
+preview. See the editor reference for the exact preview limits and persistence
+boundaries.
 
-## Run the visual-only development server
+### Edit safely
 
-Use a source checkout of this branch and **Node.js 24 with npm**. Python is not
-needed for the demo. From the repository root:
+- Use **Undo** and **Redo**, or Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z (Ctrl/Cmd+Y also
+  redoes), outside text fields. History retains 100 edits.
+- Use Ctrl/Cmd-click to select several nodes. Ctrl/Cmd+C and Ctrl/Cmd+V copy and
+  paste nodes and internal connections using an editor-local clipboard; this
+  does not read or write the operating-system clipboard.
+- Viewport and panel adjustments, selections, and run results are not history.
+  Undo never reverses task side effects.
+- **Export draft** and **Open draft** move an editable browser draft. They do not
+  publish a task or flow. Browser autosave is local to the URL and browser, not
+  a project backup or credential store.
+
+External edits to a loaded flow invalidate its revision. Reload it or save a new
+flow instead of overwriting the other change. While a run is active, graph edits
+are locked. Cancelling asks the worker process to stop; it cannot roll back a
+task's side effects.
+
+### Inspect the last run
+
+**Last run** opens a read-only record for the selected flow without changing the
+current draft. It contains the captured definition, parameters, node statuses,
+bounded logs, and bounded result previews. The record survives a bridge restart,
+but a restart does not restore a worker process, cancellation control, or live
+tracking. A record that was running at restart is displayed as last observed,
+not as a resumable run. Code, dependencies, services, and data may change after
+a record is captured, so it is inspection evidence rather than a replay promise.
+
+Run records can contain source, parameters, logs, result previews, and exception
+messages. Keep the configured artifact directory private and gitignored. There
+is no automatic secret detection or redaction guarantee.
+
+### Handle structured errors
+
+A task may raise `TaskError` to provide an optional machine-readable error code,
+affected input, remediation, and retryability advice. It is still a regular
+Python exception; retryability does not authorize repeating side effects or
+change Prefect's configured retry policy. The exact constructor and the CLI,
+worker, and editor representations are in the
+[editor reference](../docs/maintainers/editor-reference.md#structured-task-errors).
+
+The CLI writes both the human message and structured `TaskError` JSON to
+**stderr** and exits nonzero. Ordinary exceptions remain valid; they have a
+best-effort unclassified representation. Do not parse stdout for editor or CLI
+failure details.
+
+## Visual-only development server
+
+The Vite development server is useful for visual work but has no execution
+bridge. It displays demo data only. From the repository root, use Node.js 24 and
+npm:
 
 ```bash
 cd ui
-node --version
 npm ci
 npm run dev
 ```
 
-Open **http://localhost:5173** on this machine. Leave that terminal running; stop
-it with Ctrl+C. The dev server listens on all interfaces for LAN testing; your
-host firewall controls access. It is a development server, not an authenticated
-production deployment. Do not expose it to the public internet.
-
-Expected: a dark workbench with a labelled demo task library, a sample graph,
-and a properties inspector. If the port is already in use, stop the other server
-or choose an explicit alternative: `npm run dev -- --port 5174`. Do not silently
-connect to an unrelated process. No application data is sent to the dev server.
-If this host reports `ENOSPC` file-watcher limits, use
-`WEAVEM_UI_POLL=1 npm run dev` to opt into polling. Do not change system limits
-or stop unrelated processes just to open this prototype.
-Initial npm installation requires an approved registry; a built static UI needs
-no external fonts, accounts, telemetry, or application API.
-
-## Try the authoring loop
-
-1. Search the library, then click a task's add button or drag it onto the canvas.
-   Multiple instances of the same task are allowed.
-2. Select a node. Change its label or notes in the inspector. Draft parameters
-   must be a JSON object; use **Apply parameters** to accept a valid edit.
-3. Drag between ports, or use the inspector's **Connect to node** selector and
-   **Connect nodes** button. The handles are generic input/output connectors—not
-   type checks. Map each connection's destination argument before running it.
-   Unmapped wires and cycles can be saved as drawings but cannot execute.
-4. Move/zoom the graph. Delete nodes or connections through their controls, or
-   use the canvas keyboard actions. Removing a node also removes its connections.
-5. Use **Export draft** to download a `.weavem-draft.json` file. **Open draft**
-   restores its catalog, configuration, node positions, connections, and viewport.
-6. Reload to restore the same browser's autosaved draft. Use **New draft** for
-   an empty canvas with the current catalog. Replacing work requires confirmation.
-
-The inspector exposes descriptive metadata. A released badge means the imported
-snapshot identifies a release; the browser does not validate its binary, ABI,
-policy, publisher, or behavior. Run preflight and the Python runtime perform
-execution checks; saving creates ordinary local flow source, not a published immutable release.
-Keyboard focus and button-based alternatives are available; this is not a claim
-of audited accessibility conformance. Editing is desktop-first (1100px+). Smaller
-windows show a notice while keeping export/recovery available.
-
-## Import real project metadata
-
-In a terminal with Weavem installed, go to your **existing Weavem project**.
-Export to a new file; this Python API reads metadata without importing payloads
-or executing tasks. The `x` mode refuses to overwrite an existing snapshot.
-
-```bash
-python - <<'PY'
-import json
-from weavem import Project
-
-snapshot = Project.open('.').metadata()
-with open('weavem-metadata.json', 'x', encoding='utf-8') as output:
-    json.dump(snapshot, output, indent=2)
-    output.write('\n')
-PY
-```
-
-Return to the workbench and choose **Import metadata**. Select that JSON file.
-After confirmation, the editor creates an empty draft and builds its library
-from authored tasks and released tasks referenced by project bindings. This is
-not a scan of every task in `task-store/`, and it does not reconstruct the
-Python flows' call order or graph. No extra CLI, backend, or filesystem permission
-is needed by the browser. A complete example fixture is in `tests/metadata.json`.
-
-Importing metadata replaces the catalog; there is no merge or automatic version
-upgrade. Opening a saved draft instead restores its self-contained catalog.
-JSON files over 5 MiB, malformed files, unsupported versions, missing references,
-and invalid configuration are rejected without replacing the current draft.
-
-## Storage and recovery
-
-Autosave uses this browser origin's localStorage, not the project directory.
-Changing the URL/port/browser creates a separate storage space. It is not a
-backup service: export a file to move or retain work. Metadata, source paths,
-parameters, and notes remain local in the browser or the files you download.
-During a run, the selected saved flow name, revision, and parameters are sent to
-the local bridge. Saving sends the editable graph for Python generation. Draft
-schema 1 is upgraded on opening without inventing argument mappings; exports use
-schema 2. The browser graph is an editing/validation representation, not a separate runtime format.
-Neither localStorage nor draft files are secure credential stores; do not enter
-passwords, tokens, or customer data.
-
-On storage failure, the workbench reports the problem and export remains
-available. Corrupt stored JSON is kept intact and autosave is paused; explicitly
-start or open a draft to replace it. A bad import leaves the existing graph
-untouched. Preserve the failed file/error for diagnosis; do not clear browser
-storage as the first troubleshooting step. Stop and keep an exported copy if
-saving or reopening does not reproduce your graph.
+Vite prints a local URL, normally `http://localhost:5173/`; open the URL printed
+by that process and stop it with Ctrl+C. If port 5173 is occupied, choose an
+explicit alternative such as `npm run dev -- --port 5174` rather than connecting
+to an unrelated listener. Use the [local execution walkthrough](../examples/editor-local/README.md)
+and its Python bridge for real task execution. Do not expose a development server
+to the public internet.
 
 ## Frontend contribution conventions
 
-The editor uses React, TypeScript, Vite, React Flow, and Tailwind CSS. It still
-builds static assets in `dist/`; Node is needed to build/develop, not to serve the
-built UI. The local Python bridge remains responsible for task execution. This
-migration does not introduce a hosted execution server.
+The editor uses React, TypeScript, Vite, React Flow, and Tailwind CSS. It builds
+static assets in `dist/`; Node is required to develop or build the frontend, not
+to run a saved Python flow. The local Python bridge retains responsibility for
+task execution.
 
-- Use semantic tokens from `src/theme.css` for shared colors, typography, spacing,
-  and radii. Keep the current olive palette and approved workbench layout.
+- Use semantic tokens in `src/theme.css` for shared colors, typography, spacing,
+  and radii. Preserve the approved olive workbench palette and layout.
 - Reuse `Button` for standard actions and `Field` for labelled input groups.
-  Both preserve native props, refs and accessibility attributes; callers retain
-  control over state and callbacks. Specialized icon/link buttons can remain native.
-- Use explicit Tailwind classes for new local layout; use shared `@apply` recipes
-  where a control repeats. Never build class names such as `bg-${color}` dynamically.
-  Named variants must map to complete classes or existing explicit CSS recipes.
-- Keep the documented cascade layers. Do not re-import React Flow CSS outside its
-  layer or add Tailwind Preflight casually: either can change approved form/canvas
-  behavior. The existing base rules deliberately replace Preflight in this stage.
-- Keep canvas/resizer/fullscreen/scrollbar integration CSS where it expresses the
-  behavior more clearly. Remove replaced rules instead of keeping competing copies.
-- Keep presentation components focused. Do not move graph state, network calls or
-  parameter validation into shared controls. Prefer one clear implementation over
-  configurable wrappers with speculative options.
+  Both retain native props, refs, and accessibility attributes. Keep graph state,
+  network calls, and parameter validation outside shared controls.
+- Use explicit Tailwind classes for new local layout. Use shared `@apply` recipes
+  only for genuinely repeated controls; never construct class names dynamically.
+- Preserve the documented cascade layers. Do not casually re-import React Flow
+  CSS or add Tailwind Preflight: either can alter forms and canvas behavior.
+- Keep canvas, resizer, fullscreen, and scrollbar integration CSS where it
+  expresses behavior more clearly. Delete replaced rules rather than retaining
+  competing copies.
 
-When changing shared controls, verify native disabled/focus/keyboard behavior,
-compact and expanded panel widths, and unsaved parameter edits. Compare screenshots
-against the previous branch before accepting styling changes. The checks below
-cover compilation, pure model/control tests, and real browser interaction.
+## Verify editor changes
 
-## Verify changes
-
-From `ui/`:
+From `ui/`, run the frontend checks:
 
 ```bash
 npm run typecheck
@@ -230,129 +177,27 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-The browser installer downloads test tooling only. It does not install privileged
-OS packages. If shared libraries are missing, ask your system administrator to
-provide Playwright's documented browser prerequisites; do not run sudo scripts
-implicitly. CI installs Chromium and its explicit OS dependencies on its disposable
-runner. Build first as shown above: the browser tests serve `ui/dist/` through Vite
-preview, not the hot-reload dev server. Local tests need permission to bind a
-loopback test server on port 4173.
-
-Expected: type/lint/unit checks and the frontend build pass; Chromium tests pass
-real canvas interaction and draft persistence/import cases. Evidence lives in
-`../.artifacts/node-editor/`: browser binaries, npm cache, screenshots, test
-results, and HTML reports. `ui/dist/` and `ui/node_modules/` are also gitignored.
-Keep evidence until review; no cleanup is performed automatically.
-
-For the real-runtime check, activate this checkout's supported Python environment
-and run the following **from the repository root**, after the UI build and browser
-installation above:
+The browser suite requires a Playwright Chromium installation and a loopback port
+for its preview server. After the frontend build and browser installation, run
+this repository-root runtime smoke check:
 
 ```bash
 node scripts/verify-editor.mjs
 ```
 
-It starts its own ephemeral-port loopback bridge, uses Chromium to connect and
-open the saved project flow without editing, runs the local native/Python chain, checks the result and
-clean runtime logs, and stops that test bridge afterward. It does not stop an
-editor you started separately. Evidence stays in `.artifacts/node-editor/live/`.
-The separate Python regression suite also executes a pinned published native
-task, tests non-JSON Python object handoff, and checks failure behavior with real
-Prefect. The frontend browser suite uses mocked run responses for deterministic
-failure/cancel/connection-loss scenarios; those mocks alone do not prove runtime
-execution.
+It starts and stops its own loopback bridge, opens the saved sample flow, runs the
+native/Python chain, and retains evidence under `.artifacts/node-editor/live/`.
 
-For a defect, open a [repository issue](https://github.com/thtkha/weavem/issues)
-with Node/npm versions, the failing command, browser version, and redacted error
-text. Do not attach private project metadata or credentials.
+Keep browser binaries, reports, screenshots, and runtime evidence in the
+project's gitignored `.artifacts/node-editor/` directory until review. The
+[local execution walkthrough](../examples/editor-local/README.md) gives the
+exact setup and operational checks; the [editor reference](../docs/maintainers/editor-reference.md)
+covers compatibility and persistence details.
 
-## Design and boundaries
+## Design boundary
 
-The [design contract](../DESIGN.md) records the agreed interface and accessibility
-choices; the [project note](../docs/project/node-editor-prototype.md) records the
-prototype decision. Core draft types are in `src/types.ts`, independent of React
-Flow. This editor schema is not a PipelineSpec, task manifest, or flow release
-schema. Read-only task metadata is the shared vocabulary; JSON parameters and
-explicit argument mappings define the minimum execution graph.
-
-React Flow owns the graph interactions. Weavem/Prefect own execution, not a second
-JavaScript execution engine. This prototype has no code generation, nested-flow
-nodes, deployment, collaboration, automatic task installation, or release
-automation. Dependencies keep their own
-licenses; React Flow core is MIT and Pro is not required.
-
-References: [React Flow](https://reactflow.dev/learn),
-[accessibility](https://reactflow.dev/learn/advanced-use/accessibility),
-[browser testing](https://reactflow.dev/learn/advanced-use/testing).
-
-## Editor experience branch
-
-The `feature/editor-experience` branch adds these development features; they are
-not part of the released Python wheel:
-
-- **Parameters:** ordinary Python signatures, defaults, docstrings, explicit
-  `Literal` choices, nullable types, and locally declared `TypedDict` fields
-  supply advisory controls. Inspection parses source without importing it.
-  Unresolved types and compiled releases without source retain JSON/metadata
-  fallbacks. Task authors do not write frontend definitions.
-- **Field mapping:** select a connection or its inspector row. Choose the whole
-  upstream result, a declared field, an observed field, or enter a JSON path such
-  as `["customers", 0, "email"]`. This saves ordinary Python indexing, not a
-  browser expression. Missing fields fail at execution. Observed values are
-  examples from the labelled run; truncated samples do not supply field choices.
-- **Editing:** Undo/Redo and Copy/Paste selection use toolbar buttons or
-  Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl/Cmd+C, and Ctrl/Cmd+V outside text fields.
-  Copy/paste uses an editor-local clipboard, not the operating-system clipboard.
-  Select several nodes with Ctrl/Cmd-click. Internal connections are copied with
-  new identities. History retains 100 actions; viewport/panel changes and run
-  results are not history. Undo cannot reverse task side effects.
-- **Last run:** inspect the selected flow's most recently started recorded run
-  without changing the draft. The read-only record contains its source, revision,
-  parameters, connections, statuses, and bounded results. It survives bridge
-  restart, but execution control does not. A previously running, untracked record
-  is labelled as such—not presented as a restored live process. Changed local
-  task code, dependencies, and external services prevent reproducibility promises.
-- **Results:** supported built-in values have expandable tree views; lists of
-  records offer a table view. Other Python objects have textual previews.
-- **Toolbar:** flow authoring, history, project/import/export, and execution use
-  grouped controls. On narrower screens, open **More** for secondary actions.
-
-Saved mapping drafts use editor schema 3; schemas 1 and 2 still import. Executable
-editing graphs use schema 2 only when an indexed upstream field is selected;
-existing whole-result schema-1 graphs remain readable. Neither graph is a new
-published artifact format. The Python source remains authoritative.
-
-### Structured task errors
-
-Task authors may optionally raise a normal Python exception with explicit fields:
-
-```python
-from weavem import TaskError
-
-raise TaskError(
-    "customer.not_found",
-    "No customer exists with this ID",
-    input="customer_id",
-    remediation="Choose an existing customer ID",
-    retryable=False,
-)
-```
-
-Python callers can catch `TaskError`. The CLI prints its human message and a JSON
-error record to stderr and exits nonzero. The GUI shows the same details.
-Ordinary exceptions continue to work and remain unclassified. Retryability is
-advice, not permission to repeat a side effect: Prefect's configured policy is
-unchanged.
-
-### Local evidence and privacy
-
-Run records live in the configured artifact directory's `editor-runs/` folders.
-Definition snapshots retain exact JSON/source up to 8 MiB and reject larger
-records; results are previews, not datasets. Preview limits include six levels,
-100 items across a value, and a 15 KiB serialized envelope. Truncation is labelled.
-No files, URLs, getters, or custom container protocols are traversed for previews.
-
-Parameters, source, task descriptions, logs, exception messages, and previews may
-contain sensitive information. Automatic secret detection/redaction is **not**
-guaranteed. Do not use production secrets/data for development evidence. Keep
-these folders private and gitignored; use project-specific retention policies.
+The [design contract](../DESIGN.md) records the approved interface and
+accessibility choices. The [project note](../docs/project/node-editor-prototype.md)
+records prototype history. Core editor data types live in `src/types.ts` and are
+independent of React Flow. An editor draft, executable graph, layout file, task
+manifest, and published flow release are separate formats with separate roles.

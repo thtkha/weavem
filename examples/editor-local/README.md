@@ -5,17 +5,24 @@
 | Status | Source-verified |
 | Owner | Weavem maintainers, [repository](https://github.com/thtkha/weavem) |
 | Escalation | [Repository issues](https://github.com/thtkha/weavem/issues) |
-| Last verified | 2026-10-29 — source inspection; see the project note for execution evidence |
+| Last verified | 2026-10-30 — source inspection; see the project note for execution evidence |
 | Last executed | See [prototype verification record](../../docs/project/node-editor-prototype.md) |
-| Applies to | Source checkout of `prototype/node-editor`; Linux x86_64; local machine only |
+| Applies to | Source checkout of `feature/editor-experience`; Linux x86_64; local machine only |
 | Risk | Medium — real tasks execute with your user permissions |
-| Expected duration | 5–15 minutes; first native compilation can take longer |
+| Expected duration | 15–25 minutes; first native compilation can take longer |
+
+> **Verification claim:** The commands and interface paths below are
+> source-verified against this branch. The complete browser walkthrough has not
+> been rerun after this document update; the prototype verification record
+> contains prior execution evidence.
 
 ## Purpose and successful outcome
 
-Open the project's saved three-node flow and execute native/Python tasks without
-writing or wiring anything. Success means all three nodes complete and the last result is
-`Document: 2 words, 12 characters`.
+Open the project's saved three-node flow, save an editable copy, change a
+parameter, add an explicit nested-field mapping, and run the saved Python flow
+through the browser, CLI, and Python. Success means all three nodes complete,
+the copy records `count["words"]` as the `prefix` input, and each execution path
+returns `{"summarize": "2: 2 words, 12 characters"}`.
 
 ## Scope
 
@@ -42,7 +49,8 @@ credentials, private metadata, or complete customer-data logs.
 
 ## Prerequisites and inputs
 
-- A checkout containing `ui/` and `src/weavem/editor_server.py`.
+- A checkout containing `ui/` and `src/weavem/editor_server.py` on
+  `feature/editor-experience`.
 - Bash on supported Linux x86_64, standard CPython 3.12–3.15, Node.js 24 with npm,
   and a desktop browser at least 1100 pixels wide.
 - An activated virtual environment with this checkout installed using
@@ -50,7 +58,10 @@ credentials, private metadata, or complete customer-data logs.
   no administrator permissions are required. Use the existing project environment
   if already installed. Do not replace a shared system Python installation.
 - The sample project is `examples/editor-local`; it already binds all three tasks
-  in `weavem.toml`. No runtime variables or credentials are needed.
+  in `weavem.toml`. No credentials are needed.
+- Choose an unused Python identifier for the saved copy. This guide uses
+  `editor_walkthrough_tk`; replace `tk` with your own short suffix if that name
+  already exists. The later `FLOW_NAME` shell variable must match this exact name.
 - Port 8765 must be free. If occupied, use `--port 8766` in the startup step and
   open the URL printed by that server, not an unrelated listener.
 
@@ -76,7 +87,7 @@ python -c "import weavem; print(weavem.__file__)"
 python -m weavem doctor
 ```
 
-Expected: the prototype branch, supported Python, Node 24, this checkout's
+Expected: the `feature/editor-experience` branch, supported Python, Node 24, this checkout's
 `src/weavem/__init__.py`, and a successful native environment check. If any check
 fails, stop and correct the environment before compiling. Keep the redacted
 diagnostic output; do not run privileged installation commands automatically.
@@ -147,46 +158,172 @@ the argument. Metadata descriptions do not automatically supply mappings.
 **Evidence to retain:** **Export draft** saves layout, parameters, and mappings.
 **Repeatability:** Edits are reversible; adding the same task twice adds instances.
 
-### Step 5 — Run and inspect
+### Step 5 — Save an editable project-flow copy
 
-**Goal:** Execute the saved ordinary Python flow through the real runtime.
+**Goal:** Preserve the supplied sample while creating ordinary local source that
+the editor, CLI, and Python can all load.
+**Run from:** Browser workbench, connected project with `document_summary` open.
+**Action:** In the toolbar, choose **Save as**. In **New flow name**, enter
+`editor_walkthrough_tk`, then choose **Save as** in the dialog. If that name is
+already listed in **Open flow**, choose a different unused identifier instead;
+do not overwrite it.
+**Expected result:** The status says `Saved flow editor_walkthrough_tk`. The
+project now contains `flows/editor_walkthrough_tk.py`,
+`flows/editor_walkthrough_tk.toml`, and
+`flows/editor_walkthrough_tk.layout.json`. The original `document_summary` is
+unchanged.
+**If this fails:** Stop if the name is not a Python identifier. Use letters,
+numbers, and underscores only, beginning with a letter. If the name already
+exists or changed on disk, choose a new name or reload the existing flow; the
+editor does not silently overwrite a conflicting flow.
+**Evidence to retain:** The saved flow name and its status message.
+**Repeatability:** Create-only for a new name. After it exists, use **Save** to
+update that copy.
+
+### Step 6 — Edit a saved parameter and establish a baseline run
+
+**Goal:** Change code-authoritative flow input through the guided editor, then
+record an observed count result for the mapping step.
+**Run from:** Browser workbench, with the saved copy open.
+**Action:** Select `text.normalize`. In **Parameters**, use **Guided fields** if
+needed. Replace the `text` value with `  Local editor  `, including the two
+spaces at each end, and choose **Apply parameters**. Choose **Save**, then
+choose **Run flow**. Wait for all nodes to complete.
+**Expected result:** The saved source now gives `normalize` the edited literal.
+The baseline result remains `Document: 2 words, 12 characters`, because the
+task trims the spaces and the `prefix` parameter still has its `Document` value.
+The completed count node exposes an observed JSON result with `words` and
+`characters` fields.
+**If this fails:** Do not continue with an incomplete or failed baseline. Read
+the failed node's structured error and correct the parameter JSON before saving
+or retrying once.
+**Evidence to retain:** The completed run ID and the count node's observed
+result.
+**Repeatability:** Safe for this sample. **Run flow** saves the current editable
+draft before it starts; use **Save** first to make the persistence point
+explicit.
+
+### Step 7 — Map a nested upstream field to a second input
+
+**Goal:** Add a second `text.count_words` → `text.summarize` connection that
+passes only `count["words"]` to `prefix`, while retaining the existing whole
+count result for `stats`.
+**Run from:** Browser workbench, after the successful Step 6 baseline.
+**Action:**
+
+1. Select `text.summarize`. In **Parameters**, click **Use default** beside
+   `prefix`, then click **Apply parameters**. This removes the explicit literal
+   so a connection can supply `prefix`.
+2. Select `text.count_words`. In **Connections → Outgoing connections**, choose
+   **Add connection**. Set **Connect to** to **Summarize** (the node labelled `text.summarize`), then choose
+   **Connect**. This sample has only one available target argument, so the new
+   connection maps to `prefix` automatically.
+3. In `text.count_words`'s **Outgoing connections** row for the new `prefix`
+   connection, use the **Upstream value** picker to choose
+   **Observed: `["words"]`**. If the observed choice is unavailable, enter
+   `["words"]` in **Field path (JSON)** and choose **Apply field path**.
+4. Confirm the new connection's target argument is `prefix`, then choose
+   **Save**.
+
+**Expected result:** `text.summarize` has two incoming mappings: the existing
+whole count result to `stats`, and `count["words"]` to `prefix`. The saved
+Python source expresses the latter as an indexed value, equivalent to
+`prefix=statistics["words"]`.
+**If this fails:** If the new connection reports **Mapping required**, select
+that connection, enter `prefix` in **Target argument**, and choose **Apply
+mapping** before setting its field path. If the path is rejected, use only a
+JSON array of string keys or non-negative integer indexes. Do not guess a field
+for another task: observed values are examples, not a contract.
+**Evidence to retain:** The two incoming mappings on `text.summarize` and the
+saved status.
+**Repeatability:** Saving updates only the named copy. This mapping is safe in
+this sample because `summarize` formats its prefix with an f-string, so the
+numeric word count renders as `2`; a task's descriptive `str` input alone does
+not guarantee that an arbitrary numeric mapping is valid.
+
+### Step 8 — Prove the mapping is undoable and redoable
+
+**Goal:** Check that a graph edit changes the same draft history used for saved
+flow source, without executing an intermediate mapping.
+**Run from:** Browser workbench, immediately after Step 7 and before another
+run.
+**Action:** In `text.count_words`'s **Outgoing connections**, select the new
+`prefix` connection rather than an overlapping canvas wire. Then choose
+**Undo**. Undo clears the selection: select **Count words** again, then select
+its outgoing row whose target argument is `prefix`. Its **Field path (JSON)** is
+now `[]`, which means whole upstream result. Choose **Redo**, then reselect
+**Count words** and that same `prefix` connection to inspect `["words"]`.
+Choose **Save** after the redo.
+**Expected result:** Undo and Redo affect the explicit field-path edit, not the
+completed run record. The final saved mapping remains `["words"]`.
+**If this fails:** Stop rather than running a graph whose selected field is
+unclear. Use **Redo** only if it restores `["words"]`; otherwise select the
+connection and repeat Step 7 from the existing count result.
+**Evidence to retain:** The final field path and saved status.
+**Repeatability:** Safe to repeat. A new edit after Undo intentionally clears
+the redo history.
+
+### Step 9 — Run the mapped copy and inspect its persisted last run
+
+**Goal:** Execute the saved ordinary Python flow through the real runtime and
+inspect evidence captured for that exact saved revision.
 **Run from:** Browser workbench, connected project.
-**Action:** Choose **Run flow**. Native preparation is automatic, without a confirmation. Observe
-node statuses and **Run log**. Select `text.summarize` to read **Run result**.
+**Action:** Choose **Run flow**. Native preparation is automatic, without a
+confirmation. Observe node statuses and **Run log**. Select `text.summarize` to
+read **Run result**. After completion, choose **Last run** next to **Edit flow**.
 **Expected result:** The run completes; the last preview contains
-`Document: 2 words, 12 characters`. The first native run can take longer. Graph
-editing is locked while execution is active.
+`2: 2 words, 12 characters`. **Last run** shows the run ID, saved flow revision,
+inputs, executed graph, executed connections, result, and saved source. It is
+read-only evidence; choose **Edit flow** to return to the canvas.
 **If this fails:** Do not repeatedly retry an unknown task. This sample is safe
 to retry once after fixing its reported error; retain the run ID and diagnostics.
 Use **Cancel run** if the sample remains active without progress for five minutes.
-**Evidence to retain:** Run ID, final preview, and run diagnostics under `.artifacts/`.
+**Evidence to retain:** Run ID, final preview, **Last run** revision, and run
+diagnostics under `.artifacts/`.
 **Repeatability:** Sample task behavior is safe to repeat; other projects may not be.
 
-### Step 6 — Run the same source without the editor
+### Step 10 — Run the same saved source headlessly
 
-**Goal:** Prove the flow is ordinary Weavem code, not browser-only state.
+**Goal:** Prove the saved copy is ordinary Weavem code, not browser-only state.
 **Run from:** Repository root, the same activated Python environment.
-**Action:** Close the browser and stop the bridge with Ctrl+C. Then run:
+**Action:** The browser and bridge may remain open, but neither command uses
+them. Set `FLOW_NAME` to the name chosen in Step 5, then run the CLI and Python
+forms:
 
 ```bash
-python -m weavem --project examples/editor-local flow run document_summary
+export FLOW_NAME="editor_walkthrough_tk"
+python -m weavem --project examples/editor-local flow run "${FLOW_NAME}"
+python - <<'PY'
+import json
+import os
+
+from weavem.flows import load_local_flow
+
+target = load_local_flow(os.environ["FLOW_NAME"], project="examples/editor-local")
+print(json.dumps(target(), sort_keys=True))
+PY
 ```
 
-**Expected result:** The final JSON result is
-`{"summarize": "Document: 2 words, 12 characters"}`. No browser or editor server
-is required. A fresh process may prepare local native code again.
+**Expected result:** Each command's final JSON value is
+`{"summarize": "2: 2 words, 12 characters"}`. No browser or editor server is
+required. A fresh process may prepare local native code again.
 **If this fails:** Confirm the selected project and Python environment match
-Step 2; preserve the concrete error rather than reinstalling tools blindly.
-**Evidence to retain:** CLI result alongside the GUI run ID.
-**Repeatability:** This sample is safe to run again.
+Step 2, and confirm `FLOW_NAME` matches the saved copy. Preserve the concrete
+error rather than reinstalling tools blindly.
+**Evidence to retain:** CLI and Python results alongside the GUI run ID.
+**Repeatability:** This sample is safe to run again. The Python snippet uses the
+same local-flow loader that the CLI uses.
 
 ## Verification
 
 - All three nodes show completed; no failed or skipped node remains.
-- The final preview equals the expected sentence, possibly surrounded by Python
-  string representation quotes.
-- Save, reload, and reopen preserve mappings. Reconnecting is needed after
-  restarting the server because the session token changes.
+- The final preview, CLI result, and Python result each contain
+  `{"summarize": "2: 2 words, 12 characters"}`.
+- `text.summarize` retains the whole result mapping to `stats` and the
+  `["words"]` mapping to `prefix` after **Save**, reload, and reopen.
+- **Last run** identifies the same saved flow revision and shows its executed
+  connections. Reconnecting is needed after restarting the server because the
+  session token changes.
 - The project's artifact directory contains an `editor-runs/` diagnostic folder.
   Local execution compiles and loads a temporary `.so`, then removes its temporary
   build directory using the existing runtime behavior. A reusable native binary
@@ -196,12 +333,13 @@ Step 2; preserve the concrete error rather than reinstalling tools blindly.
 
 Use **Cancel run** to stop a current run, then Ctrl+C in its server terminal to
 stop the bridge. For forward recovery, use **Open draft → select exported JSON**
-to restore edits. Reloading a browser does not cancel its Python run; reconnect to recover active
-run controls while the same backend remains alive. Saved Python flows reopen from
-the project; exported drafts recover unsaved edits. Never clear corrupt browser storage as the first
-recovery step: preserve the original file/error. A process restart ends the
-in-memory run index; retained diagnostics remain on disk. Task side effects in
-other projects require task-specific recovery; cancellation is not rollback.
+to restore edits. Reloading a browser does not cancel its Python run; reconnect
+to recover active run controls while the same backend remains alive. Saved Python
+flows reopen from the project; exported drafts recover unsaved edits. Never
+clear corrupt browser storage as the first recovery step: preserve the original
+file/error. A process restart ends the in-memory run index; retained diagnostics
+and the persisted **Last run** record remain on disk. Task side effects in other
+projects require task-specific recovery; cancellation is not rollback.
 
 ## Troubleshooting
 
@@ -211,6 +349,10 @@ other projects require task-specific recovery; cancellation is not rollback.
 | Disconnected or no execution bridge | Open Step 2's printed URL, not Vite; reconnect once. |
 | Task not bound | In your own project, bind it with `weavem task use ALIAS --path tasks/NAME`; reload the catalog. The sample already has bindings. |
 | Missing argument or unexpected keyword | Correct explicit mappings and applied JSON parameters; task signatures are checked during execution. |
+| **Save as** rejects the chosen name | Use an unused Python identifier beginning with a letter. Do not delete or overwrite another flow merely to reuse its name. |
+| `prefix` remains a literal or the new wire says mapping required | Select `text.summarize`, remove the explicit `prefix` with **Use default**, apply parameters, then map the new connection to `prefix`. |
+| `words` is not offered by **Upstream value** | Complete the Step 6 baseline first. Otherwise enter `["words"]` manually and choose **Apply field path**; do not substitute a guessed field. |
+| **Last run** says no recorded run | Run and complete the saved copy first. A browser draft alone has no persisted execution record. |
 | Native compilation failed | Retain diagnostics and rerun `python -m weavem doctor`; do not install OS packages silently. |
 | Another run is active | Reconnect to the same backend to recover controls, then cancel or finish it. If the backend is unresponsive, stop its terminal with Ctrl+C and restart Step 2. Check side effects before retrying other projects. |
 | Stale release pin | Reconnect and inspect the project's explicitly selected release; do not bypass integrity checks. |
@@ -221,9 +363,11 @@ the repository issue queue.
 
 ## Cleanup
 
-Stop this bridge with Ctrl+C after use. No temporary accounts, external services,
-or production changes need recovery. Keep exported drafts and diagnostic artifacts
-until reviewed; this walkthrough does not delete them automatically.
+Stop this bridge with Ctrl+C after use. This walkthrough creates the named saved
+flow copy; keep it for review or remove it later through your normal source-control
+workflow. No temporary accounts, external services, or production changes need
+recovery. Keep exported drafts and diagnostic artifacts until reviewed; this
+walkthrough does not delete them automatically.
 
 ## Evidence and audit record
 

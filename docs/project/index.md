@@ -21,6 +21,12 @@ Native authoring tools are default dependencies. See the
 [current support limits](../users/limitations.md) for the actual shipped boundary,
 not the recommendations in an earlier experiment.
 
+## Active branches and decisions
+
+The [branch status and continuation index](branches.md) records authoritative
+work, implementation lanes, historical branches, the unselected inspector
+alternative, review gates, and decisions that must survive agent handoffs.
+
 ## Reports and evidence
 
 The [node-editor prototype](node-editor-prototype.md) records the current

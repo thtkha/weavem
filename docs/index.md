@@ -26,3 +26,7 @@ but they do not share one reading order.
 
 The Markdown files remain canonical. A future documentation site can present
 these sections separately without maintaining another copy of the content.
+
+Contributor working agreement: [preserve context and handoffs](maintainers/context-policy.md).
+For unreleased work, check [branch status and continuation](project/branches.md)
+before treating a feature record as current released instructions.
