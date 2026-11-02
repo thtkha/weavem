@@ -22,6 +22,15 @@ def _script_module():
 
 
 class VerifyUserDocsTests(unittest.TestCase):
+    def test_isolated_ci_documentation_bundles_include_security_policy(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "verify.yml").read_text()
+        copies = [line for line in workflow.splitlines()
+                  if "cp README.md " in line and '"$bundle"' in line]
+        self.assertEqual(2, len(copies), "supported and latest lanes must stage docs")
+        for line in copies:
+            with self.subTest(command=line.strip()):
+                self.assertIn("SECURITY.md", line.split())
+
     def test_repository_documentation_is_partitioned_and_linked(self) -> None:
         module = _script_module()
         docs = ROOT / "docs"
