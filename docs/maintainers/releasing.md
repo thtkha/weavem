@@ -1,285 +1,311 @@
-# Release a private Weavem alpha
+# Promote the original Weavem 0.1.0a2 wheel to public PyPI
 
 | Field | Value |
 | --- | --- |
-| Status | Source-verified |
-| Owner | Repository maintainer with write access to `thtkha/weavem` |
-| Escalation | Private GitHub issue in `thtkha/weavem`, with the release tag and workflow URL |
-| Last verified | 2026-10-27 — workflow and package metadata inspected; the new documentation gate awaits its first remote execution |
-| Last executed | 2026-10-26 — `v0.1.0a2` published with separate-runner native handoff verification |
-| Applies to | Private GitHub releases for `weavem` alpha versions |
-| Risk | Medium — pushing a tag creates an immutable release record visible to repository readers |
+| Status | Draft |
+| Owner | Kha Trịnh, repository owner `thtkha`; contact in [SECURITY.md](../../SECURITY.md) |
+| Escalation | Email `khaa.dev@gmail.com` with the workflow URL, version and redacted failure |
+| Last verified | 2026-11-02 — original release identity and CLI flags inspected; publication is pending |
+| Last executed | Never — this public promotion has not completed |
+| Applies to | `thtkha/weavem`, `main`, original `v0.1.0a2`, production PyPI project `weavem` |
+| Risk | High — public source can be copied, and an uploaded distribution cannot be replaced |
+| Expected duration | 20–60 minutes after account setup; verification and owner approval determine timing |
+| Change record | Owner-approved public promotion of the existing alpha; no new version or feature merge |
 
-> **Verification claim:** This procedure is traced to `pyproject.toml` and
-> `.github/workflows/verify.yml`. The `v0.1.0a2` tagged workflow passed, including
-> separate-runner native handoff. The subsequently added documentation gate has
-> passed locally but has not yet run remotely; this is not a new release execution.
+> **Verification claim:** This is a prepared public-promotion procedure, not proof
+> of a completed upload. Account configuration, public visibility, workflow
+> execution and anonymous PyPI installation remain acceptance gates until the
+> operator records their actual results below. The historical private-release
+> procedure is [preserved separately](releasing-private-legacy.md).
+
+## Contents
+
+- [Purpose and successful outcome](#purpose-and-successful-outcome)
+- [Scope](#scope)
+- [Safety, impact, and stop conditions](#safety-impact-and-stop-conditions)
+- [Ownership and escalation](#ownership-and-escalation)
+- [Prerequisites](#prerequisites)
+- [System and repository orientation](#system-and-repository-orientation)
+- [Preflight checks](#preflight-checks)
+- [Procedure](#procedure)
+- [Verification](#verification)
+- [Rollback and recovery](#rollback-and-recovery)
+- [Troubleshooting](#troubleshooting)
+- [Cleanup](#cleanup)
+- [Evidence and audit record](#evidence-and-audit-record)
+- [References](#references)
+- [Document maintenance](#document-maintenance)
 
 ## Purpose and successful outcome
 
-Release a Weavem alpha to private repository readers, without PyPI. The automation
-builds one wheel, tests that same wheel on Python 3.12–3.15 and latest stable
-Python, verifies prebuilt native task/flow handoff to separate matching-minor
-runners, then publishes a GitHub prerelease with the wheel and `SHA256SUMS`.
-
-Success means the alpha tag points to the tested `main` commit, every required
-workflow job passes, and the downloaded wheel passes `sha256sum -c SHA256SUMS`.
+Make the existing GitHub repository public and promote the **original**
+`weavem-0.1.0a2-py3-none-any.whl` from GitHub to PyPI. The promotion succeeds only
+when the public PyPI wheel has the original SHA-256 and a clean anonymous install
+passes the supported-platform task/flow/native/reuse checks.
 
 ## Scope
 
-Use this only for an unused version already set in `pyproject.toml`.
-`0.1.0a1` and `0.1.0a2` are already published and must not be reused. Select and
-commit a new alpha version before starting; do not overwrite an existing release.
-Do not use it for stable releases, PyPI publication, repository-visibility changes,
-or replacing existing assets. Stable release automation does not exist yet.
+Both remote branches, `main` and `prototype/node-editor`, and their reachable
+history become public after audit. The editor remains experimental and absent
+from `0.1.0a2`. Do not merge newer core/editor work, build a replacement artifact,
+move the tag, create `a3`, upload a new source distribution, or overwrite GitHub
+assets. The original wheel's embedded README retains private-release wording;
+current repository documentation explains public distribution.
 
-## Safety and stop conditions
+## Safety, impact, and stop conditions
 
-The blast radius is private repository readers: they can download the release
-assets. The point of no return is the tag push. Stop if the checkout is dirty,
-`main` is not current, the tag already exists, package metadata disagrees with the
-tag, or any verification job fails. Do not move tags, force-push, rebuild an asset
-for publication, delete assets, or manually publish a draft.
+- Require the repository owner's approved public-exposure audit before changing
+  visibility. Audit history, both remote branches, release assets, and package
+  contents; a clean working tree alone does not prove that history is safe.
+- Public exposure cannot be undone by making the repository private again.
+  The PyPI upload is a second point of no return: distribution filenames cannot
+  be reused after deletion. Preserve the original wheel, manifest and tag.
+- Stop on a secret/confidential-data finding, unresolved license/notice issue,
+  wrong source/tag/digest, failed verification lane, unavailable package name,
+  publisher-identity mismatch, or existing conflicting PyPI distribution.
+- Do not bypass the protected `pypi` environment, use credentials in chat or
+  workflow inputs, retry a conflicting upload, or substitute another package name.
+- Before exposure, preserve all audit and verification evidence in the approved,
+  gitignored `.artifacts/public-release/` directory. Do not commit it wholesale.
 
 ## Ownership and escalation
 
-The repository maintainer executes and approves this change. For a workflow or
-asset failure, open a private repository issue containing the tag, commit SHA,
-workflow URL, asset names, and output with secrets removed.
+Kha Trịnh approves public exposure, configures the existing PyPI account, and
+reviews the protected environment. Implementation agents may prepare and verify
+files; an agent report is not evidence that publication finished. For a blocker,
+stop the workflow and email `khaa.dev@gmail.com` with the repository commit,
+workflow/run URL, failed step, expected/actual digest, and redacted diagnostics.
+Do not send passwords, two-factor codes, recovery codes or API tokens.
 
-## Prerequisites and inputs
+## Prerequisites
 
-Run Bash on Linux from the repository root, with Git, Python 3.12–3.15, and an
-authenticated GitHub CLI. `gh auth status` must show an account with write access;
-`git remote get-url origin` must report `https://github.com/thtkha/weavem.git`.
+Run Bash on Linux from the repository root with Git, Python 3.12–3.15 and a
+GitHub CLI login authorized to administer `thtkha/weavem`. Verify tools with
+`git --version`, `python3 --version`, `gh --version` and `gh auth status`.
+The original artifact supports standard GIL-enabled, non-debug CPython on Linux
+x86_64/glibc 2.28+, not every platform accepted by its portable wheel filename.
 
-| Variable | Required | Description | Safe example |
-| --- | --- | --- | --- |
-| `TAG` | Yes | Unused alpha Git tag matching package version | `v0.1.0a3` |
-| `VERSION` | Yes | Version read from package metadata | `0.1.0a3` |
+The reviewed promotion workflow and documentation must already be committed and
+pushed to `main`, with a successful `Verify Weavem` push run for that exact commit.
+Start from a clean `main` checkout. This runbook does not merge feature branches.
 
-These examples describe a possible next release, not the current package version
-or permission to reuse a tag. Read the actual version from committed metadata.
+Use the existing PyPI account with verified email and two-factor authentication.
+It must be authorized to create project `weavem`, or own that project if it already
+exists. A pending publisher does not reserve a name. Do not create a password or
+API token for GitHub Actions: this workflow uses OpenID Connect (OIDC).
 
-The candidate must already be merged into `main`, and the latest `Verify Weavem`
-**push** run for that exact `main` commit must have concluded successfully.
+| Input | Fixed value or source |
+| --- | --- |
+| Repository | `https://github.com/thtkha/weavem` |
+| Source tag | `v0.1.0a2` |
+| Tag commit | `13c2b3876e55690be06da1deb5db8ab2df516f65` |
+| Wheel | `weavem-0.1.0a2-py3-none-any.whl` |
+| Wheel SHA-256 | `518877f1dc2c20c34ed3c0aeb9144a4e99d8a6ab4547db103130c475b9aa2f95` |
+| Workflow file | `.github/workflows/publish-pypi.yml` |
+| GitHub environment | `pypi`, restricted to `main` and owner review |
+| `RUN_ID` | Numeric ID of the exact manually dispatched publishing run, obtained in Step 3 |
 
 ## System and repository orientation
 
-`pyproject.toml` is the version source of truth. `.github/workflows/verify.yml`
-builds a named wheel artifact once, shares it with the supported Python and
-latest-stable lanes, and permits only an alpha tag from `main` to publish. The
-supported lanes transfer their published native stores to separate consumer
-jobs; publication also requires all four consumer jobs to pass. The
-publish job attaches the tested wheel and `SHA256SUMS`; retry logic reuses matching
-assets and stops on conflicts. The workflow has no stable-release automation.
+The dedicated `publish-pypi.yml` workflow promotes an existing artifact; it does
+not build the release. Its fixed-version helper verifies the release identity,
+checksums and wheel contents, then supported-Python jobs test that candidate.
+Only the protected publishing job receives OIDC permission. No pull request,
+experimental branch or tag push may publish. The old private-GitHub helper in
+`scripts/release-alpha.py` remains historical and refuses a public repository.
 
 ## Preflight checks
 
-### Step 1 — verify the candidate
+**Goal:** Confirm repository and immutable release identity before mutation.
 
-**Goal:** Confirm the private repository, clean `main`, version, and unused tag.
-
-**Run from:** Repository root in Bash, targeting `origin/main`.
+**Run from:** Repository root in Bash, as the authenticated repository maintainer.
 
 **Action:**
 
 ```bash
 set -euo pipefail
-gh auth status
-test "$(gh repo view thtkha/weavem --json isPrivate --jq .isPrivate)" = true
-git fetch origin main --tags
-git switch main
-git pull --ff-only origin main
+test "$(git remote get-url origin)" = 'https://github.com/thtkha/weavem.git'
 test -z "$(git status --porcelain)"
-VERSION="$(python3 -c 'import pathlib, tomllib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])')"
-TAG="v${VERSION}"
-MAIN_SHA="$(git rev-parse HEAD)"
-test "${MAIN_SHA}" = "$(git rev-parse origin/main)"
-test "$(python3 -c 'import pathlib, tomllib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])')" = "${VERSION}"
-python3 -c 'import re, sys; sys.exit(0 if re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+a[0-9]+", sys.argv[1]) else 1)' "${TAG}"
-test -z "$(git tag -l "${TAG}")"
-REMOTE_TAG="$(git ls-remote --tags origin "refs/tags/${TAG}")"
-test -z "${REMOTE_TAG}"
-MAIN_RUN_ID="$(gh run list --repo thtkha/weavem --workflow "Verify Weavem" --branch main --event push --commit "${MAIN_SHA}" --limit 1 --json databaseId,status,conclusion --jq '.[0] | select(.status == "completed" and .conclusion == "success") | .databaseId')"
-test -n "${MAIN_RUN_ID}"
+test "$(git branch --show-current)" = main
+test "$(git rev-parse HEAD)" = "$(gh api repos/thtkha/weavem/git/ref/heads/main --jq .object.sha)"
+gh run list --repo thtkha/weavem --workflow verify.yml --branch main --event push \
+  --commit "$(git rev-parse HEAD)" --limit 1 --json status,conclusion,url
+test "$(git rev-parse v0.1.0a2^{commit})" = '13c2b3876e55690be06da1deb5db8ab2df516f65'
+gh repo view thtkha/weavem --json nameWithOwner,visibility,defaultBranchRef
+gh release view v0.1.0a2 --repo thtkha/weavem --json tagName,isDraft,isPrerelease,assets
 ```
 
-**Expected result:** All checks exit zero. No local or remote tag exists, and
-`MAIN_RUN_ID` identifies a successful `push` workflow run for `MAIN_SHA`.
+**Expected result:** The correct repository, original tag commit and non-draft
+GitHub alpha with its wheel and `SHA256SUMS`; a clean `main` matching the remote,
+and a completed successful verification run for the exact commit. Require completed audit and supported-Python evidence before
+Step 2. Current private visibility is expected before initial public exposure.
 
-**If this fails:** Stop. Resolve the stated mismatch before release; use a new
-alpha version when a tag already exists. If the run lookup is empty, the exact
-commit is untested or not green; do not substitute a run from another commit.
-Never reuse an existing tag.
-
-**Evidence to retain:** Candidate commit SHA, package version, `MAIN_RUN_ID`, and
-`gh` account.
-
-**Repeatability:** Safe to repeat; it does not change the remote repository.
+**If this fails:** Stop. Do not repair by retagging, rewriting assets or skipping
+an audit/test. **Evidence to retain:** commit, release metadata, audit result and
+verification job URLs. **Repeatability:** read-only and safe to repeat.
 
 ## Procedure
 
-### Step 2 — push the immutable alpha tag
+### Step 1 — configure the publisher and approval gate
 
-**Goal:** Start verification and private prerelease publication for the checked
-`main` commit.
+**Goal:** Authorize only the intended GitHub workflow, without a long-lived token.
 
-**Run from:** Repository root in Bash, targeting `origin`.
+**Run from:** The owner's browser, signed into the existing PyPI and GitHub accounts.
+
+**Action:** On PyPI, open **Account settings → Publishing** at
+[the account publishing page](https://pypi.org/manage/account/publishing/).
+Add a pending **GitHub** publisher with project `weavem`, owner `thtkha`, repository
+`weavem`, workflow `publish-pypi.yml` (filename only), and environment `pypi`.
+If the project already exists under the owner's account, use its **Manage →
+Publishing** page instead. An unrelated owner is a blocker, not permission to rename.
+
+On GitHub, open **thtkha/weavem → Settings → Environments → pypi**. Restrict the
+environment to `main` and require repository-owner review. Ensure the owner can
+approve the intended manual run; do not weaken the protection to resolve a failure.
+
+**Expected result:** Matching publisher fields and protected environment.
+**If this fails:** Stop before visibility/upload changes and escalate to Kha.
+**Evidence to retain:** non-secret field values and approval configuration.
+**Repeatability:** inspect existing entries before adding; do not create duplicates.
+
+### Step 2 — expose only the audited repository
+
+**Goal:** Make the approved repository and both audited remote branches public.
+
+**Run from:** Repository root in Bash, as the owner, after Step 1 and all audits/tests.
+
+**Action:** Immediately before this irreversible exposure, confirm the target:
+
+```bash
+gh repo view thtkha/weavem --json nameWithOwner,visibility
+```
+
+If already public, do not repeat the change. If private and the audit is approved,
+use the owner's **Settings → General → Danger Zone → Change repository visibility**
+control for **thtkha/weavem**, select **Public**, and complete GitHub's confirmation.
+
+**Expected result:** `gh repo view thtkha/weavem --json visibility` reports
+`PUBLIC`; anonymous visitors can read the repository and original release assets.
+**If this fails:** Stop before publishing. Do not treat private/public toggling as
+removal of leaked content. **Evidence to retain:** audit revision and visibility
+check. **Repeatability:** visibility inspection is safe; exposure is not reversible.
+
+### Step 3 — dispatch the exact-a2 promotion
+
+**Goal:** Run verification, owner approval and publication for the original wheel.
+
+**Run from:** Repository root in Bash, targeting the committed workflow on `main`.
 
 **Action:**
 
 ```bash
-set -euo pipefail
-git tag -a "${TAG}" -m "Weavem ${VERSION} alpha release"
-git push origin "${TAG}"
+gh repo view thtkha/weavem --json nameWithOwner,visibility
+gh workflow run publish-pypi.yml --repo thtkha/weavem --ref main
+gh run list --repo thtkha/weavem --workflow publish-pypi.yml --branch main \
+  --event workflow_dispatch --limit 5 --json databaseId,headSha,status,conclusion,url
 ```
 
-**Expected result:** Git reports the new remote tag and GitHub starts `Verify
-Weavem` for it.
-
-**If this fails:** If the tag is only local, repair the safe local error or run
-`git tag -d "${TAG}"`. If it was pushed, stop and escalate; do not delete or move it.
-
-**Evidence to retain:** `git rev-parse "${TAG}^{commit}"` and the workflow URL.
-
-**Repeatability:** Not repeatable after a successful push.
-
-### Step 3 — inspect automated publication
-
-**Goal:** Confirm all lanes passed and GitHub published the tested wheel.
-
-**Run from:** Repository root in Bash, targeting `thtkha/weavem`.
-
-**Action:**
+Select the run matching this dispatch and approved `main` commit. Set `RUN_ID`
+to its displayed numeric `databaseId`, then run:
 
 ```bash
-set -euo pipefail
-TAG_SHA="$(git rev-parse "${TAG}^{commit}")"
-RUN_ID=""
-for ATTEMPT in $(seq 1 12); do
-  RUN_ID="$(gh run list --repo thtkha/weavem --workflow "Verify Weavem" --branch "${TAG}" --event push --commit "${TAG_SHA}" --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
-  test -n "${RUN_ID}" && break
-  sleep 10
-done
-test -n "${RUN_ID}"
-gh run watch "${RUN_ID}" --repo thtkha/weavem --exit-status
-sleep 10
-gh release view "${TAG}" --repo thtkha/weavem --json isPrerelease,isDraft,body,url,assets
-```
-
-**Expected result:** Python 3.12–3.15, latest-stable, and all separate native
-handoff consumer jobs are successful. The
-release is not a draft, is a prerelease, identifies the tag commit in its notes, and contains one
-wheel plus `SHA256SUMS`.
-
-After successful draft creation, automation checks immediately, then retries a
-missing draft after waits of 1, 2, 4, and 8 seconds. API errors and identity or
-checksum conflicts still stop immediately. It never retries the create command.
-If the draft remains invisible, it reports a **draft visibility timeout**; this
-does not mean creation failed.
-
-**If this fails:** Preserve the tag, logs, draft, and assets. A draft visibility
-timeout can be recovered by waiting for GitHub to show the draft and rerunning
-only the failed publication job below. If GitHub reports another
-transient runner, network, or publication failure rather than a code, test, or
-metadata failure, rerun only failed jobs and watch the same run:
-
-```bash
-gh run rerun "${RUN_ID}" --repo thtkha/weavem --failed
+read -r -p "Exact publishing run databaseId: " RUN_ID
+[[ "${RUN_ID}" =~ ^[0-9]+$ ]]
+gh run view "${RUN_ID}" --repo thtkha/weavem --json headSha,event,url
 gh run watch "${RUN_ID}" --repo thtkha/weavem --exit-status
 ```
 
-This retains the already built candidate. For code, test, tag, version, or checksum
-failure, fix forward in a new commit and release a new alpha version. Do not upload
-replacement assets.
-
-**Evidence to retain:** Workflow URL, `RUN_ID`, release URL, commit SHA, and asset list.
-
-**Repeatability:** Read-only inspection is safe to repeat. Rerun failed jobs only
-for a transient failure; it does not authorize changing the candidate.
+When GitHub shows a pending deployment, the owner reviews the exact run and
+approves its **pypi** environment through the run page. No credentials are entered
+in Actions logs. **Expected result:** all verification jobs pass and the protected
+publication/confirmation jobs succeed. **If this fails:** preserve the run; stop
+on a digest/name/identity conflict. A retry may reuse only matching immutable
+bytes; an already published identical wheel must be confirmed, not replaced.
+**Evidence to retain:** run ID/URL, source commit, hashes and approval record.
+**Repeatability:** do not dispatch simultaneous runs; inspect the prior run first.
 
 ## Verification
 
-### Step 4 — verify the downloaded bytes
+**Goal:** Prove checksum-matched public distribution and anonymous installation.
 
-**Goal:** Check the published wheel independently of the publication command.
+**Run from:** A clean supported Linux environment, without GitHub/PyPI credentials.
 
-**Run from:** Repository root in Bash, targeting the private release.
-
-**Action:**
+**Action:** Open the public repository, GitHub release and
+[PyPI version page](https://pypi.org/project/weavem/0.1.0a2/). Confirm that PyPI's
+wheel digest equals the fixed SHA-256 above. In a new virtual environment run:
 
 ```bash
-set -euo pipefail
-mkdir -p .artifacts/release-download
-DOWNLOAD_DIR="$(mktemp -d ".artifacts/release-download/${TAG}.XXXXXX")"
-gh release download "${TAG}" --repo thtkha/weavem --dir "${DOWNLOAD_DIR}" --pattern "weavem-*.whl" --pattern "SHA256SUMS"
-cd "${DOWNLOAD_DIR}"
-sha256sum -c SHA256SUMS
+python3 -m venv .venv-public-check
+source .venv-public-check/bin/activate
+python -m pip install --no-cache-dir --pre 'weavem==0.1.0a2'
+python -m pip check
+python -c 'from importlib.metadata import version; print(version("weavem"))'
+weavem doctor
 ```
 
-**Expected result:** `sha256sum` prints `OK` for the wheel.
-
-**If this fails:** Stop distribution and escalate with the checksum output and
-release URL. Do not overwrite the assets.
-
-**Evidence to retain:** `SHA256SUMS`, successful checksum output, release URL, and
-commit SHA under the gitignored `.artifacts/release-download/` directory.
-
-**Repeatability:** Safe to repeat; each invocation uses a new gitignored
-`.artifacts/release-download/` directory.
+Then execute the current [user tutorial](../users/authoring-guide.md) and
+[native tutorial](../users/native-authoring.md), using the same published wheel.
+**Expected result:** version `0.1.0a2`, no broken requirements, passing doctor,
+and the documented task/flow/native/cross-project results. **If this fails:** stop
+announcement and escalate; do not rebuild `a2`. **Evidence to retain:** public
+URLs, PyPI digest, interpreter/platform and sanitized test outputs.
+**Repeatability:** use a new empty directory/environment for each acceptance run.
+No sustained service observation window applies: this is package distribution,
+not a running production service deployment.
 
 ## Rollback and recovery
 
-A pushed tag and release are not retagged or overwritten. Before a push failure,
-the local tag recovery is:
+Before public exposure or upload, cancel a running workflow using
+`gh run cancel "${RUN_ID}" --repo thtkha/weavem` and verify cancellation with
+`gh run view "${RUN_ID}" --repo thtkha/weavem --json status,conclusion`.
+The safe terminal state is preserved original assets and no public upload.
 
-```bash
-set -euo pipefail
-git tag -d "${TAG}"
-git status --short
-```
-
-Expect a deleted local tag and no unexpected working-tree change. After a remote
-tag exists, forward recovery is a corrected commit with a new alpha version. Keep
-the failed tag, draft, workflow logs, and assets as evidence.
+After exposure, making the repository private cannot retract copies. After upload,
+never delete/reuse a distribution filename or overwrite the GitHub artifact.
+Preserve evidence and notify Kha. If a genuine release defect requires withdrawal,
+the PyPI owner may yank the affected release through **Manage project → Releases**
+with an explanatory reason; that is a separate owner decision. Corrected bytes
+require a new version, outside this exact-a2 promotion. Revoke the trusted publisher
+through PyPI **Publishing** if authorization itself is compromised; do not put a
+replacement token into the workflow as an emergency bypass.
 
 ## Troubleshooting
 
-- **Tag exists:** stop; choose a new alpha version.
-- **Verification job fails:** fix in a new commit and restart from Step 1.
-- **Asset or checksum conflict:** stop publication; preserve the draft and report
-  the asset name and checksum.
-- **Release is not visible:** run `gh auth status` and confirm private-repository
-  access.
+- **Publisher rejected:** compare owner/repository/workflow/environment spelling
+  against Step 1; do not remove environment protection or supply an API token.
+- **Name unavailable or different existing digest:** stop and ask the owner;
+  neither an alternate name nor replacement bytes are authorized.
+- **Checksum/tag/content mismatch:** retain the original files and failed output;
+  do not edit the manifest, rebuild, or retag to make checks pass.
+- **Pip cannot find `0.1.0a2`:** confirm the production PyPI version page, the
+  supported Python and the workflow's final status. A created pending publisher
+  alone is not a published project. Preserve index-propagation diagnostics.
+- **Private helper refuses the public repository:** expected legacy behavior;
+  use this dedicated promotion workflow, not the historical helper's publish mode.
 
 ## Cleanup
 
-Keep `.artifacts/release-download/` evidence until release review completes. Do
-not delete existing tags, release assets, CI artifacts, or historical evidence.
+Keep original wheel/manifests and `.artifacts/public-release/` evidence. Do not
+commit caches, credentials, downloaded distributions or audit raw data. No
+privileged temporary access, public server or network tunnel is created here.
 
 ## Evidence and audit record
 
-Record tag, commit SHA, Verify Weavem workflow URL, private release URL, wheel
-filename, SHA-256, and confirmation that no PyPI publication occurred.
-
-First release: [`v0.1.0a1`](https://github.com/thtkha/weavem/releases/tag/v0.1.0a1),
-verified on 2026-10-26 in [workflow run 40312643304](https://github.com/thtkha/weavem/actions/runs/40312643304).
-Publication succeeded on the second attempt, reusing the original candidate;
-this run predates the separate-runner native handoff gate.
-
-Next published alpha: [`v0.1.0a2`](https://github.com/thtkha/weavem/releases/tag/v0.1.0a2),
-verified on 2026-10-26 in [workflow run 40339054745](https://github.com/thtkha/weavem/actions/runs/40339054745),
-including all supported Python lanes and separate-runner native handoff.
+Record audit revision, public `main` commit, unchanged a2 tag commit, source/wheel
+hashes, workflow URL, owner approval, PyPI digest, anonymous-install outcomes and
+any remaining limitations. Update the status and actual execution date only after
+all acceptance gates complete; until then this runbook remains **Draft**.
 
 ## References
 
-- `pyproject.toml` — package version and Python support.
-- `.github/workflows/verify.yml` — build, verification, and publication logic.
-- [GitHub CLI release creation](https://cli.github.com/manual/gh_release_create).
+- [Pending PyPI publishers](https://docs.pypi.org/trusted-publishers/creating-a-project-through-oidc/).
+- [Trusted Publishing configuration](https://docs.pypi.org/trusted-publishers/adding-a-publisher/).
+- [GitHub CLI workflow dispatch](https://cli.github.com/manual/gh_workflow_run).
+- `.github/workflows/publish-pypi.yml` and `scripts/promote-pypi-a2.py` — executable promotion policy.
+- [Historical private release evidence](releasing-private-legacy.md#evidence-and-audit-record).
 
 ## Document maintenance
 
-Review this guide when package versioning, workflow triggers, release visibility,
-asset names, or retry behavior change. Record each release's date, tag, workflow
-URL, and verification result in the release evidence.
+Kha reviews this procedure if publisher identity, workflow permissions, source
+scope, support policy or immutable-asset rules change. Do not turn the one-time
+`a2` promotion into authorization for a new feature release.

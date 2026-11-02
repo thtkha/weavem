@@ -9,8 +9,10 @@ or releasing the framework, open the [maintainer documentation](../maintainers/i
 
 ## Current orientation
 
-The user manual currently covers **0.1.0a2**, distributed as a private GitHub
-alpha rather than through public PyPI. The [package metadata](../../pyproject.toml)
+The user manual covers the existing **0.1.0a2** headless alpha. Public distribution
+is being prepared without rebuilding its original wheel or moving its tag.
+The experimental editor and newer core-contract branches are not part of this
+release. The [package metadata](../../pyproject.toml)
 is the source of truth for the checkout's version and declared dependencies;
 the [release](https://github.com/thtkha/weavem/releases/tag/v0.1.0a2) records its
 published assets.

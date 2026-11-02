@@ -40,6 +40,21 @@ class VerifyUserDocsTests(unittest.TestCase):
             self.assertTrue(module.parse_guide(docs / guide), guide)
         module.validate_links(docs)
 
+    def test_public_a2_docs_preserve_exact_artifact_and_unreleased_boundary(self) -> None:
+        getting_started = (ROOT / "docs/users/getting-started.md").read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        release = (ROOT / "docs/maintainers/releasing.md").read_text(encoding="utf-8")
+        legacy = (ROOT / "docs/maintainers/releasing-private-legacy.md").read_text(encoding="utf-8")
+        security = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
+        self.assertIn("python -m pip install --pre 'weavem==0.1.0a2'", getting_started)
+        self.assertIn('export WEAVEM_WHEEL="$PWD/downloads/weavem-0.1.0a2-py3-none-any.whl"', getting_started)
+        self.assertIn("prototype/node-editor", readme)
+        self.assertIn("not part of `0.1.0a2`", readme)
+        self.assertIn("518877f1dc2c20c34ed3c0aeb9144a4e99d8a6ab4547db103130c475b9aa2f95", release)
+        self.assertIn("publish-pypi.yml", release)
+        self.assertIn("| Status | Deprecated |", legacy)
+        self.assertIn("khaa.dev@gmail.com", security)
+
     def test_link_validation_covers_every_audience_and_archived_records(self) -> None:
         module = _script_module()
         for folder in ("users", "maintainers", "project", "project/history"):

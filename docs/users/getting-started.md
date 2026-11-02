@@ -17,8 +17,8 @@ You need:
 - Write access to your workspace, temporary/build directories, and release store.
 - Permission for Prefect to start a local loopback service. No hosted Prefect
   account is needed for this tutorial.
-- The wheel from a trusted publisher and access to a Python package index for
-  its dependencies, or an administrator-provided complete offline wheelhouse.
+- Access to PyPI for Weavem and its dependencies, or a trusted release wheel
+  with a complete compatible offline wheelhouse.
 
 Check which interpreter `python3` selects:
 
@@ -31,7 +31,7 @@ Expected: CPython 3.12–3.15, `x86_64`, and glibc 2.28+. If your intended inter
 has another command, use it instead of `python3` when creating the environment.
 Do not bypass package compatibility checks to use a newer or unsupported Python.
 
-## 1. Obtain the wheel
+## 1. Create a workspace
 
 Create a new workspace from a writable parent directory:
 
@@ -44,57 +44,92 @@ mkdir downloads
 If the name already exists, choose another directory rather than overwriting an
 existing project. Keep this terminal open for the following steps.
 
-Open the private [0.1.0a2 release](https://github.com/thtkha/weavem/releases/tag/v0.1.0a2)
-and save these two assets into `weavem-workspace/downloads/`:
-
-- `weavem-0.1.0a2-py3-none-any.whl`
-- `SHA256SUMS`
-
-GitHub requires repository access. If you do not have it, ask the maintainer who
-provided Weavem to send you these files and this Markdown documentation tree.
-The wheel is not a standalone offline installer: pip must also obtain its
-Python dependencies. Do not run `pip install weavem` expecting this private release
-from public PyPI.
-
-From `weavem-workspace`, check the downloaded bytes:
-
-```bash
-(cd downloads && sha256sum -c SHA256SUMS)
-export WEAVEM_WHEEL="$PWD/downloads/weavem-0.1.0a2-py3-none-any.whl"
-```
-
-Expected: `weavem-0.1.0a2-py3-none-any.whl: OK`. Stop on mismatch or a missing file.
-Get a fresh copy from the same trusted release; do not change the checksum file
-to make the check pass. Checksums detect corruption, not publisher authenticity.
-`WEAVEM_WHEEL` is an absolute path used only by this guide and its consumer setup;
-it is not a Weavem configuration setting.
-
 ## 2. Create and install into an environment
 
-Run each command in order from `weavem-workspace`. Stop at the first failure:
+**Publication status:** the public promotion of `0.1.0a2` is pending. Use the
+GitHub-wheel alternative below until the maintainer confirms the PyPI upload.
+The public instructions apply after publication; they are not a claim that an
+upload has already happened.
+
+Run these commands from `weavem-workspace`:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip --version
+```
+
+Expected: pip resolves to `.venv`. If venv creation fails or pip is absent, follow
+[environment recovery](troubleshooting.md#python-environment). Do not switch to
+global `sudo pip` installation.
+
+### Install from PyPI after publication
+
+```bash
+python -m pip install --pre 'weavem==0.1.0a2'
+python -m pip check
+python -c 'from importlib.metadata import version; print(version("weavem"))'
+```
+
+Expected: no broken requirements and version `0.1.0a2`. The explicit version pin
+selects this alpha rather than an unrelated later release. No GitHub account,
+Weavem account, source clone, registry, or Docker installation is needed.
+If pip cannot find this version, stop and check the
+[PyPI release page](https://pypi.org/project/weavem/0.1.0a2/); do not substitute a
+similarly named package or bypass Python compatibility checks.
+
+The cross-project tutorial creates a second environment using the same wheel.
+Retain a copy in this workspace:
+
+```bash
+python -m pip download --no-deps --only-binary=:all: --pre \
+  --dest downloads 'weavem==0.1.0a2'
+export WEAVEM_WHEEL="$PWD/downloads/weavem-0.1.0a2-py3-none-any.whl"
+test -f "$WEAVEM_WHEEL"
+```
+
+`WEAVEM_WHEEL` is the absolute path used by the tutorial's consumer setup; it is
+not a Weavem configuration setting. The PyPI upload uses the same bytes as the
+original GitHub `0.1.0a2` wheel. Its embedded README still describes the historical
+private release; these current repository instructions explain public distribution.
+
+### Alternative: install the verified GitHub wheel
+
+Open the [0.1.0a2 release](https://github.com/thtkha/weavem/releases/tag/v0.1.0a2)
+and save these two assets into `weavem-workspace/downloads/`:
+
+- `weavem-0.1.0a2-py3-none-any.whl`
+- `SHA256SUMS`
+
+While the repository remains private, GitHub requires repository access; obtain
+the files from the maintainer if necessary. After the repository becomes public,
+these assets can be downloaded anonymously. Do not treat that visibility change
+as proof that PyPI publication has also finished.
+
+With `.venv` active, run:
+
+```bash
+(cd downloads && sha256sum -c SHA256SUMS)
+export WEAVEM_WHEEL="$PWD/downloads/weavem-0.1.0a2-py3-none-any.whl"
 python -m pip install "$WEAVEM_WHEEL"
 python -m pip check
 python -c 'from importlib.metadata import version; print(version("weavem"))'
 ```
 
-Expected: pip resolves to `.venv`, dependency checking reports no broken
-requirements, and the installed Weavem version is `0.1.0a2`.
-If venv creation fails or pip is absent, follow
-[environment recovery](troubleshooting.md#python-environment) before continuing.
-Do not switch to global `sudo pip` installation.
+Expected: `weavem-0.1.0a2-py3-none-any.whl: OK`, no broken requirements, and
+version `0.1.0a2`. Stop on a mismatch or missing asset. Obtain a fresh copy from
+the same trusted release; never edit the manifest to make verification pass.
+Checksums detect changed bytes, not publisher authenticity.
 
-For an offline installation, your administrator must first supply a wheelhouse
-compatible with this interpreter and platform containing Weavem **and every
-transitive dependency**. Instead of the install command above, use
+### Offline installation
+
+An administrator must supply a wheelhouse compatible with this interpreter and
+platform containing Weavem **and every transitive dependency**. With
+`WEAVEM_WHEEL` set, use
 `python -m pip install --no-index --find-links /absolute/path/to/wheelhouse "$WEAVEM_WHEEL"`,
-replacing that illustrative path with the supplied wheelhouse. The consumer
-installation later in the tutorial needs the same offline options, or pip's
-corresponding `PIP_NO_INDEX` and `PIP_FIND_LINKS` environment settings.
+replacing the illustrative path with the supplied wheelhouse. The consumer setup
+later in the tutorial needs the same offline options, or pip's corresponding
+`PIP_NO_INDEX` and `PIP_FIND_LINKS` environment settings.
 
 ## 3. Keep tutorial state local
 
@@ -155,7 +190,7 @@ weavem-workspace/
 ```
 
 In a new terminal, return to this directory, activate `.venv`, and repeat the
-variable assignments from steps 1 and 3. Virtual environments and shell variables
+variable assignments from steps 2 and 3. Virtual environments and shell variables
 are not portable: a colleague recreates an environment rather than copying yours.
 
 No cleanup is required to continue. Preserve downloaded release files and

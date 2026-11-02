@@ -1,0 +1,191 @@
+name: Publish original a2 to PyPI
+'on':
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pypi-original-a2
+  cancel-in-progress: false
+jobs:
+  candidate:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'thtkha/weavem'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Check the fixed promotion guards
+        run: python -m unittest discover -s tests -p test_promote_pypi_a2.py -v
+      - name: Download and pin the existing release, without rebuilding
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/promote-pypi-a2.py download \
+            --dist "$RUNNER_TEMP/original-a2" --publish-dir dist \
+            | tee "$RUNNER_TEMP/original-a2-receipt.json"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: original-a2-wheel
+          path: dist/*.whl
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: original-a2-receipt
+          path: ${{ runner.temp }}/original-a2-receipt.json
+          if-no-files-found: error
+  verify:
+    needs: candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.12', '3.13', '3.14', '3.15']
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: original-a2-wheel
+          path: dist
+      - name: Verify and install the original wheel in a fresh environment
+        run: |
+          python scripts/promote-pypi-a2.py verify --dist dist
+          python -m venv "$RUNNER_TEMP/a2-wheel"
+          "$RUNNER_TEMP/a2-wheel/bin/python" -m pip --isolated install dist/*.whl
+          "$RUNNER_TEMP/a2-wheel/bin/python" -m pip check
+          cp scripts/verify-installed-wheel.py "$RUNNER_TEMP/verify-installed-wheel.py"
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/a2-wheel/bin/python" -I verify-installed-wheel.py --work-dir "$RUNNER_TEMP/a2-installed"
+      - name: Prepare native artifacts for a separate consumer runner
+        run: |
+          mkdir "$RUNNER_TEMP/a2-handoff"
+          cp -a "$RUNNER_TEMP/a2-installed/consumer/task-store" "$RUNNER_TEMP/a2-handoff/store"
+          cp "$RUNNER_TEMP/a2-installed/result.json" "$RUNNER_TEMP/a2-handoff/producer-result.json"
+          cp scripts/verify-native-handoff.py "$RUNNER_TEMP/a2-handoff/verify-native-handoff.py"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: a2-native-handoff-${{ matrix.python }}
+          include-hidden-files: true
+          path: ${{ runner.temp }}/a2-handoff
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: a2-install-evidence-${{ matrix.python }}
+          include-hidden-files: true
+          path: ${{ runner.temp }}/a2-installed
+          if-no-files-found: warn
+  native-consumer:
+    needs: [candidate, verify]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.12', '3.13', '3.14', '3.15']
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: original-a2-wheel
+          path: dist
+      - uses: actions/download-artifact@v8
+        with:
+          name: a2-native-handoff-${{ matrix.python }}
+          path: ${{ runner.temp }}/a2-handoff
+      - name: Consume the transferred native store without rebuilding
+        run: |
+          python scripts/promote-pypi-a2.py verify --dist dist
+          python -m venv "$RUNNER_TEMP/a2-consumer"
+          "$RUNNER_TEMP/a2-consumer/bin/python" -m pip --isolated install dist/*.whl
+          "$RUNNER_TEMP/a2-consumer/bin/python" -m pip check
+          "$RUNNER_TEMP/a2-consumer/bin/python" -I "$RUNNER_TEMP/a2-handoff/verify-native-handoff.py" \
+            --store "$RUNNER_TEMP/a2-handoff/store" \
+            --expected "$RUNNER_TEMP/a2-handoff/producer-result.json" \
+            --work-dir "$RUNNER_TEMP/a2-consumer-evidence"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: a2-consumer-evidence-${{ matrix.python }}
+          include-hidden-files: true
+          path: ${{ runner.temp }}/a2-consumer-evidence
+          if-no-files-found: warn
+  publish:
+    if: github.event.repository.private == false
+    needs: [candidate, verify, native-consumer]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/weavem/0.1.0a2/
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v8
+        with:
+          name: original-a2-wheel
+          path: dist
+      - name: Recheck publication identity and original bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python scripts/promote-pypi-a2.py context
+          test "$(gh api repos/thtkha/weavem --jq .private)" = false
+          python scripts/promote-pypi-a2.py verify --dist dist
+      - name: Refuse conflicting PyPI files or skip an identical prior publication
+        id: existing
+        run: python scripts/promote-pypi-a2.py pypi-status --github-output "$GITHUB_OUTPUT"
+      - name: Publish the exact verified wheel using Trusted Publishing
+        if: steps.existing.outputs.upload == 'true'
+        # Official pypa/gh-action-pypi-publish release/v1, resolved 2026-11-02.
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086
+        with:
+          packages-dir: dist/
+          verify-metadata: true
+      - name: Confirm PyPI exposes the original checksum
+        run: python scripts/promote-pypi-a2.py confirm-pypi
+  public-install:
+    needs: publish
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install anonymously from public PyPI and run the installed-wheel gate
+        run: |
+          python scripts/promote-pypi-a2.py confirm-pypi
+          python -m venv "$RUNNER_TEMP/public-a2"
+          "$RUNNER_TEMP/public-a2/bin/python" -m pip --isolated install --no-cache-dir \
+            --index-url https://pypi.org/simple weavem==0.1.0a2
+          "$RUNNER_TEMP/public-a2/bin/python" -m pip check
+          cp scripts/verify-installed-wheel.py "$RUNNER_TEMP/verify-public-a2.py"
+          cd "$RUNNER_TEMP"
+          "$RUNNER_TEMP/public-a2/bin/python" -I verify-public-a2.py --work-dir "$RUNNER_TEMP/public-a2-evidence"
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: public-a2-install-evidence
+          include-hidden-files: true
+          path: ${{ runner.temp }}/public-a2-evidence
+          if-no-files-found: warn

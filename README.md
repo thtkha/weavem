@@ -20,8 +20,22 @@ to use a released wheel.
 2. [Create, test, run, publish, and reuse a project](docs/users/authoring-guide.md).
 3. [Build a native task release](docs/users/native-authoring.md).
 
-Current documented release: **[0.1.0a2](https://github.com/thtkha/weavem/releases/tag/v0.1.0a2)**,
-a private GitHub alpha, not a public PyPI package or a stable API.
+Current documented release: **[0.1.0a2](https://github.com/thtkha/weavem/releases/tag/v0.1.0a2)**.
+It is an alpha, not a stable API. Public PyPI publication is being prepared; after
+publication, install the pinned release in a virtual environment:
+
+```bash
+python -m pip install --pre 'weavem==0.1.0a2'
+weavem doctor
+```
+
+Until PyPI publication is confirmed, use the verified GitHub-wheel alternative in
+the [installation guide](docs/users/getting-started.md). The public PyPI promotion
+uses the original wheel unchanged; its embedded README retains historical
+private-release wording.
+
+The experimental `prototype/node-editor` branch is not part of `0.1.0a2`.
+The released package is the headless framework described in these user docs.
 Supported environment: standard GIL-enabled, non-debug **CPython 3.12–3.15 on
 Linux x86_64 with glibc 2.28+**. See [support limits](docs/users/limitations.md).
 
@@ -51,6 +65,9 @@ If your goal is to **use** Weavem, follow the [release installation guide](docs/
 If your goal is to **change Weavem itself**, follow the
 [contributor setup](docs/maintainers/index.md#work-on-the-framework).
 Cloning is not a task registration or runtime requirement.
+
+For ordinary bugs, use [GitHub issues](https://github.com/thtkha/weavem/issues).
+Report suspected vulnerabilities privately using [the security policy](SECURITY.md).
 
 ## License and trademarks
 

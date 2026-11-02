@@ -7,8 +7,9 @@ evaluations and historical reports live separately in [project records](../proje
 
 ## Work on the framework
 
-Clone the repository with your organization's GitHub access. From the checkout
-root, use a supported Python with venv/pip and an approved package index:
+Clone `https://github.com/thtkha/weavem.git`. Public cloning needs no account;
+contributing through GitHub requires one. From the checkout root, use a supported
+Python with venv/pip and an approved package index:
 
 ```bash
 python3 -m venv .venv
@@ -29,7 +30,8 @@ maintainer test material, not the official first-project tutorial.
 
 ## Maintenance procedures
 
-- [Private alpha release runbook](releasing.md).
+- [Public `0.1.0a2` promotion runbook](releasing.md).
+- [Historical private GitHub release procedure](releasing-private-legacy.md).
 - [0.1.0a2 release](https://github.com/thtkha/weavem/releases/tag/v0.1.0a2).
 - [0.1.0a2 release CI](https://github.com/thtkha/weavem/actions/runs/40339054745):
   supported Python 3.12–3.15, latest-stable gate, and separate-runner native handoff
@@ -89,6 +91,8 @@ Use the [historical records index](../project/history/index.md) for previous
 simulations, failed trials, compatibility investigations, and release evidence.
 Those records are preserved for review, not maintained as current procedures.
 
-For framework defects, use a [private repository issue](https://github.com/thtkha/weavem/issues)
+For ordinary framework defects, use a [repository issue](https://github.com/thtkha/weavem/issues)
 with the package version, Python version, reproduction, and redacted logs. Do not
 include tokens, credentials, or customer data in test fixtures or reports.
+Report security vulnerabilities privately using [SECURITY.md](../../SECURITY.md),
+not a public issue.
